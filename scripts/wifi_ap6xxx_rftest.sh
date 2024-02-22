@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 killall ipc-daemon netserver connmand wpa_supplicant
 echo "Pull BT_REG_ON to Low"
 echo 0 > /sys/class/rfkill/rfkill0/state

@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 SSID=$1
 PASSWORD=$2
 CONF=/tmp/wpa_supplicant.conf
