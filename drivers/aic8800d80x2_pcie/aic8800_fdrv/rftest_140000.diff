@@ -1,0 +1,171 @@
+commit e155d56059d737e6b464d4feed5229997e9b615c
+Author: dijiaxu <dijiaxu@aicsemi.com>
+Date:   Wed Apr 2 15:11:10 2025 +0800
+
+    [d80x2p] 1. update wifi fw(fix 2.4g dc calib);
+    2. fix pmf;
+    3. modify rftest to 0x140000 and normal mode stay  0x120000, since rftest need to enable phy dump
+
+diff --git a/PCIE/driver_fw/driver/aic8800d80x2/aic8800_fdrv/aicwf_pcie.c b/PCIE/driver_fw/driver/aic8800d80x2/aic8800_fdrv/aicwf_pcie.c
+index fc2f762c..00760703 100644
+--- a/PCIE/driver_fw/driver/aic8800d80x2/aic8800_fdrv/aicwf_pcie.c
++++ b/PCIE/driver_fw/driver/aic8800d80x2/aic8800_fdrv/aicwf_pcie.c
+@@ -346,20 +346,21 @@ static int aicwf_resume_access(void)
+ 	struct rwnx_vif *rwnx_vif_param = NULL;
+ 	struct rwnx_cmd *cur = NULL;
+ 	struct rwnx_cmd *nxt = NULL;
+-    
++    u32 fw_addr = testmode? RAM_LMAC_RF_FW_ADDR : RAM_FMAC_FW_ADDR;
++
+ #ifdef CONFIG_USE_BT
+     aicwf_bt_init(rwnx_hw);
+ 	mdelay(15);
+ #endif
+ 
+-	ret = rwnx_plat_bin_fw_upload_2(rwnx_hw, RAM_FMAC_FW_ADDR, RWNX_PCIE_FW_NAME);
++	ret = rwnx_plat_bin_fw_upload_2(rwnx_hw, fw_addr, RWNX_PCIE_FW_NAME);
+ 	if (ret) {
+ 		AICWFDBG(LOGERROR, "resume fw load fail\n");
+ 		return ret;
+ 	}
+ 
+ 	patch_config(rwnx_hw);
+-	pcie_reset_firmware(rwnx_hw, RAM_FMAC_FW_ADDR);
++	pcie_reset_firmware(rwnx_hw, fw_addr);
+ 
+ 	aicwf_sw_resume();
+ 
+diff --git a/PCIE/driver_fw/driver/aic8800d80x2/aic8800_fdrv/rwnx_platform.c b/PCIE/driver_fw/driver/aic8800d80x2/aic8800_fdrv/rwnx_platform.c
+index 325a5213..fc41ff15 100644
+--- a/PCIE/driver_fw/driver/aic8800d80x2/aic8800_fdrv/rwnx_platform.c
++++ b/PCIE/driver_fw/driver/aic8800d80x2/aic8800_fdrv/rwnx_platform.c
+@@ -2416,7 +2416,8 @@ extern int adap_test;
+ 
+ int patch_config(struct rwnx_hw *rwnx_hw)
+ {
+-	const u32 rd_patch_addr = RAM_FMAC_FW_ADDR + 0x0198;
++    u32 fw_addr = testmode? RAM_LMAC_RF_FW_ADDR : RAM_FMAC_FW_ADDR;
++	const u32 rd_patch_addr = fw_addr + 0x0198;
+ 	u32 aic_patch_addr;
+ 	u32 config_base, aic_patch_str_base;
+ 	#if (NEW_PATCH_BUFFER_MAP)
+@@ -2449,7 +2450,7 @@ int patch_config(struct rwnx_hw *rwnx_hw)
+ 	AICWFDBG(LOGINFO, "%s: cfg_base:%x,patch_str_base:%x,adap_test=%d\n", __func__, config_base, aic_patch_str_base, adap_test);
+ 
+ 	#if (NEW_PATCH_BUFFER_MAP)
+-	rd_version_addr = RAM_FMAC_FW_ADDR + 0x01C;
++	rd_version_addr = fw_addr + 0x01C;
+ 	rd_version_val = *((volatile u32 *) (rwnx_hw->pcidev->pci_bar0_vaddr + rd_version_addr));
+ 	AICWFDBG(LOGINFO, "rd_version_val=%08X\n", rd_version_val);
+ 	rwnx_hw->pcidev->fw_version_uint = rd_version_val;
+@@ -2508,7 +2509,8 @@ int patch_config(struct rwnx_hw *rwnx_hw)
+ 
+ int patch_config_d80x2(struct rwnx_hw *rwnx_hw)
+ {
+-	const u32 rd_patch_addr = RAM_FMAC_FW_ADDR + 0x1a8;//0x0198; g_wifi_settings
++    u32 fw_addr = testmode? RAM_LMAC_RF_FW_ADDR : RAM_FMAC_FW_ADDR;
++	const u32 rd_patch_addr = fw_addr + 0x1a8;//0x0198; g_wifi_settings
+ 	u32 aic_patch_addr;
+ 	u32 config_base, aic_patch_str_base;
+ 	u32 patch_buff_addr, patch_buff_base;
+@@ -4026,6 +4028,7 @@ int rwnx_platform_on(struct rwnx_hw *rwnx_hw, void *config)
+ 	u32 otad_base;
+ 	u32 gen2_base;
+ 	u32 bond_id;
++    u32 fw_addr = testmode? RAM_LMAC_RF_FW_ADDR : RAM_FMAC_FW_ADDR;
+ 
+ 	RWNX_DBG(RWNX_FN_ENTRY_STR);
+ 
+@@ -4065,6 +4068,7 @@ int rwnx_platform_on(struct rwnx_hw *rwnx_hw, void *config)
+ 			}
+ 		}
+ 
++<<<<<<< Updated upstream
+ 		if(rwnx_hw->pcidev->chip_id == PRODUCT_ID_AIC8800D80X2) {
+ 			printk("fw_flsupg %d \n",fw_flsupg);
+ 			if(fw_flsupg){
+@@ -4082,6 +4086,24 @@ int rwnx_platform_on(struct rwnx_hw *rwnx_hw, void *config)
+ 				mdelay(100);
+ 			}
+ 		}
++=======
++	if(rwnx_hw->pcidev->chip_id == PRODUCT_ID_AIC8800D80X2) {
++				printk("fw_flsupg %d \n",fw_flsupg);
++				if(fw_flsupg){
++					ret = rwnx_plat_bin_fw_upload_2(rwnx_hw,fw_addr, RWNX_8800D80X2_PCIE_FLASH_FW_NAME);
++					pcie_reset_firmware(rwnx_hw, fw_addr);
++					fw_flsupg = 0;
++					mdelay(1000);
++				}
++
++				printk("fw_flsupg %d \n",fw_flggen2);
++				if(fw_flggen2){
++					ret = rwnx_plat_bin_fw_upload_2(rwnx_hw,fw_addr, RWNX_8800D80X2_PCIE_FLASHGEN2_FW_NAME);
++					pcie_reset_firmware(rwnx_hw, fw_addr);
++					fw_flggen2 = 0;
++					mdelay(100);
++				}
++>>>>>>> Stashed changes
+ 	}
+ #endif
+ 
+@@ -4097,7 +4119,7 @@ int rwnx_platform_on(struct rwnx_hw *rwnx_hw, void *config)
+             patch_config_d80x2(rwnx_hw);
+ 
+         AICWFDBG(LOGINFO, "fw already load\n");
+-        pcie_reset_firmware(rwnx_hw, RAM_FMAC_FW_ADDR);
++        pcie_reset_firmware(rwnx_hw, fw_addr);
+         rwnx_plat_userconfig_load(rwnx_hw);
+         return 0;
+     }
+@@ -4112,18 +4134,18 @@ int rwnx_platform_on(struct rwnx_hw *rwnx_hw, void *config)
+     if(rwnx_hw->pcidev->chip_id == PRODUCT_ID_AIC8800D80) {
+         if (testmode == 0)
+             #ifdef CONFIG_USB_BT
+-            ret = rwnx_plat_bin_fw_upload_2(rwnx_hw,RAM_FMAC_FW_ADDR, RWNX_PCIE_FW_BT_NAME);
++            ret = rwnx_plat_bin_fw_upload_2(rwnx_hw,fw_addr, RWNX_PCIE_FW_BT_NAME);
+             #else
+-            ret = rwnx_plat_bin_fw_upload_2(rwnx_hw,RAM_FMAC_FW_ADDR, RWNX_PCIE_FW_NAME);
++            ret = rwnx_plat_bin_fw_upload_2(rwnx_hw,fw_addr, RWNX_PCIE_FW_NAME);
+             #endif
+         else
+-            ret = rwnx_plat_bin_fw_upload_2(rwnx_hw,RAM_FMAC_FW_ADDR, RWNX_PCIE_RF_FW_NAME);
++            ret = rwnx_plat_bin_fw_upload_2(rwnx_hw,fw_addr, RWNX_PCIE_RF_FW_NAME);
+     } else if(rwnx_hw->pcidev->chip_id == PRODUCT_ID_AIC8800D80X2) {
+         if (testmode == 0){
+-			ret = rwnx_plat_bin_fw_upload_2(rwnx_hw,RAM_FMAC_FW_ADDR, RWNX_8800D80X2_PCIE_FW_NAME);
++			ret = rwnx_plat_bin_fw_upload_2(rwnx_hw,fw_addr, RWNX_8800D80X2_PCIE_FW_NAME);
+         }
+         else
+-            ret = rwnx_plat_bin_fw_upload_2(rwnx_hw,RAM_FMAC_FW_ADDR, RWNX_8800D80X2_PCIE_RF_FW_NAME);
++            ret = rwnx_plat_bin_fw_upload_2(rwnx_hw,fw_addr, RWNX_8800D80X2_PCIE_RF_FW_NAME);
+     }
+ 	if (ret)
+ 		return ret;
+@@ -4133,7 +4155,7 @@ int rwnx_platform_on(struct rwnx_hw *rwnx_hw, void *config)
+ 	else
+ 		patch_config_d80x2(rwnx_hw);
+ 
+-	pcie_reset_firmware(rwnx_hw, RAM_FMAC_FW_ADDR);
++	pcie_reset_firmware(rwnx_hw, fw_addr);
+ 
+ 	#endif /* !CONFIG_ROM_PATCH_EN */
+ 	#endif
+diff --git a/PCIE/driver_fw/driver/aic8800d80x2/aic8800_fdrv/rwnx_platform.h b/PCIE/driver_fw/driver/aic8800d80x2/aic8800_fdrv/rwnx_platform.h
+index cf3e924e..c9f9ae68 100644
+--- a/PCIE/driver_fw/driver/aic8800d80x2/aic8800_fdrv/rwnx_platform.h
++++ b/PCIE/driver_fw/driver/aic8800d80x2/aic8800_fdrv/rwnx_platform.h
+@@ -35,6 +35,7 @@
+ #define RWNX_FCU_FW_NAME                "fcuram.bin"
+ 
+ #define RAM_FMAC_FW_ADDR                   0x00120000
++#define RAM_LMAC_RF_FW_ADDR                0x00140000
+ #define FW_RAM_ADID_BASE_ADDR_8800D80_U02  0x00201940
+ #define FW_RAM_PATCH_BASE_ADDR_8800D80_U02 0x0020B43c
+ 
+diff --git a/PCIE/driver_fw/fw/aic8800D80X2/fmacfw_8800D80X2_pcie.bin b/PCIE/driver_fw/fw/aic8800D80X2/fmacfw_8800D80X2_pcie.bin
+index f1cfe42f..38427853 100644
+Binary files a/PCIE/driver_fw/fw/aic8800D80X2/fmacfw_8800D80X2_pcie.bin and b/PCIE/driver_fw/fw/aic8800D80X2/fmacfw_8800D80X2_pcie.bin differ
+diff --git a/PCIE/driver_fw/fw/aic8800D80X2/lmacfw_rf_8800D80X2_pcie.bin b/PCIE/driver_fw/fw/aic8800D80X2/lmacfw_rf_8800D80X2_pcie.bin
+index 2c2aad57..4572902b 100644
+Binary files a/PCIE/driver_fw/fw/aic8800D80X2/lmacfw_rf_8800D80X2_pcie.bin and b/PCIE/driver_fw/fw/aic8800D80X2/lmacfw_rf_8800D80X2_pcie.bin differ

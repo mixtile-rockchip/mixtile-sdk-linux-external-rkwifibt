@@ -31,14 +31,17 @@ void aic_host_tx_flush(struct rwnx_hw *rwnx_hw)
     RWNX_DBG(RWNX_FN_ENTRY_STR);
 
     while (idx < IPC_TXDMA_DESC_CNT) {
+        struct rwnx_ipc_buf *tx_buf = NULL;
+        struct sk_buff *skb_tmp = NULL;
+        
         sw_txhdr = (struct rwnx_sw_txhdr *)rwnx_hw->ipc_env->txcfm[idx];
         if (!sw_txhdr) {
             idx++;
             continue;
         }
 
-        struct rwnx_ipc_buf *tx_buf = &sw_txhdr->ipc_desc;
-        struct sk_buff *skb_tmp = sw_txhdr->skb;
+        tx_buf = &sw_txhdr->ipc_desc;
+        skb_tmp = sw_txhdr->skb;
 
         AICWFDBG(LOGDEBUG,"aic_host_tx_flush: Completed TX descriptor found at index %d\n"
                 "                     sw_txhdr=%p, ipc_desc=%p, skb=%p\n",
@@ -67,12 +70,14 @@ void aic_host_tx_flush(struct rwnx_hw *rwnx_hw)
     for (queue_idx = 0; queue_idx < PCIE_TXQUEUE_CNT; queue_idx++) {
         for (desc_idx = 0; desc_idx < PCIE_TXDESC_CNT; desc_idx++) {
             if (rwnx_hw->ipc_env->tx_host_id[queue_idx][desc_idx]) {
+                struct sk_buff *skb_tmp = NULL;
+                struct rwnx_ipc_buf *tx_buf = NULL;
                 AICWFDBG(LOGTRACE,"aic_host_tx_flush: Found non-zero entry in tx_host_id[%d][%d]\n",
                     queue_idx, desc_idx);
-                struct sk_buff *skb_tmp = (struct sk_buff *)(uint64_t)rwnx_hw->ipc_env->tx_host_id[queue_idx][desc_idx];
+                skb_tmp = (struct sk_buff *)(uint64_t)rwnx_hw->ipc_env->tx_host_id[queue_idx][desc_idx];
                 sw_txhdr = ((struct rwnx_txhdr *)skb_tmp->data)->sw_hdr;
                 headroom = sw_txhdr->headroom;
-                struct rwnx_ipc_buf *tx_buf = &sw_txhdr->ipc_desc;
+                tx_buf = &sw_txhdr->ipc_desc;
 
                 rwnx_ipc_buf_a2e_release(rwnx_hw, tx_buf);
                 dma_unmap_single(rwnx_hw->dev, sw_txhdr->ipc_hostdesc.dma_addr,

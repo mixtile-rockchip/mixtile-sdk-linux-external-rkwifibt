@@ -886,6 +886,21 @@ static int aicwf_pcie_suspend(struct pci_dev *pdev, pm_message_t state)
 	}
 	spin_unlock_bh(&rwnx_hw->cb_lock);
 
+#ifdef CONFIG_LOWPOWER
+	printk("suspende lowpower\n");
+	struct ipc_shared_env_tag *shared = (struct ipc_shared_env_tag *)(rwnx_hw->pcidev->pci_bar0_vaddr + 0x1DC000);
+	*(volatile uint32_t *)&shared->fw_init_done = 0;
+	//writel(4, pci->emb_tpci + 0x0ec); //generate an empty int
+	volatile unsigned int *dst_mail = (volatile unsigned int *)(rwnx_hw->pcidev->pci_bar2_vaddr + 0x800ec);
+	dst_mail[0] = 0x4;	//generate an empty int
+#endif
+
+	u8 linkctrl;
+	u32 rd1, rd2;
+	pci_read_config_dword (pdev, 0x080, &rd1);
+	pci_read_config_byte(pdev, pdev->pcie_cap + PCI_EXP_LNKCTL, &linkctrl);
+	printk("rk suspend rd1=0x%x, linkctrl=0x%x\n", rd1, linkctrl);
+
 	ret = pci_save_state(pdev);
 	if (ret) {
 		printk("failed on pci_save_state %d\n", ret);
@@ -930,14 +945,38 @@ static int aicwf_pcie_resume(struct pci_dev *pdev)
 	}
 #endif
 
-	fw_started = *(volatile u32 *) (g_rwnx_plat->pcidev->pci_bar0_vaddr + 0x120000) == 0x1a2000;
+	u8 linkctrl;
+	u32 rd1, rd2;
+	pci_read_config_dword (pdev, 0x080, &rd1);
+	pci_read_config_byte(pdev, pdev->pcie_cap + PCI_EXP_LNKCTL, &linkctrl);
+	printk("rk resume rd1=0x%x, linkctrl=0x%x\n", rd1, linkctrl);
 
-	if(!fw_started) {
+	fw_started = *(volatile u32 *) (g_rwnx_plat->pcidev->pci_bar0_vaddr + 0x120000) == 0x1a2000;
+	printk("fw_started: %d\n", fw_started);
+
+	//if (1) { //(!fw_started) {
+	if (!fw_started) {
 		ret = aicwf_resume_access();
 		if (ret) {
-			printk("resume access fail %d\n", ret);
-			return ret;
+			printk("resume access fail %d!!!!!!!!!!!!!!!!!!!!!!!!!!!\n", ret);
+			//return ret;
 		}
+#if 0
+		pci_read_config_dword (pdev, 0x080, &rd1);
+		pci_read_config_dword (pdev, 0x230, &rd2);
+
+		pci_read_config_byte(pdev, pdev->pcie_cap + PCI_EXP_LNKCTL, &linkctrl);
+		if(linkctrl & 0x02){
+			linkctrl = linkctrl & ~0x02;
+			pci_write_config_byte(pdev, pdev->pcie_cap + PCI_EXP_LNKCTL, linkctrl);
+		}
+
+		printk("motify 3 linkctrl = %x, 080 = %x, 230 = %x", linkctrl, rd1, rd2);
+
+		pcie_capability_clear_word(pdev, PCI_EXP_LNKCTL, PCI_EXP_LNKCTL_CLKREQ_EN);
+		pcie_capability_clear_word(pdev, PCI_L1SS_CTL1 , PCI_L1SS_CTL1_ASPM_L1_1 );
+		pcie_capability_clear_word(pdev, PCI_L1SS_CTL1 , PCI_L1SS_CTL1_ASPM_L1_2 );
+#endif
 	} else {
 		printk("resume skip reload\n");
 
@@ -947,8 +986,26 @@ static int aicwf_pcie_resume(struct pci_dev *pdev)
 		mod_timer(&g_rwnx_plat->pcidev->tp_ctrl_timer, jiffies + msecs_to_jiffies(TEMP_GET_INTERVAL));
 #endif
 
-		return ret;
+		//return ret;
 	}
+
+#if 1
+		pci_read_config_dword (pdev, 0x080, &rd1);
+		pci_read_config_dword (pdev, 0x230, &rd2);
+
+		pci_read_config_byte(pdev, pdev->pcie_cap + PCI_EXP_LNKCTL, &linkctrl);
+		if(linkctrl & 0x02){
+			linkctrl = linkctrl & ~0x02;
+			pci_write_config_byte(pdev, pdev->pcie_cap + PCI_EXP_LNKCTL, linkctrl);
+		}
+
+		printk("motify 3 linkctrl = %x, 080 = %x, 230 = %x", linkctrl, rd1, rd2);
+
+		pcie_capability_clear_word(pdev, PCI_EXP_LNKCTL, PCI_EXP_LNKCTL_CLKREQ_EN);
+		pcie_capability_clear_word(pdev, PCI_L1SS_CTL1 , PCI_L1SS_CTL1_ASPM_L1_1 );
+		pcie_capability_clear_word(pdev, PCI_L1SS_CTL1 , PCI_L1SS_CTL1_ASPM_L1_2 );
+#endif
+
 	printk("%s end\n", __func__);
 
 	return ret;

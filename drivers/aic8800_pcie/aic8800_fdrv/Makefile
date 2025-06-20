@@ -5,6 +5,7 @@ EXTRA_CFLAGS += -Wno-pointer-to-int-cast
 #EXTRA_CFLAGS += -Wno-unused-function
 #EXTRA_CFLAGS += -Wno-maybe-uninitialized
 #EXTRA_CFLAGS += -Wno-unused-variable
+EXTRA_CFLAGS += -w
 
 RWNX_VERS_NUM := 6.4.3.0
 
@@ -108,7 +109,7 @@ CONFIG_TEMP_CONTROL = n
 CONFIG_DYNAMIC_PWR = n
 CONFIG_POWER_LIMIT = n
 CONFIG_FOR_IPCAM = n
-CONFIG_LOWPOWER = n
+CONFIG_LOWPOWER = y
 CONFIG_NO_FIRMWARE_RELOAD =n
 
 # Support of MU-MIMO transmission (need FW support)

@@ -49,6 +49,8 @@
 
 #define RWNX_8800D80X2_PCIE_FLASH_FW_NAME                   "fw_flsupg_m80x2p.bin"
 
+#define RWNX_8800D80X2_PCIE_FLASHGEN1_FW_NAME                   "fw_flsgen1_m80x2p.bin"
+
 #define RWNX_8800D80X2_PCIE_FLASHGEN2_FW_NAME                   "fw_flsgen2_m80x2p.bin"
 
 #ifdef CONFIG_FOR_IPCAM

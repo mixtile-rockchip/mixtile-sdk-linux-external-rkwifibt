@@ -79,6 +79,8 @@ enum {
 	GET_NOISE,
 	RDWR_BT_EFUSE_PWROFST,
 	EXEC_FLASH_OPER,
+	RDWR_PWRADD2X,
+	RDWR_EFUSE_PWRADD2X,
 };
 
 typedef struct {
@@ -1406,6 +1408,276 @@ static int aic_priv_cmd_country_set(struct rwnx_hw *rwnx_hw, int argc,
 	return ret;
 }
 
+#ifdef CONFIG_TEMP_CONTROL
+static int aic_priv_cmd_temp_ctrl_sw(struct rwnx_hw *rwnx_hw, int argc,
+									 char *argv[], char *command)
+{
+	if (argc < 2) {
+		AICWFDBG(LOGINFO, "%s param err\n", __func__);
+		return -1;
+	}
+
+	if (command_strtoul(argv[1], NULL, 10) == 0) {
+		AICWFDBG(LOGINFO, "tp to off\n");
+		rwnx_hw->pcidev->on_off = false;
+		rwnx_hw->pcidev->get_level = 0;
+		spin_lock_bh(&rwnx_hw->pcidev->tm_lock);
+		rwnx_hw->pcidev->tm_start = 0;
+		if (timer_pending(&rwnx_hw->pcidev->tp_ctrl_timer)) {
+			del_timer_sync(&rwnx_hw->pcidev->tp_ctrl_timer);
+		}
+		spin_unlock_bh(&rwnx_hw->pcidev->tm_lock);
+	} else if (command_strtoul(argv[1], NULL, 10) == 1) {
+		AICWFDBG(LOGINFO, "tp to on\n");
+		rwnx_hw->pcidev->on_off = true;
+		spin_lock_bh(&rwnx_hw->pcidev->tm_lock);
+		rwnx_hw->pcidev->tm_start = 1;
+		mod_timer(&rwnx_hw->pcidev->tp_ctrl_timer,
+				  jiffies + msecs_to_jiffies(TEMP_GET_INTERVAL));
+		spin_unlock_bh(&rwnx_hw->pcidev->tm_lock);
+	} else {
+		AICWFDBG(LOGINFO, "tp err param\n");
+		return -1;
+	}
+
+	return 0;
+}
+
+static int aic_priv_cmd_temp_sget(struct rwnx_hw *rwnx_hw, int argc,
+								  char *argv[], char *command)
+{
+	u8_l func = 0;
+	int bytes_written = 0;
+	int8_t tp_res[4];
+
+	if (argc < 2) {
+		AICWFDBG(LOGINFO, "%s param err\n", __func__);
+		return -1;
+	}
+
+	func = (u8_l)command_strtoul(argv[1], NULL, 10);
+	if (func == 0) {                            // get
+		if (rwnx_hw->pcidev->on_off) { // on
+			tp_res[0] = 1;
+			if (rwnx_hw->pcidev->set_level == 0)
+				tp_res[1] = rwnx_hw->pcidev->get_level;
+			else
+				tp_res[1] = rwnx_hw->pcidev->set_level;
+			AICWFDBG(LOGINFO, "tp_get on-off: %d, ctrl-level: %d\n", tp_res[0],
+					 tp_res[1]);
+			memcpy(command, &tp_res[0], 2);
+			bytes_written = 2;
+		} else { // off
+			tp_res[0] = 0;
+			AICWFDBG(LOGINFO, "tp_get on-off: %d\n", tp_res[0]);
+			memcpy(command, &tp_res[0], 1);
+			bytes_written = 1;
+		}
+	} else if (func == 1) { // set
+		if (rwnx_hw->pcidev->on_off == false) {
+			AICWFDBG(LOGINFO, "tp_set sw is off, return\n");
+			tp_res[0] = 0;
+			memcpy(command, &tp_res[0], 1);
+			bytes_written = 1;
+		} else {
+			if (argc < 3) {
+				AICWFDBG(LOGINFO, "%s param err\n", __func__);
+				return -1;
+			}
+			rwnx_hw->pcidev->set_level =
+				command_strtoul(argv[2], NULL, 10);
+			if (rwnx_hw->pcidev->set_level < 0 ||
+				rwnx_hw->pcidev->set_level > 2) {
+				AICWFDBG(LOGINFO, "set_level out of range\n");
+				rwnx_hw->pcidev->set_level = 0;
+			}
+			rwnx_hw->pcidev->get_level = 0;
+			tp_res[0] = 1;
+			tp_res[1] = rwnx_hw->pcidev->set_level;
+			AICWFDBG(LOGINFO, "tp_set ctrl-level: %d\n",
+					 rwnx_hw->pcidev->set_level);
+			memcpy(command, &tp_res[0], 2);
+			bytes_written = 2;
+
+			if (rwnx_hw->pcidev->set_level != 0) {
+				spin_lock_bh(&rwnx_hw->pcidev->tm_lock);
+				rwnx_hw->pcidev->tm_start = 0;
+				if (timer_pending(&rwnx_hw->pcidev->tp_ctrl_timer)) {
+					del_timer_sync(&rwnx_hw->pcidev->tp_ctrl_timer);
+				}
+				spin_unlock_bh(&rwnx_hw->pcidev->tm_lock);
+			} else if (rwnx_hw->pcidev->set_level == 0) {
+				spin_lock_bh(&rwnx_hw->pcidev->tm_lock);
+				rwnx_hw->pcidev->tm_start = 1;
+				mod_timer(&rwnx_hw->pcidev->tp_ctrl_timer,
+						  jiffies + msecs_to_jiffies(TEMP_GET_INTERVAL));
+				spin_unlock_bh(&rwnx_hw->pcidev->tm_lock);
+			}
+		}
+	} else {
+		AICWFDBG(LOGINFO, "tp command err\n");
+		return -1;
+	}
+
+	return bytes_written;
+}
+
+static int aic_priv_cmd_set_tmr_intval(struct rwnx_hw *rwnx_hw, int argc,
+									   char *argv[], char *command)
+{
+	u8_l func = 0;
+	int bytes_written = 0;
+
+	if (argc < 3) {
+		AICWFDBG(LOGINFO, "%s param err\n", __func__);
+		return -1;
+	}
+
+	func = (u8_l)command_strtoul(argv[1], NULL, 10);
+	if (func == 1) {
+		rwnx_hw->pcidev->interval_t1 =
+			command_strtoul(argv[2], NULL, 10);
+		AICWFDBG(LOGDEBUG, "set tmr_intval_1: %d\n",
+				 rwnx_hw->pcidev->interval_t1);
+		memcpy(command, &rwnx_hw->pcidev->interval_t1, 4);
+		bytes_written = 4;
+	} else if (func == 2) {
+		rwnx_hw->pcidev->interval_t2 =
+			command_strtoul(argv[2], NULL, 10);
+		AICWFDBG(LOGDEBUG, "set tmr_intval_2: %d\n",
+				 rwnx_hw->pcidev->interval_t2);
+		memcpy(command, &rwnx_hw->pcidev->interval_t2, 4);
+		bytes_written = 4;
+	} else {
+		AICWFDBG(LOGERROR, "%s command err\n", __func__);
+		return -1;
+	}
+
+	return bytes_written;
+}
+
+static int aic_priv_cmd_get_tmr_intval(struct rwnx_hw *rwnx_hw, int argc,
+									   char *argv[], char *command)
+{
+	u8_l func = 0;
+	int bytes_written = 0;
+
+	if (argc < 2) {
+		AICWFDBG(LOGINFO, "%s param err\n", __func__);
+		return -1;
+	}
+	func = (u8_l)command_strtoul(argv[1], NULL, 10);
+	if (func == 1) {
+		AICWFDBG(LOGDEBUG, "get tmr_intval_1: %d\n",
+				 rwnx_hw->pcidev->interval_t1);
+		memcpy(command, &rwnx_hw->pcidev->interval_t1, 4);
+		bytes_written = 4;
+	} else if (func == 2) {
+		AICWFDBG(LOGDEBUG, "get tmr_intval_1: %d\n",
+				 rwnx_hw->pcidev->interval_t2);
+		memcpy(command, &rwnx_hw->pcidev->interval_t2, 4);
+		bytes_written = 4;
+	} else {
+		AICWFDBG(LOGERROR, "%s command err\n", __func__);
+		return -1;
+	}
+
+	return bytes_written;
+}
+
+static int aic_priv_cmd_temp_get(struct rwnx_hw *rwnx_hw, int argc,
+								 char *argv[], char *command)
+{
+	int bytes_written = 0;
+	struct mm_set_vendor_swconfig_cfm tp_cfm;
+
+	if (timer_pending(&rwnx_hw->pcidev->tp_ctrl_timer)) {
+		if (jiffies_to_msecs(jiffies - rwnx_hw->started_jiffies) < 5000) {
+			AICWFDBG(LOGINFO, "tp_get temp_1: %d\n", rwnx_hw->temp);
+			memcpy(command, &rwnx_hw->temp, 1);
+		} else {
+			if (rwnx_send_get_temp_req(rwnx_hw, &tp_cfm))
+				return -1;
+			AICWFDBG(LOGINFO, "tp_get temp_2: %d\n",
+					 tp_cfm.temp_comp_get_cfm.degree);
+			rwnx_hw->pcidev->cur_temp =
+				tp_cfm.temp_comp_get_cfm.degree;
+			memcpy(command, &tp_cfm.temp_comp_get_cfm.degree, 1);
+		}
+	} else {
+		if (rwnx_send_get_temp_req(rwnx_hw, &tp_cfm))
+			return -1;
+		AICWFDBG(LOGINFO, "tp_get temp_3: %d\n",
+				 tp_cfm.temp_comp_get_cfm.degree);
+		memcpy(command, &tp_cfm.temp_comp_get_cfm.degree, 1);
+	}
+	bytes_written = 1;
+
+	return bytes_written;
+}
+
+static int aic_priv_cmd_tp_thd_set(struct rwnx_hw *rwnx_hw, int argc,
+								   char *argv[], char *command)
+{
+	u8_l func = 0;
+	int bytes_written = 0;
+
+	if (argc < 3) {
+		AICWFDBG(LOGERROR, "%s param err\n", __func__);
+		return -1;
+	}
+	func = (u8_l)command_strtoul(argv[1], NULL, 10);
+
+	if (func == 1) {
+		rwnx_hw->pcidev->tp_thd_1 = command_strtoul(argv[2], NULL, 10);
+		AICWFDBG(LOGINFO, "set tp_thd_1: %d\n",
+				 rwnx_hw->pcidev->tp_thd_1);
+		memcpy(command, &rwnx_hw->pcidev->tp_thd_1, 1);
+		bytes_written = 1;
+	} else if (func == 2) {
+		rwnx_hw->pcidev->tp_thd_2 = command_strtoul(argv[2], NULL, 10);
+		AICWFDBG(LOGINFO, "set tp_thd_2: %d\n",
+				 rwnx_hw->pcidev->tp_thd_2);
+		memcpy(command, &rwnx_hw->pcidev->tp_thd_2, 1);
+		bytes_written = 1;
+	} else {
+		AICWFDBG(LOGERROR, "%s command err\n", __func__);
+		return -1;
+	}
+	return bytes_written;
+}
+
+static int aic_priv_cmd_tp_thd_get(struct rwnx_hw *rwnx_hw, int argc,
+								   char *argv[], char *command)
+{
+	u8_l func = 0;
+	int bytes_written = 0;
+
+	if (argc < 2) {
+		AICWFDBG(LOGERROR, "%s param err\n", __func__);
+		return -1;
+	}
+	func = (u8_l)command_strtoul(argv[1], NULL, 10);
+
+	if (func == 1) {
+		AICWFDBG(LOGINFO, "get tp_thd_1: %d\n",
+				 rwnx_hw->pcidev->tp_thd_1);
+		memcpy(command, &rwnx_hw->pcidev->tp_thd_1, 1);
+		bytes_written = 1;
+	} else if (func == 2) {
+		AICWFDBG(LOGINFO, "set tp_thd_2: %d\n",
+				 rwnx_hw->pcidev->tp_thd_2);
+		memcpy(command, &rwnx_hw->pcidev->tp_thd_2, 1);
+		bytes_written = 1;
+	} else {
+		AICWFDBG(LOGERROR, "%s command err\n", __func__);
+		return -1;
+	}
+	return bytes_written;
+}
+
+#endif
+
 static int aic_priv_cmd_get_noise(struct rwnx_hw *rwnx_hw, int argc, char *argv[], char *command)
 {
     rwnx_send_rftest_req(rwnx_hw, GET_NOISE, 0, NULL, &cfm);
@@ -1416,6 +1688,149 @@ static int aic_priv_cmd_get_noise(struct rwnx_hw *rwnx_hw, int argc, char *argv[
 
     return 2;
 }
+
+static int aic_priv_cmd_get_txbytes(struct rwnx_hw *rwnx_hw, int argc, char *argv[], char *command)
+{
+    struct mm_get_statistic_cfm cfm;
+    int i;
+    struct rwnx_sta *sta;
+
+    int ret = rwnx_send_get_statistic_req(rwnx_hw, &cfm);
+    if(ret) {
+        AICWFDBG(LOGERROR,"%s fail\n", __func__);
+        return 0;
+    }
+    command[0] = (u8)cfm.sta_txbytes_cfm.sta_cnt;
+
+    for(i=0; i<cfm.sta_txbytes_cfm.sta_cnt; i++) {
+        sta = &rwnx_hw->sta_table[cfm.sta_txbytes_cfm.sta_txbytes[i].sta_idx];
+        memcpy(&command[10*i+1], sta->mac_addr, 6);
+        *(u32 *)&command[10*i+6+1] = cfm.sta_txbytes_cfm.sta_txbytes[i].txbytes;
+        AICWFDBG(LOGINFO, "%s: %pM: %d\n", __func__, sta->mac_addr, *(u32 *)&command[10*i+6+1]);
+    }
+
+    return 10*cfm.sta_txbytes_cfm.sta_cnt+1;
+}
+
+static int aic_priv_cmd_rdwr_pwradd2x (struct rwnx_hw *rwnx_hw, int argc, char *argv[], char *command)
+{
+	u8_l func = 0;
+	int8_t pwradd2x_in = 0;
+
+#ifdef AICWF_PCIE_SUPPORT
+	struct aic_pci_dev *dev = g_rwnx_plat->pcidev;
+#endif
+
+	if (dev->chip_id != PRODUCT_ID_AIC8800D80) {
+		AICWFDBG(LOGERROR, "RDWR_PWRADD2X, only D40/80 support\n");
+		return -EINVAL;
+	}
+
+	if (argc > 1) {
+		func = (u8_l)command_strtoul(argv[1], NULL, 10);
+	}
+	if ((func > 0) && (argc > 2)) {
+		pwradd2x_in = (int8_t)command_strtoul(argv[2], NULL, 10);
+	}
+	if (func == 0) { // read cur
+		rwnx_send_rftest_req(rwnx_hw, RDWR_PWRADD2X, 0, NULL, &cfm);
+	} else if ((func == 1) || (func == 2)) { // write pwradd2x
+			AICWFDBG(LOGINFO, "set pwradd2x_%s %d\r\n", (func == 1) ? "2g4" : "5g", pwradd2x_in);
+			if (pwradd2x_in < -15 ||  pwradd2x_in > 15) {
+				AICWFDBG(LOGERROR, "wrong params %d,  pwradd2x: -15 ~ 15\n", pwradd2x_in);
+				return -EINVAL;
+			} else {
+				u8_l buf[2] = {func, (u8_l)pwradd2x_in};
+				rwnx_send_rftest_req(rwnx_hw, RDWR_PWRADD2X, sizeof(buf), buf, &cfm);
+			}
+	} else {
+		AICWFDBG(LOGERROR, "wrong func: %x\n", func);
+		return -EINVAL;
+	}
+	memcpy(command, &cfm.rftest_result[0], 2);
+	return 2;
+}
+
+static int aic_priv_cmd_rdwr_efuse_pwradd2x (struct rwnx_hw *rwnx_hw, int argc, char *argv[], char *command)
+{
+	u8_l func = 0;
+	int8_t pwradd2x_in = 0;
+#ifdef AICWF_PCIE_SUPPORT
+	struct aic_pci_dev *dev = g_rwnx_plat->pcidev;
+#endif
+
+	if (dev->chip_id != PRODUCT_ID_AIC8800D80) {
+		AICWFDBG(LOGERROR, "RDWR_PWRADD2X, only D40/80 support\n");
+		return -EINVAL;
+	}
+
+	if (argc > 1) {
+		func = (u8_l)command_strtoul(argv[1], NULL, 10);
+	}
+	if ((func > 0) && (argc > 2)) {
+		pwradd2x_in = (int8_t)command_strtoul(argv[2], NULL, 10);
+	}
+	if (func == 0) { // read cur
+		rwnx_send_rftest_req(rwnx_hw, RDWR_EFUSE_PWRADD2X, 0, NULL, &cfm);
+	} else if ((func == 1) || (func == 2)) { // write pwradd2x
+			AICWFDBG(LOGINFO, "set efuse pwradd2x_%s %d\r\n", (func == 1) ? "2g4" : "5g", pwradd2x_in);
+			if (pwradd2x_in < -15 ||  pwradd2x_in > 15) {
+				AICWFDBG(LOGERROR, "wrong params %d,  pwradd2x: -15 ~ 15\n", pwradd2x_in);
+				return -EINVAL;
+			} else {
+				u8_l buf[2] = {func, (u8_l)pwradd2x_in};
+				rwnx_send_rftest_req(rwnx_hw, RDWR_EFUSE_PWRADD2X, sizeof(buf), buf, &cfm);
+			}
+	} else {
+		AICWFDBG(LOGERROR, "wrong func: %x\n", func);
+		return -EINVAL;
+	}
+	memcpy(command, &cfm.rftest_result[0], 3);
+	return 3;
+}
+
+#ifdef CONFIG_DYNAMIC_PERPWR
+static int aic_priv_cmd_set_sta_thd(struct rwnx_hw *rwnx_hw, int argc, char *argv[], char *command)
+{
+	int ret = 0;
+	int i;
+	s8_l val;
+
+	if (argc < 3) {
+		AICWFDBG(LOGERROR, "%s: Invalid parameters (argc=%d)\n", __func__, argc);
+		return -EINVAL;
+	}
+
+	AICWFDBG(LOGDEBUG, "cmd set_sta_thd: %s, %s\n", argv[1], argv[2]);
+
+	val = (s8_l)command_strtoul(argv[2], NULL, 10);
+
+	struct {
+		const char *name;
+		s8_l *target;
+		size_t name_len;
+	} thd_map[] = {
+		{ "rssi_thd_0",     &rwnx_hw->pwrth.rssi_thd_0,     10 },
+		{ "rssi_thd_1",     &rwnx_hw->pwrth.rssi_thd_1,     10 },
+		{ "rssi_thd_2",     &rwnx_hw->pwrth.rssi_thd_2,     10 },
+		{ "pwr_loss_lvl_0", &rwnx_hw->pwrth.pwr_loss_lvl_0, 14 },
+		{ "pwr_loss_lvl_1", &rwnx_hw->pwrth.pwr_loss_lvl_1, 14 },
+		{ "pwr_loss_lvl_2", &rwnx_hw->pwrth.pwr_loss_lvl_2, 14 },
+		{ "pwr_loss_lvl_3", &rwnx_hw->pwrth.pwr_loss_lvl_3, 14 },
+	};
+
+	for (i = 0; i < ARRAY_SIZE(thd_map); i++) {
+		if (strncmp(argv[1], thd_map[i].name, thd_map[i].name_len) == 0) {
+			*thd_map[i].target = val;
+			AICWFDBG(LOGINFO, "%s: %s = %d\n", __func__, thd_map[i].name, val);
+			return 0;
+		}
+	}
+
+	AICWFDBG(LOGERROR, "%s: Unknown parameter '%s'\n", __func__, argv[1]);
+	return -EINVAL;
+}
+#endif
 
 static int aic_priv_cmd_help (struct rwnx_hw *rwnx_hw, int argc, char *argv[], char *command)
 {
@@ -1530,6 +1945,28 @@ static const struct aic_priv_cmd aic_priv_commands[] = {
 	  "<val> = 0 check, 1 rec, 2 prot 3 rd_wcr0 4 er_wcr0 "},
 	{"country_set", aic_priv_cmd_country_set, "<ccode>"},
     {"get_noise", aic_priv_cmd_get_noise, "get noise"},
+	{"rdwr_pwradd2x", aic_priv_cmd_rdwr_pwradd2x,
+	  "a value is added for both 2.4G and 5G to achieve overall power adjustment of the band"},
+	{"rdwr_efuse_pwradd2x", aic_priv_cmd_rdwr_efuse_pwradd2x,
+	  "a value is added for both 2.4G and 5G to achieve overall power adjustment of the band, write to efuse"},
+#ifdef CONFIG_TEMP_CONTROL
+	{"TEMP_CTRL_SW", aic_priv_cmd_temp_ctrl_sw, "<val> 1--open, 0--close"},
+	{"TEMP_CTRL_SET_GET", aic_priv_cmd_temp_sget,
+	 "<option> <val> option--0-get,1-set; val--0/1/2"},
+	{"SET_TMR_INTVAL", aic_priv_cmd_set_tmr_intval,
+	 "<index> <time> index--0/1, time ms"},
+	{"GET_TMR_INTVAL", aic_priv_cmd_get_tmr_intval, "<index> index--0/1"},
+	{"TEMP_GET", aic_priv_cmd_temp_get, "no param"},
+	{"TEMP_THRESHOLD_SET", aic_priv_cmd_tp_thd_set,
+	 "<index> <val> index--0/1, val--degree centigrade"},
+	{"TEMP_THRESHOLD_GET", aic_priv_cmd_tp_thd_get, "<index> inddex--0/1"},
+#endif
+    {"get_txbytes", aic_priv_cmd_get_txbytes, "get_txbytes"},
+#ifdef CONFIG_DYNAMIC_PERPWR
+	{"set_sta_thd", aic_priv_cmd_set_sta_thd,
+	  "set per_sta power threshold, (set_sta_thd rssi_thd_0 value; set_sta_thd pwr_loss_lvl_0 value)"},
+#endif
+
 //Reserve for new aic_priv_cmd.
 	{ "help", aic_priv_cmd_help,
 	  "= show usage help" },
@@ -1834,7 +2271,7 @@ int get_cs_info(struct rwnx_vif *vif, u8 *mac_addr, u8 *val)
 
         cs_info.phymode = phymode; // 0:b 1:g 2:a 3:n 4:ac 5:ax
         //snr (int8_t)rx_vect2->evm1, (int8_t)rx_vect2->evm2
-        cs_info.snr = (int8_t)(rx_vect2->evm1) + (int8_t)(rx_vect2->evm2) / 2;
+        cs_info.snr = ((int8_t)(rx_vect2->evm1) + (int8_t)(rx_vect2->evm2)) / 2;
         cs_info.noise = cs_info.rssi - cs_info.snr; //rssi - snr
 
         //chanutil TBD
@@ -2035,7 +2472,12 @@ int android_priv_cmd(struct net_device *net, struct ifreq *ifr, int cmd)
         goto exit;
     }
     else if(!strncasecmp(command, CMD_SET_PCIE_DOWN, strlen(CMD_SET_PCIE_DOWN))) {
+		u8 cnt = 20;
         AICWFDBG(LOGERROR, "cmd set pcie down\n");
+		while(vif->rwnx_hw->cmd_mgr->queue_sz && cnt) {
+			cnt--;
+			msleep(100);
+		}
         aicwf_pcie_vif_down_db(vif->rwnx_hw->pcidev);
         set_pcie_down = true;
 

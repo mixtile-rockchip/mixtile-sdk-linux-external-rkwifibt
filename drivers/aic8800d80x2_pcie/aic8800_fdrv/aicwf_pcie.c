@@ -114,7 +114,13 @@ void aicwf_netif_ctrl(struct aic_pci_dev *pcidev, int val)
 	list_for_each_entry(rwnx_vif, &pcidev->rwnx_hw->vifs, list) {
 		if (!rwnx_vif || !rwnx_vif->ndev || !rwnx_vif->up)
 			continue;
-		netif_tx_stop_all_queues(rwnx_vif->ndev);//netif_stop_queue(rwnx_vif->ndev);
+
+		if (pcidev->rwnx_hw->fc == 0) {
+			pcidev->rwnx_hw->fc = 1;
+			AICWFDBG(LOGDEBUG,"tp_fc:%d %d %d \n",atomic_read(&pcidev->rwnx_hw->txdata_total),atomic_read(&pcidev->rwnx_hw->txdata_cnt),atomic_read(&pcidev->rwnx_hw->txdata_cnt_push));
+			netif_tx_stop_all_queues(rwnx_vif->ndev);//netif_stop_queue(rwnx_vif->ndev);
+		}
+
 	}
 	spin_unlock_irqrestore(&pcidev->tx_flow_lock, flags);
 	pcidev->net_stop = true;
@@ -175,7 +181,13 @@ void aicwf_netif_worker(struct work_struct *work)
 	list_for_each_entry(rwnx_vif, &pcidev->rwnx_hw->vifs, list) {
 		if (!rwnx_vif || !rwnx_vif->ndev || !rwnx_vif->up)
 			continue;
-		netif_tx_wake_all_queues(rwnx_vif->ndev);//netif_wake_queue(rwnx_vif->ndev);
+
+		if (atomic_read(&pcidev->rwnx_hw->txdata_total) <128 && pcidev->rwnx_hw->fc) {
+			pcidev->rwnx_hw->fc = 0;
+			AICWFDBG(LOGINFO,"tp_fcr\n");
+			netif_tx_wake_all_queues(rwnx_vif->ndev);//netif_wake_queue(rwnx_vif->ndev);
+		}
+
 	}
 	spin_unlock_irqrestore(&pcidev->tx_flow_lock, flags);
 	pcidev->net_stop = false;
@@ -259,12 +271,21 @@ static void aicwf_temp_ctrl_timer(struct timer_list *t)
 irqreturn_t aicwf_pcie_irq_hdlr(int irq, void *dev_id)
 {
     struct aic_pci_dev *pciedev = (struct aic_pci_dev *) dev_id;
+    unsigned long flags;
 
     //printk("%s:%lx\n", __func__);
     if(pciedev->rwnx_hw) {
-        disable_irq_nosync(irq);
-        pciedev->rwnx_hw->is_irq_disable = 1;
+        spin_lock_irqsave(&pciedev->irq_lock, flags);
+        if(pciedev->rwnx_hw->is_irq_disable == 0) {
+            disable_irq_nosync(irq);
+            pciedev->rwnx_hw->is_irq_disable = 1;
+        }
+        spin_unlock_irqrestore(&pciedev->irq_lock, flags);
+        #ifndef CONFIG_PCIE_PROCESS_THREAD
         tasklet_schedule(&pciedev->rwnx_hw->task);
+        #else
+        complete(&pciedev->bus_if->pcie_irq_proc_trgg);
+        #endif
         #ifndef CONFIG_HSTMSI_SUPPORT
         writel(0x10, pciedev->emb_tpci + 0x0ec);
 	    #endif
@@ -585,6 +606,7 @@ static int aicwf_pcie_init(struct aic_pci_dev *pciedev)
         goto out_irq;
     }
 
+    spin_lock_init(&pciedev->irq_lock);
 	if((pciedev->chip_id == PRODUCT_ID_AIC8800D80) || (pciedev->chip_id == PRODUCT_ID_AIC8800D80X2)) {
 		//# by G: msg waitlock at L1
 		pci_read_config_byte(pci_dev, pci_dev->pcie_cap + PCI_EXP_LNKCTL, &linkctrl);
@@ -716,6 +738,15 @@ static int aicwf_pcie_probe(struct pci_dev *pci_dev, const struct pci_device_id 
 		LOG_ERROR("%s: pci plat init fail\n", __func__);
 		goto free;
 	}
+#ifdef AICWF_PCIE_SUPPORT
+	bus_if->busrx_thread = kthread_run(pcie_rxbuf_rep_thread, (void *)bus_if->bus_priv.pci->rx_priv, "pcie_rxbuf_rep_thread");
+	if (IS_ERR(bus_if->busrx_thread)) {
+		bus_if->bustx_thread  = NULL;
+		txrx_err("pcie_rxbuf_rep_thread run fail\n");
+		goto free;
+	}
+#endif
+
 	aicwf_hostif_ready();
 	goto out;
 
@@ -989,6 +1020,26 @@ void rwnx_data_dump(char* tag, void* data, unsigned long len){
 
 }
 
+static inline void aic_thread_wait_stop(void)
+{
+#if 1// PLATFORM_LINUX
+	#if 0
+	while (!kthread_should_stop()){
+        AICWFDBG(LOGINFO, "%s waiting for thread_stop notify \r\n", __func__);
+		msleep(100);
+    }
+	#else
+	set_current_state(TASK_INTERRUPTIBLE);
+	while (!kthread_should_stop()) {
+        AICWFDBG(LOGINFO, "%s waiting for thread_stop notify \r\n", __func__);
+		schedule();
+		set_current_state(TASK_INTERRUPTIBLE);
+	}
+	__set_current_state(TASK_RUNNING);
+	#endif
+#endif
+}
+
 int pcie_rxbuf_rep_thread(void *data)
 {
 	struct aicwf_rx_priv *rx_priv = (struct aicwf_rx_priv *)data;
@@ -996,18 +1047,13 @@ int pcie_rxbuf_rep_thread(void *data)
 	struct rwnx_hw *rwnx_hw = NULL;
 
 	while (1) {
-		if (kthread_should_stop()) {
-			AICWFDBG(LOGERROR, "pcie busrx thread stop\n");
+		if (!wait_for_completion_interruptible_timeout(&bus_if->busrx_trgg, msecs_to_jiffies(1000))) {
+			AICWFDBG(LOGTRACE, "%s wait for completion timeout \r\n", __func__);
+		}
+			if (bus_if->state == BUS_DOWN_ST) {
+			AICWFDBG(LOGERROR, "%s will stop\n",__func__);
 			break;
 		}
-		if (!wait_for_completion_interruptible(&bus_if->busrx_trgg)) {
-
-			//bus_if = g_rwnx_plat->pcidev->bus_if;
-			//rwnx_hw = g_rwnx_plat->pcidev->rwnx_hw;
-
-			if (bus_if->state == BUS_DOWN_ST)
-				continue;
-
 			AICWFDBG(LOGERROR, "%s trigger \n",__func__);
 			//printk("trigger rwnx_hw = %px \n",rwnx_hw);
 			if(g_rwnx_plat->pcidev && g_rwnx_plat->pcidev->rwnx_hw) {
@@ -1021,9 +1067,9 @@ int pcie_rxbuf_rep_thread(void *data)
 				break;
 			}
 			for(;atomic_read(&rwnx_hw->rxbuf_cnt) < rwnx_hw->ipc_env->rxbuf_nb;){
-                if (bus_if->state == BUS_DOWN_ST){
-                    break;
-                }
+	            if (bus_if->state == BUS_DOWN_ST){
+	                break;
+	            }
 				if(rwnx_ipc_rxbuf_alloc(rwnx_hw)){
 					AICWFDBG(LOGERROR, "pcie_rxbuf_rep_thread rxbuf alloc fail,now rxbuf_cnt = %d \n",atomic_read(&rwnx_hw->rxbuf_cnt));
 					msleep(10);
@@ -1031,10 +1077,51 @@ int pcie_rxbuf_rep_thread(void *data)
 				}
 			}
 			AICWFDBG(LOGTRACE, "%s out \n",__func__);
-		}
 	}
+	aic_thread_wait_stop();
+	AICWFDBG(LOGINFO, "%s Exit\r\n", __func__);
 	return 0;
 }
+
+#ifdef CONFIG_PCIE_PROCESS_THREAD
+int pcie_irq_process_thread(void *data)
+{
+    struct aic_pci_dev *pcidev = (struct aic_pci_dev *)data;
+    struct aicwf_bus *bus_if = pcidev->bus_if;
+    struct rwnx_hw *rwnx_hw = NULL;
+
+    #if 0
+    #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0)
+    sched_set_fifo_low(current);
+    #else
+    struct sched_param param;
+    param.sched_priority = 1;
+    sched_setscheduler(current, SCHED_FIFO, &param);
+    #endif
+    #endif
+
+	while (1) {
+		if (!wait_for_completion_interruptible(&bus_if->pcie_irq_proc_trgg)) {
+			if (bus_if->state == BUS_DOWN_ST){
+				AICWFDBG(LOGERROR, "%s will stop\n",__func__);
+				break;
+			}
+            //AICWFDBG(LOGERROR, "%s trigger \n",__func__);
+            if(g_rwnx_plat->pcidev && g_rwnx_plat->pcidev->rwnx_hw) {
+                rwnx_hw = g_rwnx_plat->pcidev->rwnx_hw;
+            } else {
+                AICWFDBG(LOGERROR, "%s NULL rwnx_hw \n",__func__);
+                break;
+            }
+
+            rwnx_task((pcidev->rwnx_hw));
+        }
+    }
+	aic_thread_wait_stop();
+	AICWFDBG(LOGINFO, "%s Exit\r\n", __func__);
+    return 0;
+}
+#endif
 
 #ifdef CONFIG_RX_SKBLIST
 #ifdef CONFIG_RX_TASKLET
@@ -1176,20 +1263,18 @@ int pcie_rxbuf_process_thread(void *data)
     int i, mpdu_len, offset;
 
 	while (1) {
-		if (kthread_should_stop()) {
-			AICWFDBG(LOGERROR, "pcie busrx thread stop\n");
-			break;
-		}
 		if (!wait_for_completion_interruptible(&bus_if->rx_trgg)) {
-			if (bus_if->state == BUS_DOWN_ST)
-				continue;
-            rwnx_hw = g_rwnx_plat->pcidev->rwnx_hw;
-            while (1) {
-                spin_lock_bh(&rx_priv->rxqlock);
-                if (aicwf_is_framequeue_empty(&rx_priv->rxq)) {
-                    spin_unlock_bh(&rx_priv->rxqlock);
-                    break;
-                }
+			if (bus_if->state == BUS_DOWN_ST){
+				AICWFDBG(LOGERROR, "%s will stop\n",__func__);
+				break;
+			}
+	        rwnx_hw = g_rwnx_plat->pcidev->rwnx_hw;
+	        while (1) {
+	            spin_lock_bh(&rx_priv->rxqlock);
+	            if (aicwf_is_framequeue_empty(&rx_priv->rxq)) {
+	                spin_unlock_bh(&rx_priv->rxqlock);
+	                break;
+	            }
 
 				pick = skb_peek(&rx_priv->rxq.queuelist[0]);
 				hw_rxhdr = (struct hw_rxhdr *)pick->data;
@@ -1203,107 +1288,107 @@ int pcie_rxbuf_process_thread(void *data)
 				if(atomic_read(&rwnx_hw->pcidev->rx_priv->rx_wait) == 1)
 					atomic_set(&rwnx_hw->pcidev->rx_priv->rx_wait, 0);
 
-                skb = aicwf_frame_dequeue(&rx_priv->rxq);
-                //printk("deq:%p,%p\n", skb, pick);
-                atomic_dec(&rx_priv->rx_cnt);
-                spin_unlock_bh(&rx_priv->rxqlock);
-                if (skb == NULL) {
-                    txrx_err("skb_error\r\n");
-                    break;
-                }
+	            skb = aicwf_frame_dequeue(&rx_priv->rxq);
+	            //printk("deq:%p,%p\n", skb, pick);
+	            atomic_dec(&rx_priv->rx_cnt);
+	            spin_unlock_bh(&rx_priv->rxqlock);
+	            if (skb == NULL) {
+	                txrx_err("skb_error\r\n");
+	                break;
+	            }
 
-                mpdu_len = ((skb->data[1]<<8) |skb->data[0]) + 60;
-                //skb_put(skb, mpdu_len);
-                //hw_rxhdr = (struct hw_rxhdr *)skb->data;
-                if(hw_rxhdr->flags_is_amsdu) {
-                     //printk("rx amsdu:%x,%x,%d\n",skb->data[1], skb->data[0], hw_rxhdr->hwvect.reserved);
+	            mpdu_len = ((skb->data[1]<<8) |skb->data[0]) + 60;
+	            //skb_put(skb, mpdu_len);
+	            //hw_rxhdr = (struct hw_rxhdr *)skb->data;
+	            if(hw_rxhdr->flags_is_amsdu) {
+	                 //printk("rx amsdu:%x,%x,%d\n",skb->data[1], skb->data[0], hw_rxhdr->hwvect.reserved);
 
-                    if(hw_rxhdr->hwvect.reserved <= 1)
-                        AICWFDBG(LOGINFO, "amsdu but cnt=%x,%x,%d\n",skb->data[1], skb->data[0], hw_rxhdr->hwvect.reserved);
+	                if(hw_rxhdr->hwvect.reserved <= 1)
+	                    AICWFDBG(LOGINFO, "amsdu but cnt=%x,%x,%d\n",skb->data[1], skb->data[0], hw_rxhdr->hwvect.reserved);
 
-                    if(hw_rxhdr->hwvect.reserved > 10)
-                        AICWFDBG(LOGERROR, "warning: amsdu cnt=%d\n", hw_rxhdr->hwvect.reserved);
-                    first = skb;
-                    skb_put(skb, 2048);
-                    //dev_kfree_skb(skb);
-                    for(i=0; i<hw_rxhdr->hwvect.reserved-1;i++) {
-                        spin_lock_bh(&rx_priv->rxqlock);
-                        while (aicwf_is_framequeue_empty(&rx_priv->rxq)) {
-                            //printk("no next skb, wait\n");
-                            spin_unlock_bh(&rx_priv->rxqlock);
-                            msleep(10);
-                            spin_lock_bh(&rx_priv->rxqlock);
-                        }
-                        next_skb = aicwf_frame_dequeue(&rx_priv->rxq);
-                        if(next_skb == NULL) {
-                            AICWFDBG(LOGERROR, "should not happen!!!!!!!!!!!\n");
-                            spin_unlock_bh(&rx_priv->rxqlock);
-                            break;
-                        }
-                        //printk("deq1:%p\n", next_skb);
-                        skb_put(next_skb, 2048);
-                        atomic_dec(&rx_priv->rx_cnt);
-                        next_skb->next = NULL;
-                        skb->next = next_skb;
-                        skb = next_skb;
-                        //dev_kfree_skb(next_skb);
-                        spin_unlock_bh(&rx_priv->rxqlock);
-                    }
-                    skb = first;
-                }else {
-                    if(mpdu_len > 2048) {
-                        AICWFDBG(LOGERROR, "rx len > 2048: %d,%d\n", mpdu_len, hw_rxhdr->hwvect.reserved);
-                        //rwnx_data_dump(">2048: ", skb->data, 96);
-                        offset = 0;
-                        //if fw not discart since no hostbuf, cnt should > 1
-                        if(hw_rxhdr->hwvect.reserved > 1) {
-                            skb_new = dev_alloc_skb(mpdu_len);
-                            if(skb_new)
-                                skb_put(skb_new, mpdu_len);
+	                if(hw_rxhdr->hwvect.reserved > 10)
+	                    AICWFDBG(LOGERROR, "warning: amsdu cnt=%d\n", hw_rxhdr->hwvect.reserved);
+	                first = skb;
+	                skb_put(skb, 2048);
+	                //dev_kfree_skb(skb);
+	                for(i=0; i<hw_rxhdr->hwvect.reserved-1;i++) {
+	                    spin_lock_bh(&rx_priv->rxqlock);
+	                    while (aicwf_is_framequeue_empty(&rx_priv->rxq)) {
+	                        //printk("no next skb, wait\n");
+	                        spin_unlock_bh(&rx_priv->rxqlock);
+	                        msleep(10);
+	                        spin_lock_bh(&rx_priv->rxqlock);
+	                    }
+	                    next_skb = aicwf_frame_dequeue(&rx_priv->rxq);
+	                    if(next_skb == NULL) {
+	                        AICWFDBG(LOGERROR, "should not happen!!!!!!!!!!!\n");
+	                        spin_unlock_bh(&rx_priv->rxqlock);
+	                        break;
+	                    }
+	                    //printk("deq1:%p\n", next_skb);
+	                    skb_put(next_skb, 2048);
+	                    atomic_dec(&rx_priv->rx_cnt);
+	                    next_skb->next = NULL;
+	                    skb->next = next_skb;
+	                    skb = next_skb;
+	                    //dev_kfree_skb(next_skb);
+	                    spin_unlock_bh(&rx_priv->rxqlock);
+	                }
+	                skb = first;
+	            }else {
+	                if(mpdu_len > 2048) {
+	                    AICWFDBG(LOGERROR, "rx len > 2048: %d,%d\n", mpdu_len, hw_rxhdr->hwvect.reserved);
+	                    //rwnx_data_dump(">2048: ", skb->data, 96);
+	                    offset = 0;
+	                    //if fw not discart since no hostbuf, cnt should > 1
+	                    if(hw_rxhdr->hwvect.reserved > 1) {
+	                        skb_new = dev_alloc_skb(mpdu_len);
+	                        if(skb_new)
+	                            skb_put(skb_new, mpdu_len);
 
-                            for(i=0; i<hw_rxhdr->hwvect.reserved-1;i++) {
-                                int copy_len = mpdu_len > 2048? 2048 : mpdu_len;
-                                if(skb_new)
-                                    memcpy(skb_new->data + offset, skb->data, copy_len);
-                                mpdu_len -= copy_len;
-                                offset += copy_len;
-                                dev_kfree_skb(skb);
-                                spin_lock_bh(&rx_priv->rxqlock);
-                                while (aicwf_is_framequeue_empty(&rx_priv->rxq)) {
-                                    //printk("no next skb, wait\n");
-                                    spin_unlock_bh(&rx_priv->rxqlock);
-                                    msleep(10);
-                                    spin_lock_bh(&rx_priv->rxqlock);
-                                }
-                                skb = aicwf_frame_dequeue(&rx_priv->rxq);
-                                if(skb == NULL) {
-                                    AICWFDBG(LOGERROR, "should not happen!!!!!!!!!!!\n");
-                                    spin_unlock_bh(&rx_priv->rxqlock);
-                                    break;
-                                }
-                                //printk("deq2:%p\n", skb);
-                                atomic_dec(&rx_priv->rx_cnt);
-                                //dev_kfree_skb(next_skb);
-                                spin_unlock_bh(&rx_priv->rxqlock);
-                            }
-                            skb = skb_new;
-                        }else {
-                            skb_put(skb, 2048);
-                        }
-                    }else {
-                        skb_put(skb, mpdu_len);
-                    }
-                }
+	                        for(i=0; i<hw_rxhdr->hwvect.reserved-1;i++) {
+	                            int copy_len = mpdu_len > 2048? 2048 : mpdu_len;
+	                            if(skb_new)
+	                                memcpy(skb_new->data + offset, skb->data, copy_len);
+	                            mpdu_len -= copy_len;
+	                            offset += copy_len;
+	                            dev_kfree_skb(skb);
+	                            spin_lock_bh(&rx_priv->rxqlock);
+	                            while (aicwf_is_framequeue_empty(&rx_priv->rxq)) {
+	                                //printk("no next skb, wait\n");
+	                                spin_unlock_bh(&rx_priv->rxqlock);
+	                                msleep(10);
+	                                spin_lock_bh(&rx_priv->rxqlock);
+	                            }
+	                            skb = aicwf_frame_dequeue(&rx_priv->rxq);
+	                            if(skb == NULL) {
+	                                AICWFDBG(LOGERROR, "should not happen!!!!!!!!!!!\n");
+	                                spin_unlock_bh(&rx_priv->rxqlock);
+	                                break;
+	                            }
+	                            //printk("deq2:%p\n", skb);
+	                            atomic_dec(&rx_priv->rx_cnt);
+	                            //dev_kfree_skb(next_skb);
+	                            spin_unlock_bh(&rx_priv->rxqlock);
+	                        }
+	                        skb = skb_new;
+	                    }else {
+	                        skb_put(skb, 2048);
+	                    }
+	                }else {
+	                    skb_put(skb, mpdu_len);
+	                }
+	            }
 
-                //printk("rxdataind:%p,%p,%p\n", rwnx_hw, skb, rx_priv);
-                if(skb)
-                    rwnx_rxdataind_aicwf(rwnx_hw, skb, (void *)rx_priv);
-            }
-
-			//printk("%s\n",__func__);
+	            //printk("rxdataind:%p,%p,%p\n", rwnx_hw, skb, rx_priv);
+	            if(skb)
+	                rwnx_rxdataind_aicwf(rwnx_hw, skb, (void *)rx_priv);
+	        }
 		}
+		//printk("%s\n",__func__);
 	}
-
+	aic_thread_wait_stop();
+	AICWFDBG(LOGINFO, "%s Exit\r\n", __func__);
 	return 0;
 }
 #endif

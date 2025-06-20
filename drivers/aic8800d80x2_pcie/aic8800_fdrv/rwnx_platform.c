@@ -55,6 +55,7 @@ extern char aic_fw_path_8800d80x2[FW_PATH_MAX_LEN];
 
 extern int testmode;
 extern int fw_flsupg;
+extern int fw_flggen1;
 extern int fw_flggen2;
 
 struct rwnx_plat *g_rwnx_plat;
@@ -488,7 +489,11 @@ typedef struct {
 #define CFG_USER_CHAN_MAX_TXPWR_EN  0
 #endif
 #define CFG_USER_TX_USE_ANA_F       0
+#ifdef CONFIG_PRBREQ_REPORT
+#define CFG_USER_APM_PRBRSP_OFFLOAD_DISABLE 1
+#else
 #define CFG_USER_APM_PRBRSP_OFFLOAD_DISABLE 0
+#endif
 
 #define CFG_USER_EXT_FLAGS_EN   (CFG_USER_CHAN_MAX_TXPWR_EN || CFG_USER_TX_USE_ANA_F)
 
@@ -543,7 +548,7 @@ u32 patch_tbl_8800d80x2[][2] = {
     #endif
 
 	#ifdef CONFIG_RADAR_OR_IR_DETECT
-    {0x0204, 0x01010100},//radar
+    {0x0204, 0x01010B00},//radar
 	#endif
 };
 
@@ -962,15 +967,17 @@ int pcie_reset_firmware(struct rwnx_hw *rwnx_hw, u32 fw_addr)
         writel((1<<5),  rwnx_hw->pcidev->emb_sctl + 0x12c);
     }
 
-	if (testmode == 0 && !fw_flsupg && !fw_flggen2) {
-		mdelay(300);
+	if (testmode == 0 && !fw_flsupg && !fw_flggen2 && !fw_flggen1) {
+		//mdelay(300);
         while(*(volatile uint32_t *)&rwnx_hw->ipc_env->shared->fw_init_done != 1) {
-            AICWFDBG(LOGINFO, "fw init done=%d\n", *(volatile uint32_t *)&rwnx_hw->ipc_env->shared->fw_init_done);
+            AICWFDBG(LOGVERBOS, "fw init done=%d\n", *(volatile uint32_t *)&rwnx_hw->ipc_env->shared->fw_init_done);
             msleep(5);
         }
     }
 	else
 		mdelay(5000);
+
+    AICWFDBG(LOGINFO, "fw init done\n");
 
 	return err;
 }
@@ -3768,14 +3775,10 @@ void aicbt_parse_config(struct rwnx_hw *rwnx_hw)
     } else {
         aicbt_info.lpm_enable = AICBT_LPM_ENABLE_DEFAULT;
     }
-    tag_ptr = aicbt_find_tag((char*)dst, size, "TXPWR_LVL=", strlen("0x6F2F"));
+    tag_ptr = aicbt_find_tag((char*)dst, size, "TXPWR_LVL=", strlen("0xFFFFFFFF"));
     if (tag_ptr) {
         if (sscanf(tag_ptr, "%08x", &tmp_val) == 1) {
-            if (tmp_val >= 0 || tmp_val <= 0X7F7F) {
                 aicbt_info.txpwr_lvl = tmp_val;
-            } else {
-                aicbt_info.txpwr_lvl = AICBT_TXPWR_LVL_DEFAULT;
-            }
         } else {
             aicbt_info.txpwr_lvl = AICBT_TXPWR_LVL_DEFAULT;
         }
@@ -3892,6 +3895,7 @@ int aicbt_patch_info_unpack(struct aicbt_patch_info_t *patch_info, struct aicbt_
             patch_info->info_len = head_t->len;
             memcpy_len = patch_info->info_len;
         }
+	head_t->len = patch_info->info_len;
         AICWFDBG(LOGDEBUG, "%s memcpy_len:%d \r\n", __func__, memcpy_len);
 
         if (patch_info->info_len == 0)
@@ -4001,6 +4005,81 @@ err:
 }
 #endif
 
+void rwnx_update_flash(struct rwnx_hw *rwnx_hw)
+{
+#ifdef CONFIG_UPG_FLASH
+	u32 otad_base;
+	u32 gen2_base;
+	int ret;
+#endif
+	u32 bond_id;
+
+	aicwf_pcie_tran(rwnx_hw->pcidev, (void *)0x40500004, &bond_id, 4, AIC_TRAN_EMB2DRV, 1);
+	AICWFDBG(LOGINFO, "0x40500004 bond_id %x >>17 %x \n",bond_id,(bond_id >> 17));
+
+	if (((bond_id >> 17) & 0x01UL) == 0x00UL) {
+		chip_mcu_id = 1;
+	}
+
+	AICWFDBG(LOGINFO,"M chip is %u \n ",chip_mcu_id);
+
+#ifdef CONFIG_UPG_FLASH
+	if(chip_mcu_id){
+		aicwf_pcie_tran(rwnx_hw->pcidev, (void *)0x8006000, &otad_base, 4, AIC_TRAN_EMB2DRV, 1);
+		AICWFDBG(LOGINFO, "0x8006000 otad_base %x fw_flsupg %d \n",otad_base,fw_flsupg);
+		aicwf_pcie_tran(rwnx_hw->pcidev, (void *)0x807f074, &gen2_base, 4, AIC_TRAN_EMB2DRV, 1);
+		AICWFDBG(LOGINFO, "0x807f074 gen2_base %x, FLASH_SET_GEN2 %d FLASH_SET_GEN1 %d \n",gen2_base, FLASH_SET_GEN2,FLASH_SET_GEN1);
+
+		//only use for M80x2P
+		if(otad_base != 0x474d4943)
+		{
+			fw_flsupg = 1;
+			if(FLASH_SET_GEN2){
+				fw_flggen2 = 1;
+			}if(FLASH_SET_GEN1){
+				fw_flggen1 = 1;
+			}
+		}
+		else
+		{
+			if(FLASH_SET_GEN2){
+				if(((gen2_base >> 24) & 0xFF) != 0xA3)
+					fw_flggen2 = 1;
+			}if(FLASH_SET_GEN1){
+				if(((gen2_base >> 24) & 0xFF) == 0xA3)
+					fw_flggen1 = 1;
+			}
+		}
+
+		if(rwnx_hw->pcidev->chip_id == PRODUCT_ID_AIC8800D80X2) {
+			printk("fw_flsupg %d \n",fw_flsupg);
+			if(fw_flsupg){
+				ret = rwnx_plat_bin_fw_upload_2(rwnx_hw,RAM_FMAC_FW_ADDR, RWNX_8800D80X2_PCIE_FLASH_FW_NAME);
+				pcie_reset_firmware(rwnx_hw, RAM_FMAC_FW_ADDR);
+				fw_flsupg = 0;
+				mdelay(1000);
+			}
+
+			printk("fw_flggen2 %d \n",fw_flggen2);
+			if(fw_flggen2){
+				ret = rwnx_plat_bin_fw_upload_2(rwnx_hw,RAM_FMAC_FW_ADDR, RWNX_8800D80X2_PCIE_FLASHGEN2_FW_NAME);
+				pcie_reset_firmware(rwnx_hw, RAM_FMAC_FW_ADDR);
+				fw_flggen2 = 0;
+				mdelay(100);
+			}
+
+			printk("fw_flggen1 %d \n",fw_flggen1);
+			if(fw_flggen1){
+				ret = rwnx_plat_bin_fw_upload_2(rwnx_hw,RAM_FMAC_FW_ADDR, RWNX_8800D80X2_PCIE_FLASHGEN1_FW_NAME);
+				pcie_reset_firmware(rwnx_hw, RAM_FMAC_FW_ADDR);
+				fw_flggen1 = 0;
+				mdelay(100);
+			}
+		}
+	}
+#endif
+}
+
 
 /**
  * rwnx_platform_on() - Start the platform
@@ -4021,13 +4100,10 @@ int rwnx_platform_on(struct rwnx_hw *rwnx_hw, void *config)
 {
 	int ret;
 	struct rwnx_plat *rwnx_plat = rwnx_hw->plat;
-	(void)ret;
+	//(void)ret;
     #if (defined(CONFIG_NO_FIRMWARE_RELOAD) || defined(CONFIG_LOWPOWER))
     u32 sysctl;
     #endif
-	u32 otad_base;
-	u32 gen2_base;
-	u32 bond_id;
     u32 fw_addr = testmode? RAM_LMAC_RF_FW_ADDR : RAM_FMAC_FW_ADDR;
 
 	RWNX_DBG(RWNX_FN_ENTRY_STR);
@@ -4035,58 +4111,7 @@ int rwnx_platform_on(struct rwnx_hw *rwnx_hw, void *config)
 	if (rwnx_plat->enabled)
 		return 0;
 
-	aicwf_pcie_tran(rwnx_hw->pcidev, (void *)0x40500004, &bond_id, 4, AIC_TRAN_EMB2DRV, 1);
-	AICWFDBG(LOGINFO, "0x40500004 bond_id %x >>17 %x \n",bond_id,(bond_id >> 17));
-
-	if (((bond_id >> 17) & 0x01UL) == 0x00UL) {
-		chip_mcu_id = 1;
-	}
-
-	AICWFDBG(LOGINFO,"M chip is %u \n ",chip_mcu_id);
-
-#ifdef CONFIG_UPG_FLASH
-	if(chip_mcu_id){
-		aicwf_pcie_tran(rwnx_hw->pcidev, (void *)0x8006000, &otad_base, 4, AIC_TRAN_EMB2DRV, 1);
-		AICWFDBG(LOGINFO, "0x8006000 otad_base %x fw_flsupg %d \n",otad_base,fw_flsupg);
-		aicwf_pcie_tran(rwnx_hw->pcidev, (void *)0x807f074, &gen2_base, 4, AIC_TRAN_EMB2DRV, 1);
-		AICWFDBG(LOGINFO, "0x807f074 gen2_base %x, %d\n",gen2_base, FLASH_SET_GEN2);
-
-		//only use for M80x2P
-		if(otad_base != 0x474d4943)
-		{
-			fw_flsupg = 1;
-			if(FLASH_SET_GEN2){
-				fw_flggen2 = 1;
-			}
-
-		}
-		else
-		{
-			if(FLASH_SET_GEN2){
-				if(((gen2_base >> 24) & 0xFF) != 0xA3)
-					fw_flggen2 = 1;
-			}
-		}
-
-		if(rwnx_hw->pcidev->chip_id == PRODUCT_ID_AIC8800D80X2) {
-			printk("fw_flsupg %d \n",fw_flsupg);
-			if(fw_flsupg){
-				ret = rwnx_plat_bin_fw_upload_2(rwnx_hw,fw_addr, RWNX_8800D80X2_PCIE_FLASH_FW_NAME);
-				pcie_reset_firmware(rwnx_hw, RAM_FMAC_FW_ADDR);
-				fw_flsupg = 0;
-				mdelay(1000);
-			}
-
-			printk("fw_flggen2 %d \n",fw_flggen2);
-			if(fw_flggen2){
-				ret = rwnx_plat_bin_fw_upload_2(rwnx_hw,fw_addr, RWNX_8800D80X2_PCIE_FLASHGEN2_FW_NAME);
-				pcie_reset_firmware(rwnx_hw, RAM_FMAC_FW_ADDR);
-				fw_flggen2 = 0;
-				mdelay(100);
-			}
-		}
-	}
-#endif
+	rwnx_update_flash(rwnx_hw);
 
     #if (defined(CONFIG_NO_FIRMWARE_RELOAD) || defined(CONFIG_LOWPOWER))
     *(volatile uint32_t *)&rwnx_hw->ipc_env->shared->fw_init_done = 2;

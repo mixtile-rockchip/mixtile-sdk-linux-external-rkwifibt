@@ -91,6 +91,9 @@ int aicwf_bus_init(uint bus_hdrlen, struct device *dev)
 
 	init_completion(&bus_if->bustx_trgg);
 	init_completion(&bus_if->busrx_trgg);
+#ifdef CONFIG_PCIE_PROCESS_THREAD
+    init_completion(&bus_if->pcie_irq_proc_trgg);
+#endif
 #ifndef CONFIG_RX_TASKLET
 	init_completion(&bus_if->rx_trgg);
 #endif
@@ -105,13 +108,15 @@ int aicwf_bus_init(uint bus_hdrlen, struct device *dev)
 	bus_if->busrx_thread = kthread_run(usb_busrx_thread, (void *)bus_if->bus_priv.usb->rx_priv, "aicwf_busrx_thread");
 #endif
 #ifdef AICWF_PCIE_SUPPORT
-	bus_if->busrx_thread = kthread_run(pcie_rxbuf_rep_thread, (void *)bus_if->bus_priv.pci->rx_priv, "pcie_rxbuf_rep_thread");
+#ifdef CONFIG_PCIE_PROCESS_THREAD
+    bus_if->pcie_irq_proc_thread = kthread_run(pcie_irq_process_thread, (void *)bus_if->bus_priv.pci, "pcie_irq_proc_thread");
+#endif
 #ifdef CONFIG_RX_SKBLIST
 #ifndef CONFIG_RX_TASKLET
     bus_if->rx_thread = kthread_run(pcie_rxbuf_process_thread, (void *)bus_if->bus_priv.pci->rx_priv, "pcie_rxbuf_process_thread");
-#endif
-#endif
-#endif
+#endif /* CONFIG_RX_TASKLET */
+#endif /* CONFIG_RX_SKBLIST */
+#endif /* AICWF_PCIE_SUPPORT */
 
 #if defined(AICWF_SDIO_SUPPORT) || defined(AICWF_USB_SUPPORT)
 	if (IS_ERR(bus_if->bustx_thread)) {
@@ -128,11 +133,20 @@ int aicwf_bus_init(uint bus_hdrlen, struct device *dev)
 #endif
 
 #ifdef AICWF_PCIE_SUPPORT
-	if (IS_ERR(bus_if->busrx_thread)) {
-		bus_if->busrx_thread  = NULL;
-		txrx_err("pcie_rxbuf_rep_thread run fail\n");
+#ifdef CONFIG_PCIE_PROCESS_THREAD
+    if (IS_ERR(bus_if->pcie_irq_proc_thread)) {
+		bus_if->pcie_irq_proc_thread  = NULL;
+		txrx_err("pcie_irq_proc_thread run fail\n");
 		goto fail;
 	}
+#endif
+#ifndef CONFIG_RX_TASKLET
+	if (IS_ERR(bus_if->rx_thread)) {
+		bus_if->rx_thread  = NULL;
+		txrx_err("pcie_rxbuf_process_thread run fail\n");
+		goto fail;
+	}
+#endif
 #endif
 
 	return ret;
@@ -641,7 +655,17 @@ void aicwf_rx_deinit(struct aicwf_rx_priv *rx_priv)
 		rx_priv->pciedev->bus_if->busrx_thread = NULL;
 	}
 
+#ifdef CONFIG_PCIE_PROCESS_THREAD
+	AICWFDBG(LOGINFO, "pcie irq proc thread\n");
+	if (rx_priv->pciedev->bus_if->pcie_irq_proc_thread) {
+		complete_all(&rx_priv->pciedev->bus_if->pcie_irq_proc_trgg);
+		kthread_stop(rx_priv->pciedev->bus_if->pcie_irq_proc_thread);
+		rx_priv->pciedev->bus_if->pcie_irq_proc_thread = NULL;
+	}
+#endif
+
 #ifndef CONFIG_RX_TASKLET
+	AICWFDBG(LOGINFO, "pcie rx thread\n");
 	if (rx_priv->pciedev->bus_if->rx_thread) {
 		complete_all(&rx_priv->pciedev->bus_if->rx_trgg);
 		kthread_stop(rx_priv->pciedev->bus_if->rx_thread);

@@ -49,6 +49,7 @@ void rwnx_task(unsigned long data)
 {
     struct rwnx_hw *rwnx_hw = (struct rwnx_hw *)data;
     struct aic_pci_dev *adev = rwnx_hw->pcidev;
+    unsigned long flags;
 
 #ifdef AICWF_PCIE_SUPPORT
     //struct rwnx_plat *rwnx_plat = rwnx_hw->plat;
@@ -437,12 +438,13 @@ void rwnx_task(unsigned long data)
     //if(debug_print)
        // printk("exit\n");
 
+    spin_lock_irqsave(&rwnx_hw->pcidev->irq_lock, flags);
     if(rwnx_hw->is_irq_disable) {
         //printk("en\n");
         rwnx_hw->is_irq_disable = 0;
         enable_irq(rwnx_hw->pcidev->pci_dev->irq);
     }
-
+    spin_unlock_irqrestore(&rwnx_hw->pcidev->irq_lock, flags);
 }
 
 void rwnx_txrestart_task(unsigned long data)

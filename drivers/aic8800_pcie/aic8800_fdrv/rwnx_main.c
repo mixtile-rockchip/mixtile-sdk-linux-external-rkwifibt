@@ -524,7 +524,8 @@ int wifi_fail = 0;
 module_param(testmode, int, 0660);
 module_param(adap_test, int, 0660);
 module_param(wifi_fail, int, 0660);
-char aic_fw_path[200]="/lib/firmware/aic8800D80";
+//char aic_fw_path[200]="/lib/firmware/aic8800D80";
+char aic_fw_path[200]="/lib/firmware/";
 char aic_fw_path_8800d80x2[200]="/lib/firmware/aic8800D80X2";
 u8 chip_sub_id = 0;
 u8 chip_mcu_id = 0;
@@ -5539,6 +5540,7 @@ int rwnx_cfg80211_init(struct rwnx_plat *rwnx_plat, void **platform_data)
 	/* Set WoWLAN flags */
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 11, 0)
 	wiphy->wowlan = &aic_wowlan_support;
+	AICWFDBG(LOGINFO, "wowlan: %p\n", wiphy->wowlan);
 #else
 	wiphy->wowlan.flags = aic_wowlan_support.flags;
 #endif

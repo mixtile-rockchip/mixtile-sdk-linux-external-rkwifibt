@@ -125,6 +125,10 @@ struct aicwf_bus {
     struct completion rx_trgg;
     struct task_struct *rx_thread;
 #endif
+#ifdef CONFIG_PCIE_PROCESS_THREAD
+    struct completion pcie_irq_proc_trgg;
+    struct task_struct *pcie_irq_proc_thread;
+#endif
 };
 
 struct aicwf_tx_priv {

@@ -27,6 +27,9 @@
 #include <linux/udp.h>
 #include "rwnx_msg_tx.h"
 #endif
+#ifdef CONFIG_BAND_STEERING
+#include "aicwf_manager.h"
+#endif
 
 #ifndef IEEE80211_MAX_CHAINS
 #define IEEE80211_MAX_CHAINS 4
@@ -76,6 +79,37 @@ struct vendor_radiotap_hdr {
 	u16 len;
 	u8 data[];
 };
+
+#ifdef CONFIG_BAND_STEERING
+typedef struct _op_class_ {
+	u8_l        op_class;
+	u8_l        band;     /* 0: 2.4g, 1: 5g*/
+} _op_class_;
+
+static const _op_class_ g_op_class[] = {
+	{ 81, BAND_ON_24G },
+	{ 82, BAND_ON_24G },
+	{ 83, BAND_ON_24G },
+	{ 84, BAND_ON_24G },
+	{ 115, BAND_ON_5G },
+	{ 116, BAND_ON_5G },
+	{ 117, BAND_ON_5G },
+	{ 118, BAND_ON_5G },
+	{ 119, BAND_ON_5G },
+	{ 120, BAND_ON_5G },
+	{ 121, BAND_ON_5G },
+	{ 122, BAND_ON_5G },
+	{ 123, BAND_ON_5G },
+	{ 124, BAND_ON_5G },
+	{ 125, BAND_ON_5G },
+	{ 126, BAND_ON_5G },
+	{ 127, BAND_ON_5G },
+	{ 128, BAND_ON_5G }
+};
+
+#define BAND_CAP_2G    BIT(BAND_ON_24G)
+#define BAND_CAP_5G    BIT(BAND_ON_5G)
+#endif
 
 /**
  * rwnx_rx_get_vif - Return pointer to the destination vif
@@ -207,7 +241,8 @@ static void rwnx_rx_statistic(struct rwnx_hw *rwnx_hw, struct hw_rxhdr *hw_rxhdr
 	struct rx_vector_1 *rxvect = &hw_rxhdr->hwvect.rx_vect1;
 	int mpdu, ampdu, mpdu_prev, rate_idx;
 
-    if (rxvect->format_mod > FORMATMOD_NON_HT_DUP_OFDM)
+	//evm2 is snr, if ampdu, only last mpdu has snr, only update last mpdu(evm1/2->snr1/2)
+    if (rxvect->format_mod > FORMATMOD_NON_HT_DUP_OFDM && hw_rxhdr->hwvect.rx_vect2.evm1 != 0)
 	    /* save complete hwvect */
 	    sta->stats.last_rx = hw_rxhdr->hwvect;
 
@@ -634,6 +669,81 @@ static inline const u8 *cfg80211_find_ext_ie(u8 ext_eid, const u8* ies, int len)
 #endif
 #endif
 
+#ifdef CONFIG_BAND_STEERING
+static void handle_op_class_band(struct tmp_feature_sta *f_sta, const u8 *ie, int ie_len)
+{
+    int op_num, i, j;
+    u8 op_class;
+
+    if (!ie) {
+        return;
+    }
+
+    op_num = ie[1];
+    for (i = 0; i < op_num; i++) {
+        op_class = ie[i + 2];
+        for (j = 0; j < ARRAY_SIZE(g_op_class); j++) {
+            if (op_class == g_op_class[j].op_class) {
+                switch (g_op_class[j].band) {
+                case BAND_ON_24G:
+                    f_sta->supported_band |= BAND_CAP_2G;
+                    break;
+                case BAND_ON_5G:
+                    f_sta->supported_band |= BAND_CAP_5G;
+                    break;
+                default:
+                    break;
+                }
+                break;
+            }
+        }
+    }
+}
+
+static void set_band_by_freq(struct tmp_feature_sta *f_sta, u16 freq)
+{
+    if (freq >= 5180) {
+        f_sta->supported_band |= BAND_CAP_5G;
+    } else {
+        f_sta->supported_band |= BAND_CAP_2G;
+    }
+}
+
+static void handle_assoc_request(struct rwnx_vif *rwnx_vif,
+                               struct tmp_feature_sta *f_sta,
+                               struct ieee80211_mgmt *mgmt,
+                               struct sk_buff *skb,
+                               struct rx_vector_1 *rxvect,
+                               struct hw_rxhdr *hw_rxhdr,
+                               bool is_reassoc)
+{
+    const u8 *ie;
+    u8 *variable_field;
+    size_t variable_len;
+
+    aicwf_nl_send_frame_rpt_msg(rwnx_vif, WIFI_ASSOCREQ, mgmt->sa, rxvect->rssi1);
+    f_sta->sta_idx = rwnx_vif->ap.tmp_sta_idx;
+
+    if (is_reassoc) {
+        variable_field = mgmt->u.reassoc_req.variable;
+    } else {
+        variable_field = mgmt->u.assoc_req.variable;
+    }
+    variable_len = skb->len - (variable_field - skb->data);
+
+    ie = cfg80211_find_ie(WLAN_EID_SUPPORTED_REGULATORY_CLASSES,
+                         variable_field, variable_len);
+
+    if (ie) {
+        handle_op_class_band(f_sta, ie, variable_len);
+        AICWFDBG(LOGSTEER, "%s, pcie %sassoc supported_band: %u\n", __func__,
+              is_reassoc ? "re" : "", f_sta->supported_band);
+    } else {
+        AICWFDBG(LOGSTEER, "%s pcie %sassoc no find op_class\n", __func__, is_reassoc ? "re" : "");
+        set_band_by_freq(f_sta, hw_rxhdr->phy_info.phy_prim20_freq);
+    }
+}
+#endif
 
 /**
  * rwnx_rx_mgmt - Process one 802.11 management frame
@@ -652,8 +762,49 @@ static void rwnx_rx_mgmt(struct rwnx_hw *rwnx_hw, struct rwnx_vif *rwnx_vif,
 	struct rx_vector_1 *rxvect = &hw_rxhdr->hwvect.rx_vect1;
 
 	//printk("rwnx_rx_mgmt\n");
-	if(skb->data[0]!=0x80)
+	if(skb->data[0]!=0x80 && skb->data[0]!=0x40)
 		AICWFDBG(LOGDEBUG,"rxmgmt:%x,%x\n", skb->data[0], skb->data[1]);
+
+#ifdef CONFIG_BAND_STEERING
+	bool queued = false;
+	struct tmp_feature_sta *f_sta = &rwnx_hw->feature_table[rwnx_vif->ap.tmp_sta_idx];
+	if (RWNX_VIF_TYPE(rwnx_vif) == NL80211_IFTYPE_AP) {
+#if 0
+		if(skb->data[0] != 0x80)
+			printk("rx mgmt:%02x\n", mgmt->frame_control);
+#endif
+
+		if (ieee80211_is_assoc_req(mgmt->frame_control)) {
+			handle_assoc_request(rwnx_vif, f_sta, mgmt, skb, rxvect, hw_rxhdr, false);
+		} else if (ieee80211_is_reassoc_req(mgmt->frame_control)) {
+			handle_assoc_request(rwnx_vif, f_sta, mgmt, skb, rxvect, hw_rxhdr, true);
+		}
+
+		if (ieee80211_is_auth(mgmt->frame_control)) {
+			aicwf_nl_send_frame_rpt_msg(rwnx_vif, WIFI_AUTH, mgmt->sa, rxvect->rssi1);
+		}
+
+		if (ieee80211_is_probe_req(mgmt->frame_control)) {
+			if (!rwnx_vif->ap.start)
+				return;
+			aicwf_nl_send_frame_rpt_msg(rwnx_vif, WIFI_PROBEREQ, mgmt->sa, rxvect->rssi1);
+			AICWFDBG(LOGSTEER, "pcie rx p_req: %pM\n", mgmt->sa);
+			for (int i = 0; i < MAX_PENDING_PROBES; i++) {
+				if (!rwnx_vif->pb_pool[i].in_use) {
+					rwnx_vif->pb_pool[i].in_use = true;
+					memcpy(rwnx_vif->pb_pool[i].da, mgmt->sa, 6);
+					queue_work(rwnx_vif->rsp_wq, &rwnx_vif->pb_pool[i].rsp_work);
+					queued = true;
+					break;
+				}
+			}
+			if (!queued)
+				AICWFDBG(LOGERROR, "pcie probe_rsp pool full, drop %pM\n", mgmt->sa);
+			return;
+		}
+
+	}
+#endif
 
 #if (defined CONFIG_HE_FOR_OLD_KERNEL) || (defined CONFIG_VHT_FOR_OLD_KERNEL)
 	struct aic_sta *sta = &rwnx_hw->aic_table[rwnx_vif->ap.aic_index];
@@ -2320,7 +2471,7 @@ void rwnx_rxdata_process_amsdu(struct rwnx_hw *rwnx_hw, struct sk_buff *skb, u8 
         if(sub_skb->next == NULL)
             sublen1 = sublen + 14;
         else
-            sublen1 = roundup(sublen, 4);
+            sublen1 = roundup(sublen + 14, 4);
             
         //printk("trim: %d,%d\n", sub_skb->len, (sublen + 14));
         if(sublen1 <= sub_skb->len) {
@@ -2591,9 +2742,9 @@ check_len_update:
 				memcpy(ether_type, &skb->data[hdr_len + 6 + 4], 2);
 				break;
 			case RWNX_RX_HD_DECR_WAPI:
-                                pull_len += 18;//wapi_header
-                                memcpy(ether_type, &skb->data[hdr_len + 6 + 18], 2);
-                                break;
+				pull_len += 18;//wapi_header
+				memcpy(ether_type, &skb->data[hdr_len + 6 + 18], 2);
+				break;
 
 			default:
 				memcpy(ether_type, &skb->data[hdr_len + 6], 2);
@@ -2827,7 +2978,10 @@ check_len_update:
 
 #ifdef CONFIG_DYNAMIC_PERPWR
 				sta = &rwnx_hw->sta_table[hw_rxhdr->flags_sta_idx];
-				rssi_update_txpwrloss(sta, hw_rxhdr->hwvect.rx_vect1.rssi1);
+				rssi_update_txpwrloss(sta, hw_rxhdr->hwvect.rx_vect1.rssi1, rwnx_hw);
+#endif
+#ifdef CONFIG_BAND_STEERING
+				(&rwnx_hw->sta_table[hw_rxhdr->flags_sta_idx])->rssi = hw_rxhdr->hwvect.rx_vect1.rssi1;
 #endif
 
 				u8 flags_dst_idx = hw_rxhdr->flags_dst_idx;
