@@ -83,7 +83,7 @@ wifibt_id()
 
 wifibt_module()
 {
-	MODULES=`wifibt_info | cut -f 6`
+	MODULES=$(wifibt_info | cut -f 6)
 	for m in ${MODULES//|/ }; do
 		if [ -e "/lib/modules/${m%%:*}" ]; then
 			echo $m
@@ -105,7 +105,7 @@ if [ -e "$CHIPS_FILE" ]; then
 fi
 
 if [ ! -r "$CHIPS_FILE" ]; then
-	echo "# Vendor Chip VID:PID Module[:opt]|Falback[:opt] Quirk" \
+	echo -e "# Vendor Chip VID:PID Module[:opt]|Falback[:opt] Quirk\n" \
 		> "$CHIPS_FILE"
 
 	# Prefer /etc/ version
@@ -138,7 +138,7 @@ Realtek	RTL8852BE	10ec:b852	8852be.ko
 Realtek	RTL8852BS	024c:b852	8852bs.ko
 Realtek	RTL8852BU	0bda:a85b	8852bu.ko
 Broadcom	AP6212A	02d0:a9a6	bcmdhd.ko
-Broadcom	AP625X	02d0:a9bf	bcmdhd.ko|cyw43455.ko	# AP6255/AP6256/AP6745
+Broadcom	AP625X	02d0:a9bf	bcmdhd.ko|cyw43455.ko	#AP6255/AP6256/AP6745
 Broadcom	AP6275P	14e4:449d	bcmdhd_pcie.ko
 Broadcom	AP6275S	02d0:aae8	bcmdhd.ko
 Broadcom	AP6276P	14e4:44a0	bcmdhd_pcie.ko
@@ -151,6 +151,7 @@ Broadcom	AP6398S	02d0:4359	bcmdhd.ko
 Broadcom	CYW4373	02d0:4373	cyw4373.ko
 Rockchip	RK960	0296:5349	rk960.ko:fw_no_sleep=1	suspend-reload
 EOF
+	sed -i '1! s/[[:space:]]\+/\t/g' "$CHIPS_FILE"
 fi
 
 if [ -e "$CHIP_FILE" ]; then
