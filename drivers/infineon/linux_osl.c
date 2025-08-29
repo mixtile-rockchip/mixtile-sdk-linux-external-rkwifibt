@@ -773,6 +773,11 @@ osl_malloc(osl_t *osh, uint size)
 original:
 #endif /* CONFIG_DHD_USE_STATIC_BUF */
 
+	if (IS_ENABLED(CONFIG_PREEMPT_RT))
+		flags = GFP_ATOMIC;
+	else
+		flags = (CAN_SLEEP()) ? GFP_KERNEL: GFP_ATOMIC;
+
 	flags = CAN_SLEEP() ? GFP_KERNEL: GFP_ATOMIC;
 #if defined(DHD_USE_KVMALLOC) && (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 12, 0))
 	if ((addr = kvmalloc(size, flags)) == NULL) {
@@ -1109,11 +1114,17 @@ osl_cpu_relax(void)
 
 extern void osl_preempt_disable(osl_t *osh)
 {
+if (IS_ENABLED(CONFIG_PREEMPT_RT))
+	migrate_disable();
+else
 	preempt_disable();
 }
 
 extern void osl_preempt_enable(osl_t *osh)
 {
+if (IS_ENABLED(CONFIG_PREEMPT_RT))
+	migrate_enable();
+else
 	preempt_enable();
 }
 
