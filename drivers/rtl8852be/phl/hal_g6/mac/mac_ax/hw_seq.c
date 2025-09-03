@@ -13,7 +13,9 @@
  *
  ******************************************************************************/
 #include "hw_seq.h"
+#include "mac_priv.h"
 
+#if MAC_FEAT_HWSSN
 #if MAC_AX_FW_REG_OFLD
 u32 mac_set_hwseq_reg(struct mac_ax_adapter *adapter,
 		      u8 idx,
@@ -29,7 +31,7 @@ u32 mac_set_hwseq_reg(struct mac_ax_adapter *adapter,
 	h2c_info.h2c_class = FWCMD_H2C_CL_FW_OFLD;
 	h2c_info.h2c_func = FWCMD_H2C_FUNC_SET_HWSEQ_REG;
 	h2c_info.rec_ack = 0;
-	h2c_info.done_ack = 1;
+	h2c_info.done_ack = 0;
 
 	content = (struct mac_ax_set_hwseq_reg *)PLTFM_MALLOC(h2c_info.content_len);
 	if (!content)
@@ -67,11 +69,10 @@ u32 mac_set_hwseq_reg(struct mac_ax_adapter *adapter,
 			ret = MACSUCCESS;
 		}
 #endif
-#if (MAC_AX_8852C_SUPPORT || MAC_AX_8192XB_SUPPORT || MAC_AX_8851E_SUPPORT || \
-MAC_AX_8852D_SUPPORT || MAC_AX_1115E_SUPPORT)
+#if (MAC_AX_8852C_SUPPORT || MAC_AX_8192XB_SUPPORT || MAC_AX_8852D_SUPPORT || \
+MAC_AX_1115E_SUPPORT)
 		if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852C) ||
 		    is_chip_id(adapter, MAC_AX_CHIP_ID_8192XB) ||
-		    is_chip_id(adapter, MAC_AX_CHIP_ID_8851E) ||
 		    is_chip_id(adapter, MAC_AX_CHIP_ID_8852D) ||
 		    is_chip_id(adapter, MAC_BE_CHIP_ID_1115E)) {
 			reg_val = MAC_REG_R32(R_AX_CMAC_HWSSN01);
@@ -95,11 +96,10 @@ MAC_AX_8852D_SUPPORT || MAC_AX_1115E_SUPPORT)
 			ret = MACSUCCESS;
 		}
 #endif
-#if (MAC_AX_8852C_SUPPORT || MAC_AX_8192XB_SUPPORT || MAC_AX_8851E_SUPPORT || \
-MAC_AX_8852D_SUPPORT || MAC_AX_1115E_SUPPORT)
+#if (MAC_AX_8852C_SUPPORT || MAC_AX_8192XB_SUPPORT || MAC_AX_8852D_SUPPORT || \
+MAC_AX_1115E_SUPPORT)
 		if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852C) ||
 		    is_chip_id(adapter, MAC_AX_CHIP_ID_8192XB) ||
-		    is_chip_id(adapter, MAC_AX_CHIP_ID_8851E) ||
 		    is_chip_id(adapter, MAC_AX_CHIP_ID_8852D) ||
 		    is_chip_id(adapter, MAC_BE_CHIP_ID_1115E)) {
 			reg_val = MAC_REG_R32(R_AX_CMAC_HWSSN01);
@@ -123,11 +123,10 @@ MAC_AX_8852D_SUPPORT || MAC_AX_1115E_SUPPORT)
 			ret = MACSUCCESS;
 		}
 #endif
-#if (MAC_AX_8852C_SUPPORT || MAC_AX_8192XB_SUPPORT || MAC_AX_8851E_SUPPORT || \
-MAC_AX_8852D_SUPPORT || MAC_AX_1115E_SUPPORT)
+#if (MAC_AX_8852C_SUPPORT || MAC_AX_8192XB_SUPPORT || MAC_AX_8852D_SUPPORT || \
+MAC_AX_1115E_SUPPORT)
 		if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852C) ||
 		    is_chip_id(adapter, MAC_AX_CHIP_ID_8192XB) ||
-		    is_chip_id(adapter, MAC_AX_CHIP_ID_8851E) ||
 		    is_chip_id(adapter, MAC_AX_CHIP_ID_8852D) ||
 		    is_chip_id(adapter, MAC_BE_CHIP_ID_1115E)) {
 			reg_val = MAC_REG_R32(R_AX_CMAC_HWSSN23);
@@ -151,11 +150,10 @@ MAC_AX_8852D_SUPPORT || MAC_AX_1115E_SUPPORT)
 			ret = MACSUCCESS;
 		}
 #endif
-#if (MAC_AX_8852C_SUPPORT || MAC_AX_8192XB_SUPPORT || MAC_AX_8851E_SUPPORT || \
-MAC_AX_8852D_SUPPORT || MAC_AX_1115E_SUPPORT)
+#if (MAC_AX_8852C_SUPPORT || MAC_AX_8192XB_SUPPORT || MAC_AX_8852D_SUPPORT || \
+MAC_AX_1115E_SUPPORT)
 		if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852C) ||
 		    is_chip_id(adapter, MAC_AX_CHIP_ID_8192XB) ||
-		    is_chip_id(adapter, MAC_AX_CHIP_ID_8851E) ||
 		    is_chip_id(adapter, MAC_AX_CHIP_ID_8852D) ||
 		    is_chip_id(adapter, MAC_BE_CHIP_ID_1115E)) {
 			reg_val = MAC_REG_R32(R_AX_CMAC_HWSSN23);
@@ -214,8 +212,8 @@ u32 mac_set_hwseq_dctl_seq_val(struct mac_ax_adapter *adapter,
 		ret = MACSUCCESS;
 		break;
 	case DCTL_HW_SEQ_3:
-		info.seq2 = seq_info->val;
-		mask.seq2 = FWCMD_H2C_DCTRL_SEQ2_MSK;
+		info.seq3 = seq_info->val;
+		mask.seq3 = FWCMD_H2C_DCTRL_SEQ3_MSK;
 		ret = MACSUCCESS;
 		break;
 	default:
@@ -258,11 +256,11 @@ u32 mac_get_hwseq_cfg(struct mac_ax_adapter *adapter,
 		      u8 macid, u8 ref_sel,
 		      struct mac_ax_dctl_seq_cfg *seq_info)
 {
-	struct mac_ax_dctl_info info = {0};
-	struct mac_ax_dctl_info mask = {0};
-	struct mac_ax_ops *a_ops = adapter_to_mac_ops(adapter);
+#if MAC_AX_FEATURE_DBGPKG
 	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
-	u32 ret = 0;
+	u32 val32, ret;
+	u32 offset = 0;
+	u32 dctl_table_size = 0;
 
 	if (ref_sel) {
 #if MAC_AX_8852A_SUPPORT || MAC_AX_8852B_SUPPORT || MAC_AX_8851B_SUPPORT || MAC_AX_8852BT_SUPPORT
@@ -281,11 +279,10 @@ u32 mac_get_hwseq_cfg(struct mac_ax_adapter *adapter,
 			return MACSUCCESS;
 			}
 #endif
-#if (MAC_AX_8852C_SUPPORT || MAC_AX_8192XB_SUPPORT || MAC_AX_8851E_SUPPORT || \
-MAC_AX_8852D_SUPPORT || MAC_AX_1115E_SUPPORT)
+#if (MAC_AX_8852C_SUPPORT || MAC_AX_8192XB_SUPPORT || MAC_AX_8852D_SUPPORT || \
+MAC_AX_1115E_SUPPORT)
 		if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852C) ||
 		    is_chip_id(adapter, MAC_AX_CHIP_ID_8192XB) ||
-		    is_chip_id(adapter, MAC_AX_CHIP_ID_8851E) ||
 		    is_chip_id(adapter, MAC_AX_CHIP_ID_8852D) ||
 		    is_chip_id(adapter, MAC_BE_CHIP_ID_1115E)) {
 			seq_info->seq0_val = (MAC_REG_R32(R_AX_CMAC_HWSSN01) >>
@@ -300,17 +297,41 @@ MAC_AX_8852D_SUPPORT || MAC_AX_1115E_SUPPORT)
 		}
 #endif
 	} else {
-		ret = a_ops->upd_dctl_info(adapter, &info, &mask, macid, 0);
-		if (ret != MACSUCCESS)
+#if (MAC_AX_8852C_SUPPORT || MAC_AX_8192XB_SUPPORT || MAC_AX_8852D_SUPPORT)
+		if (is_chip_id(adapter, MAC_AX_CHIP_ID_8192XB) ||
+		    is_chip_id(adapter, MAC_AX_CHIP_ID_8852C) ||
+		    is_chip_id(adapter, MAC_AX_CHIP_ID_8852D))
+			dctl_table_size = DCTL_INFO_SIZE_V1;
+#endif
+#if (MAC_AX_8852A_SUPPORT || MAC_AX_8852B_SUPPORT || MAC_AX_8851B_SUPPORT)
+		if (is_chip_id(adapter, MAC_AX_CHIP_ID_8851B) ||
+		    is_chip_id(adapter, MAC_AX_CHIP_ID_8852A) ||
+		    is_chip_id(adapter, MAC_AX_CHIP_ID_8852B))
+			dctl_table_size = DCTL_INFO_SIZE;
+#endif
+		offset = (macid * dctl_table_size);
+		ret = mac_sram_dbg_read(adapter, offset + DCTL_HW_SEQ_OFFSET_0_1, &val32,
+					DMAC_TBL_SEL);
+		if (ret != MACSUCCESS) {
+			PLTFM_MSG_ERR("%s read sram fail %d\n", __func__, ret);
 			return ret;
+		}
+		seq_info->seq0_val = ((val32 >> DCTL_HW_SEQ_SHIFT_0) & DCTL_HW_SEQ_MASK_0);
+		seq_info->seq1_val = ((val32 >> DCTL_HW_SEQ_SHIFT_1) & DCTL_HW_SEQ_MASK_1);
+		ret = mac_sram_dbg_read(adapter, offset + DCTL_HW_SEQ_OFFSET_2_3, &val32,
+					DMAC_TBL_SEL);
+		if (ret != MACSUCCESS) {
+			PLTFM_MSG_ERR("%s read sram fail %d\n", __func__, ret);
+			return ret;
+		}
+		seq_info->seq2_val = ((val32 >> DCTL_HW_SEQ_SHIFT_2) & DCTL_HW_SEQ_MASK_2);
+		seq_info->seq3_val = ((val32 >> DCTL_HW_SEQ_SHIFT_3) & DCTL_HW_SEQ_MASK_3);
 
-		seq_info->seq0_val = info.seq0;
-		seq_info->seq1_val = info.seq1;
-		seq_info->seq2_val = info.seq2;
-		seq_info->seq3_val = info.seq3;
-		seq_info->hw_exseq_macid = info.hw_exseq_macid;
 		return MACSUCCESS;
 	}
 	return MACNOTSUP;
+#else
+	return MACNOTSUP;
+#endif
 }
-
+#endif

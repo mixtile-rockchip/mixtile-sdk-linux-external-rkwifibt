@@ -23,7 +23,8 @@ static enum rtw_phl_status phl_mp_rx_phy_crc_ok(
 {
 	enum rtw_hal_status hal_status = RTW_HAL_STATUS_FAILURE;
 
-	rtw_hal_mp_trigger_watchdog_cal(mp);
+	if (!mp->is_phl_wdog_start)
+		rtw_hal_mp_trigger_watchdog_cal(mp);
 
 	hal_status = rtw_hal_mp_rx_phy_crc_ok(mp, arg);
 

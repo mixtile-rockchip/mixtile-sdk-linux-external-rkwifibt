@@ -77,7 +77,7 @@ struct bb_ch_info_cr_cfg_info {
 	u8	ch_i_grp_num_he; /*[HE]0~3: decimation to 1/1, 1/2, 1/4, 1/16*/
 	u8	ch_i_blk_start_idx; /*1~10*/
 	u8	ch_i_blk_end_idx; /*1~10*/
-	u32	ch_i_ele_bitmap; /*Channel matrix size, ex: 0x303:2X2, 0x1: 1X1*/
+	u32	ch_i_ele_bitmap; /*Channel matrix size, ex: 0x303:2X2, 0x1: 1X1, legacy CSI only support 0x101 or 0x1, 1T1R IC only support 0x1*/
 	enum bb_ch_mode_t ch_i_type; /*0~1: Legacy-CH, MIMO-CH*/
 	u8	ch_i_seg_len; /*0~3: 12/28/60/124 (8byte)*/
 };
@@ -162,6 +162,7 @@ void halbb_ch_trig_select(struct bb_info *bb, u8 event);
 void halbb_ch_info_close_powersaving(struct bb_info *bb, bool en, enum phl_phy_idx phy_idx);
 bool halbb_ch_info_calc_pertone_snr(struct bb_info *bb, u8 snrvalue, u16 *addr, u32 len);
 u8 halbb_ch_info_ack_verify(struct bb_info *bb, u16 *addr, u8 datasize, u16 len);
+u32 halbb_ch_info_ic_cfg(struct bb_info *bb, enum bb_ch_mode_t ch_i_type);
 
 enum bb_ch_info_t halbb_ch_info_parsing(struct bb_info *bb, u8 *addr, u32 len,
 					struct physts_rxd *desc,

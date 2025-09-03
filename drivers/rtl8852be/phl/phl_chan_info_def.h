@@ -1,4 +1,4 @@
-﻿/******************************************************************************
+/******************************************************************************
  *
  * Copyright(c) 2019 - 2021 Realtek Corporation.
  *
@@ -27,6 +27,7 @@
 #define CHAN_INFO_PKT_TOTAL MAX_CHAN_INFO_PKT_KEEP + 1
 #define MAX_CHAN_INFO_CLIENT PHL_MACID_MAX_NUM
 #define MAX_CHAN_INFO_CLIENT_ARR_SZ (MAX_CHAN_INFO_CLIENT >> 3)
+#define CSI_IS_ACK_MODE(_mode) (_mode == CHINFO_MODE_ACK)
 
 struct csi_header_t {
 	u8 mac_addr[6];			/* mdata: u8 ta[6]? */
@@ -62,6 +63,12 @@ struct rx_chan_info_pool {
 	_os_lock busy_lock;	/* spinlock */
 	u32 idle_cnt;
 	u32 busy_cnt;
+};
+
+struct csi_ind_t {
+	void *drv_priv;
+	struct csi_header_t *csi_header;
+	u8 *csi_raw;
 };
 
 enum phl_chinfo_action {
@@ -104,15 +111,13 @@ enum phl_chinfo_enable_mode {
 };
 
 struct rtw_chinfo_action_parm {
-	struct rtw_phl_stainfo_t *sta;
+	struct rtw_phl_stainfo_t *sta; /* peer sta */
 	enum phl_chinfo_group_num group_num;
 	enum phl_chinfo_mode mode;
 	enum phl_chinfo_enable_mode enable_mode;
 	enum phl_chinfo_action act;
 	enum phl_chinfo_accuracy accuracy;
-#ifdef CONFIG_PHL_CHANNEL_INFO_DBG
 	u32 ele_bitmap;
-#endif
 	u8 enable;
 	u16 trig_period;
 	u8 tx_nss;
@@ -121,20 +126,22 @@ struct rtw_chinfo_action_parm {
 	/* decided by core layer */
 	u8 chk_ack_rate;
 #endif
-#ifdef CONFIG_PHL_WKARD_CHANNEL_INFO_SAP
-	u8 ap_csi;
-	u8 assign_client_mac[MAC_ALEN];
-#endif
 };
 
 struct rtw_chinfo_cur_parm {
 	struct rtw_chinfo_action_parm action_parm;
 #ifdef CONFIG_PHL_WKARD_CHANNEL_INFO_ACK
-	enum rtw_data_rate  rate;
+	enum rtw_data_rate rate; /* data rate to filter unexpected csi when chk_ack_rate == true */
 #endif
 
 	u8 macid_bitmap[MAX_CHAN_INFO_CLIENT_ARR_SZ];
 	u8 num;
+
+#ifdef CONFIG_PHL_CSI_FW_TX_OFLD
+	/* assume same pkt type for each macid */
+	u8 pkt_id[MAX_CHAN_INFO_CLIENT];
+	u32 pkt_token[MAX_CHAN_INFO_CLIENT];
+#endif
 };
 #endif
 #endif /*_PHL_CHAN_INFO_DEF_H_*/

@@ -143,7 +143,7 @@ rtw_hal_wow_cfg_nlo(void *hal, enum SCAN_OFLD_OP op, u16 mac_id,
 		goto end;
 
 	if (cfg->delay != 0) {
-		hstatus = rtw_hal_mac_get_tsf(hal, hw_band, hw_port, &tsf_h, &tsf_l);
+		hstatus = rtw_hal_mac_get_tsf(hal_info, hw_band, hw_port, &tsf_h, &tsf_l);
 		if (hstatus == RTW_HAL_STATUS_SUCCESS) {
 			tsf = ((u64)tsf_h << 32) | tsf_l;
 			tsf += cfg->delay * 1000;
@@ -172,10 +172,10 @@ rtw_hal_wow_cfg_nlo(void *hal, enum SCAN_OFLD_OP op, u16 mac_id,
 	}
 
 end:
-
+#ifdef CONFIG_PHL_SCANOFLD
 	hstatus = rtw_hal_mac_scan_ofld(hal_info, (u8)mac_id,
 				hw_band, hw_port, &info);
-
+#endif
 	if (hstatus != RTW_HAL_STATUS_SUCCESS)
 		return hstatus;
 
@@ -185,7 +185,9 @@ end:
 enum rtw_hal_status
 rtw_hal_wow_cfg_nlo_chnl_list(void *hal, struct rtw_nlo_info *cfg)
 {
+#ifdef CONFIG_PHL_SCANOFLD
 	struct hal_info_t *hal_info = (struct hal_info_t *)hal;
+#endif
 	enum rtw_hal_status hstatus = RTW_HAL_STATUS_FAILURE;
 	u8 i = 0;
 
@@ -195,9 +197,11 @@ rtw_hal_wow_cfg_nlo_chnl_list(void *hal, struct rtw_nlo_info *cfg)
 	for (i = 0; i < cfg->channel_num; i++) {
 		/* set channel to mac */
 		cfg->channel_list[i].probe_req_id = cfg->probe_req_id;
+#ifdef CONFIG_PHL_SCANOFLD
 		hstatus = rtw_hal_mac_scan_ofld_add_ch(hal_info, HW_BAND_0,
 						&cfg->channel_list[i],
 						i == (cfg->channel_num-1) ? true : false);
+#endif
 		if (hstatus != RTW_HAL_STATUS_SUCCESS)
 			return hstatus;
 	}
@@ -219,6 +223,9 @@ enum rtw_hal_status rtw_hal_wow_init(struct rtw_phl_com_t *phl_com, void *hal,
 	if (hal_status != RTW_HAL_STATUS_SUCCESS)
 		return hal_status;
 
+	if (sta->rlink->mstate == MLME_LINKED)
+		rtw_hal_rf_fwredl_config(hal_info, rtw_hal_hw_band_to_phy_idx(sta->rlink->hw_band));
+
 	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "%s successfully done.\n", __func__);
 
 	FUNCOUT_WSTS(hal_status);
@@ -239,6 +246,12 @@ enum rtw_hal_status rtw_hal_wow_deinit(struct rtw_phl_com_t *phl_com, void *hal,
 	hal_status = hal_ops->hal_wow_deinit(phl_com, hal_info, sta);
 	if (hal_status != RTW_HAL_STATUS_SUCCESS)
 		return hal_status;
+
+	/* recover fw log settings after wowlan resume redl fw */
+	rtw_hal_fw_recover_log_cfg(hal);
+
+	if (sta->rlink->mstate == MLME_LINKED)
+		rtw_hal_rf_fwredl_config(hal_info, rtw_hal_hw_band_to_phy_idx(sta->rlink->hw_band));
 
 	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "%s successfully done.\n", __func__);
 
@@ -452,11 +465,12 @@ enum rtw_hal_status rtw_hal_wow_func_stop(struct rtw_phl_com_t *phl_com, void *h
 	return hstatus;
 }
 
-enum rtw_hal_status rtw_hal_set_wowlan(struct rtw_phl_com_t *phl_com, void *hal, u8 enter)
+enum rtw_hal_status rtw_hal_set_wowlan(struct rtw_phl_com_t *phl_com, void *hal,
+				       enum mac_ax_wow_ctrl ctrl)
 {
 	struct hal_info_t *hal_info = (struct hal_info_t *)hal;
 	enum rtw_hal_status hal_status = RTW_HAL_STATUS_FAILURE;
-	hal_status = rtw_hal_mac_set_wowlan(hal_info, enter);
+	hal_status = rtw_hal_mac_set_wowlan(hal_info, ctrl);
 
 	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "%s : status(%u).\n", __func__, hal_status);
 
@@ -515,6 +529,43 @@ enum rtw_hal_status rtw_hal_wow_drop_tx(void *hal, u8 band)
 	}
 
 	return hal_status;
+}
+
+enum rtw_hal_status rtw_hal_wow_req_tri_evt(void *hal)
+{
+	enum rtw_hal_status hal_status = RTW_HAL_STATUS_FAILURE;
+	struct hal_info_t *hal_info = (struct hal_info_t *)hal;
+
+	hal_status = rtw_hal_mac_wow_req_tri_evt(hal_info);
+
+	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "%s : status(%u).\n", __func__, hal_status);
+
+	return hal_status;
+}
+
+enum rtw_hal_status rtw_hal_wow_req_diag_rpt(void *hal)
+{
+	enum rtw_hal_status hal_status = RTW_HAL_STATUS_FAILURE;
+	struct hal_info_t *hal_info = (struct hal_info_t *)hal;
+
+	hal_status = rtw_hal_mac_wow_req_diag_rpt(hal_info);
+
+	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "%s : status(%u).\n", __func__, hal_status);
+
+	return hal_status;
+}
+
+enum rtw_hal_status rtw_hal_wow_dbg_dump(void *hal)
+{
+	struct hal_info_t *hal_info = (struct hal_info_t *)hal;
+	enum rtw_hal_status hal_stats = RTW_HAL_STATUS_FAILURE;
+
+	hal_stats = rtw_hal_mac_wow_dbg_dump(hal_info);
+
+	if (RTW_HAL_STATUS_SUCCESS != hal_stats)
+		PHL_ERR("%s : Fail.\n", __func__);
+
+	return hal_stats;
 }
 
 #endif /* CONFIG_WOWLAN */

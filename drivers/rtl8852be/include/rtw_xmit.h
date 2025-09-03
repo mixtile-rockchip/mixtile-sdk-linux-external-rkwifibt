@@ -325,6 +325,7 @@ struct pkt_attrib {
 
 //WLAN HDR
 	u16	hdrlen;		/* the WLAN Header Len */
+	u8	a4_hdr;
 	u8	type;
 	u8	subtype;
 	u8	qos_en;
@@ -992,6 +993,8 @@ struct	xmit_priv	{
 	u32 txsc_phl_err_cnt1;
 	u32 txsc_phl_err_cnt2;
 #endif /* CONFIG_CORE_TXSC */
+
+	u16 max_agg_time;
 };
 
 #if 0 /*CONFIG_CORE_XMITBUF*/
@@ -1068,6 +1071,7 @@ void xmit_delivery_enabled_frames(_adapter *padapter, struct sta_info *psta);
 #endif
 
 #ifdef RTW_PHL_TX
+void dbg_dump_txreq_mdata(struct rtw_t_meta_data *mdata, const char *func);
 s32 core_tx_prepare_phl(_adapter *padapter, struct xmit_frame *pxframe);
 s32 core_tx_call_phl(_adapter *padapter, struct xmit_frame *pxframe, void *txsc_pkt);
 s32 core_tx_per_packet(_adapter *padapter, struct xmit_frame *pxframe,
@@ -1088,7 +1092,11 @@ u8 tos_to_up(u8 tos);
 #endif
 #endif
 
-void core_tx_amsdu_tasklet(unsigned long priv);
+#ifdef CONFIG_RTW_TX_AMSDU_USE_WQ
+void core_tx_amsdu_handler(_workitem *work);
+#else
+void core_tx_amsdu_handler(unsigned long priv);
+#endif
 
 u8 rtw_get_tx_bw_mode(_adapter *adapter, struct sta_info *sta);
 

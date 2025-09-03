@@ -654,7 +654,11 @@ _phl_ecsa_cmd_msg_hdlr(
 			}
 
 			/* Switch channel */
-			phl_set_ch_bw(phl_info, hw_band, &chdef_to_switch, RFK_TYPE_ECSA);
+			if (IS_ECSA_TYPE_STA(ecsa_ctrl) &&
+				ecsa_ctrl->ecsa_param.mode == true)
+				phl_set_ch_bw(phl_info, hw_band, &chdef_to_switch, RFK_TYPE_ECSA);
+			else
+				phl_set_ch_bw(phl_info, hw_band, &chdef_to_switch, RFK_TYPE_FORCE_DO);
 
 			SET_MSG_EVT_ID_FIELD(nextmsg.msg_id, MSG_EVT_ECSA_SWITCH_DONE);
 			nextmsg.rsvd[0].ptr =  (u8*)ecsa_ctrl->role;

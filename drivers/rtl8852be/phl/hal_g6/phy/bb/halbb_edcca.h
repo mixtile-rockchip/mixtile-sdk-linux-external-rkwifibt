@@ -30,12 +30,14 @@
 #define EDCCA_HL_DIFF_NORMAL 8
 
 // EDCCA
-#define CBP_6G                         53 /*@-68 dB to avoid cross-band loss*/
+#define CBP_6G                         53 /*@-75 dB to avoid cross-band loss*/
 #define EDCCA_5G                         63 /*@-62 dBm -3 dB margin*/
 #define EDCCA_2G                        68 /*@-57 dBm -3 dB margin*/
 #define CARRIER_SENSE                        75 /*@-50dBm -3 dB margin*/
 #define EDCCA_MAX                        249 /*@ 127dBm for normal mode*/
 #define EDCCA_TH_L2H_LB                  66 /*@ -62 dBm from IEEE*/
+#define EDCCA_TH_H_UP                    66 /*@ -62 dBm for normal mode upperbound*/
+#define EDCCA_TH_H_LOW                   53 /*@ -75 dBm for normal mode loweround*/
 #define EDCCA_PWDB_EXCLU_TX		128 /*128 - 256 = -128dBm when Tx*/
 #define EDCCA_PWDB_TO_RSSI(pwdb)		((pwdb + 110) < 0 ? 0 : (pwdb + 110))
 #define EDCCA_PWROFST_DEFAULT 18 /*2dB is phyUD default value. Note that the loss from adc to snd is actually 0.5dB*/
@@ -230,7 +232,6 @@ struct edcca_hw_rpt {
 };
 
 struct bb_edcca_info {
-	struct bb_edcca_cr_info bb_edcca_cr_i;
 	u8 th_l;
 	u8 th_h;
 	u8 th_hl_diff;
@@ -240,11 +241,16 @@ struct bb_edcca_info {
 	u8 th_h_5g;
 	u8 th_h_2p4g;
 	u8 th_h_cs;
+	u8 th_h_nrml_up;
+	u8 th_h_nrml_low;
+	u8 th_h_obss;
+	bool collision_th_en;
 	u8 colli_th;
 	u8 colli_ofst;
 	struct edcca_hw_rpt edcca_rpt;
 	u8 pwrofst; /*max(ext_loss, 2), 0~31=>[-16:1:15]*/
 	u32 rvrt_val; /*all rvrt_val for pause API must set to u32*/
+	bool init_edcca_cr_success;
 };
 #ifdef HALBB_DYN_L2H_SUPPORT
 struct bb_dyn_l2h_info {
@@ -265,6 +271,7 @@ void halbb_set_collision_thre(struct bb_info *bb);
 void halbb_set_edcca_pause_val(struct bb_info *bb, u32 *val_buf, u8 val_len);
 void halbb_edcca_event_nofity(struct bb_info * bb, u8 pause_type);
 void halbb_edcca_dev_hw_cap(struct bb_info * bb);
+void halbb_edcca_init_io_en(struct bb_info *bb);
 void halbb_edcca_init(struct bb_info *bb);
 void halbb_cr_cfg_edcca_init(struct bb_info *bb);
 void halbb_edcca_dbg(struct bb_info *bb, char input[][16], u32 *_used,

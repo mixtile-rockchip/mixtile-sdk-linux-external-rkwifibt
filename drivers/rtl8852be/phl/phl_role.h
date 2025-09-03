@@ -92,7 +92,7 @@ phl_wifi_role_change(struct phl_info_t *phl_info,
                      struct rtw_wifi_role_t *wrole,
                      struct rtw_wifi_role_link_t *rlink,
                      enum wr_chg_id chg_id,
-                     void *chg_info
+                     const void *chg_info
 );
 enum rtw_phl_status
 phl_wifi_role_macid_all_pause(struct phl_info_t *phl_info, struct rtw_wifi_role_t *wrole, bool pause);

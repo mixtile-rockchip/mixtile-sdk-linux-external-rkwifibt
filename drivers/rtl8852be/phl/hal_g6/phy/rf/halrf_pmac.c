@@ -21,6 +21,9 @@ void halrf_set_pseudo_cw(struct rf_info *rf, enum rf_path path,
 {
 	u32 cw_addr[2] = {0x7c10, 0x7d10};
 
+	if (path >= halrf_max_path_num(rf))
+		return;
+
 	halrf_wreg(rf, cw_addr[path], 0x000001FF, txagc_cw & 0x1ff);
 	halrf_wreg(rf, cw_addr[path], BIT(9), en);
 
@@ -132,7 +135,7 @@ void halrf_set_pmac_tx(struct rf_info *rf, enum phl_phy_idx phy_idx,
 
 		halrf_set_pmac_plcp_gen(rf, phy_idx, tx);
 
-		if (path != RF_PATH_ABCD) {
+		if (path < halrf_max_path_num(rf)) {
 			rtw_hal_bb_cfg_tx_path((rf)->hal_com, path, phy_idx);
 			rtw_hal_bb_cfg_rx_path((rf)->hal_com, path, phy_idx);
 		}

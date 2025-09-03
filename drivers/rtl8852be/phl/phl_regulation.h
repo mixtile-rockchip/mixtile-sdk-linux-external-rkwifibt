@@ -75,6 +75,10 @@ void rtw_phl_get_chdef_6g(void *phl,
 u8 rtw_phl_get_cat6g_by_country_ex(void *phl,
 	char *country, u8 tbl_idx);
 
+bool rtw_phl_get_regu_func_cert_by_country(
+	void * phl, char *country, u8 tbl_idx,
+	struct rtw_regu_func_cert_info *rg_cert);
+
 /* legacy api, will be removed */
 u8 rtw_phl_get_cat6g_by_country(char *cntry);
 u8 rtw_phl_get_regu_country_ver(void);

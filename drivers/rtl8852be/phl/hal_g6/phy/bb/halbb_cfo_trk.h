@@ -139,7 +139,6 @@ struct bb_cfo_diver_info {
 };
 
 struct bb_cfo_trk_info {
-	struct	bb_cfo_trk_cr_info	bb_cfo_trk_cr_i;
 #ifdef HALBB_CFO_DAMPING_CHK
 	struct	bb_cfo_rc_info		bb_cfo_rc_i;
 #endif

@@ -21,7 +21,11 @@
 enum txgapk_id {
 	TXGAPK_TRACK	= 0x00,
 	TXGAPK_PWR		= 0x01,
-	TXGAPK_IQKBK    = 0x02
+	TXGAPK_IQKBK    = 0x02,
+	TXGAPK_TRK_W,
+    TXGAPK_PWR_W,
+    TANK_CAL,
+    TANK_W,
 };
 
 

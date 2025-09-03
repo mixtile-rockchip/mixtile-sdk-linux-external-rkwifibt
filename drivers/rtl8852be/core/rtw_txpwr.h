@@ -15,6 +15,9 @@
 #ifndef __RTW_TXPWR_H__
 #define __RTW_TXPWR_H__
 
+#define MBM_PDBM 100
+#define UNSPECIFIED_MBM 32767 /* maximum of s16 */
+
 #define TPC_MODE_DISABLE	0
 #define TPC_MODE_MANUAL		1
 #define TPC_MODE_INVALID	2	/* keep last */
@@ -45,6 +48,12 @@ struct tx_power_ext_info {
 	struct txpwr_param_status lmt_ru_6g;
 #endif
 };
+
+s16 mb_of_ntx(u8 ntx);
+s8 txpwr_mbm_to_txgi_s8_with_max(s16 mbm, u8 txgi_max, u8 txgi_pdbm);
+
+void txpwr_idx_get_dbm_str(s8 idx, u8 txgi_max, s8 txgi_ww, u8 txgi_pdbm, SIZE_T cwidth, char dbm_str[], u8 dbm_str_len);
+void txpwr_mbm_get_dbm_str(s16 mbm, SIZE_T cwidth, char dbm_str[], u8 dbm_str_len);
 
 void rtw_update_txpwr_level(struct dvobj_priv *dvobj, enum phl_band_idx band_idx);
 void rtw_update_txpwr_level_all_hwband(struct dvobj_priv *dvobj);

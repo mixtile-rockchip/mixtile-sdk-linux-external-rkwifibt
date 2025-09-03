@@ -256,7 +256,7 @@ void halbb_flag_2_default(bool *is_matched, bool *find_target)
 void halbb_set_lna_tia_gain_bbcr_gt2(struct bb_info *bb, u8 fc_ch, enum band_type band, enum channel_width bw, enum rf_path path)
 {
 	struct bb_hw_cfg_info *hw_cfg = &bb->bb_hw_cfg_i;
-	struct bb_hw_cfg_cr_info *cr = &bb->bb_hw_cfg_i.bb_hw_cfg_cr_i;
+	struct bb_hw_cfg_cr_info *cr = &bb->bb_cmn_hooker->bb_hw_cfg_cr_i;
 	struct bb_gain_gen2_info *gain = &bb->bb_gain_gen2_i;
 	enum bb_band_gt2_t band_gt2;
 	enum bb_tab_idx_gt2_t tab_idx = BB_GT2_TAB_2G;
@@ -276,15 +276,14 @@ void halbb_set_lna_tia_gain_bbcr_gt2(struct bb_info *bb, u8 fc_ch, enum band_typ
 		band_gt2 = BB_GT2_BAND_2G;
 		tab_idx = BB_GT2_TAB_2G;
 
-		if (!hw_cfg->gain_table_init_ready_2g_a && (path == RF_PATH_A))
-			hw_cfg->gain_table_init_ready_2g_a = true;
-		else if (!hw_cfg->gain_table_init_ready_2g_b && (path == RF_PATH_B))
-			hw_cfg->gain_table_init_ready_2g_b = true;
-
 		/*only init 2G table for 1 time*/
 		if (hw_cfg->gain_table_init_ready_2g_a && hw_cfg->gain_table_init_ready_2g_b)
 			return;
 
+		if (!hw_cfg->gain_table_init_ready_2g_a && (path == RF_PATH_A))
+			hw_cfg->gain_table_init_ready_2g_a = true;
+		else if (!hw_cfg->gain_table_init_ready_2g_b && (path == RF_PATH_B))
+			hw_cfg->gain_table_init_ready_2g_b = true;
 	} else {
 		band_gt2 = halbb_get_band_gen2(bb, fc_ch, band);
 		tab_idx = BB_GT2_TAB_5G_6G;
@@ -526,6 +525,14 @@ void halbb_cfg_bb_phy(struct bb_info *bb, u32 addr, u32 data,
 #ifdef HALBB_DBCC_SUPPORT
 	u32 ofst = 0;
 #endif
+	u16 cr_phy_idx = (addr >> 16);
+
+	if (cr_phy_idx == 0x100) {
+		if (phy_idx == HW_PHY_0)
+			return;
+		else
+			addr &= 0xffff;
+	}
 
 	if (addr == 0xfe) {
 		halbb_delay_ms(bb, 50);
@@ -665,11 +672,11 @@ bool halbb_cfg_bbcr_be(struct bb_info *bb, bool is_form_folder,
 			break;
 		default:
 			if (is_matched) {
-				//#ifdef HALBB_FW_OFLD_SUPPORT
-				//ret = halbb_fwcfg_bb_phy_8922a(bb, v1, v2, phy_idx);
-				//#else
-				halbb_cfg_bb_phy(bb, v1, v2, phy_idx);
-				//#endif
+				/*Bypass CR setting for keyword: BABECAFE*/
+				if (v2 != 0xBABECAFE)
+					halbb_cfg_bb_phy(bb, v1, v2, phy_idx);
+				else
+					BB_DBG(bb, DBG_INIT, "Bypass cfg CR 0x%x\n", v1);
 			}
 			break;
 		}
@@ -927,7 +934,6 @@ void halbb_get_efuse_ofst_init(struct bb_info *bb)
 
 	#ifdef BB_8922A_SUPPORT
 	case BB_RTL8922A:
-		halbb_get_efuse_ofst_init_8922a(bb);
 		break;
 	#endif
 
@@ -940,6 +946,9 @@ bool halbb_init_reg(struct bb_info *bb)
 {
 	struct rtw_para_info_t *reg = NULL;
 	bool rpt_0 = true, rpt_1 = true, rpt_gain = true;
+
+	halbb_show_cr_cnt(bb, BB_INIT_REG);
+	halbb_show_rf_cr_cnt(bb, BB_INIT_REG);
 
 	#ifdef HALBB_FW_OFLD_SUPPORT
 	halbb_fwofld_bitmap_en(bb, true, FW_OFLD_PHY_0_CR_INIT);
@@ -954,10 +963,18 @@ bool halbb_init_reg(struct bb_info *bb)
 	halbb_fwofld_bitmap_en(bb, false, FW_OFLD_PHY_0_CR_INIT);
 	#endif
 
+	#ifdef HALBB_FW_OFLD_SUPPORT
+	halbb_fwofld_bitmap_en(bb, true, FW_OFLD_PHY_1_CR_INIT);
+	#endif
+
 	if (bb->hal_com->dbcc_en || bb->bb_cmn_hooker->ic_dual_phy_support) {
 		reg = &bb->phl_com->phy_sw_cap[HW_PHY_1].bb_phy_reg_info;
 		rpt_1 = halbb_init_cr_default(bb, reg->para_src, reg->para_data_len, reg->para_data, HW_PHY_1);
 	}
+
+	#ifdef HALBB_FW_OFLD_SUPPORT
+	halbb_fwofld_bitmap_en(bb, false, FW_OFLD_PHY_1_CR_INIT);
+	#endif
 
 	reg = &bb->phl_com->phy_sw_cap[HW_PHY_0].bb_phy_reg_gain_info;
 	rpt_gain = halbb_init_gain_table(bb, reg->para_src, reg->para_data_len, reg->para_data, HW_PHY_0);
@@ -965,6 +982,9 @@ bool halbb_init_reg(struct bb_info *bb)
 	halbb_get_efuse_ofst_init(bb);
 
 	BB_DBG(bb, DBG_INIT, "phy0/1/gain success: {%d, %d, %d}\n", rpt_0, rpt_1, rpt_gain);
+
+	halbb_show_cr_cnt(bb, BB_INIT_REG);
+	halbb_show_rf_cr_cnt(bb, BB_INIT_REG);
 
 	if (rpt_0 && rpt_1 && rpt_gain)
 		return true;
@@ -1011,7 +1031,7 @@ void halbb_rx_gain_table_dbg(struct bb_info *bb, char input[][16],
 			     u32 *_used, char *output, u32 *_out_len)
 {
 	struct bb_hw_cfg_info *hw_cfg = &bb->bb_hw_cfg_i;
-	struct bb_hw_cfg_cr_info *cr = &bb->bb_hw_cfg_i.bb_hw_cfg_cr_i;
+	struct bb_hw_cfg_cr_info *cr = &bb->bb_cmn_hooker->bb_hw_cfg_cr_i;
 	struct bb_gain_gen2_info *gain_gt2 = &bb->bb_gain_gen2_i;
 	struct bb_gain_info *gain = &bb->bb_gain_i;
 	u32 val[10] = {0};
@@ -1162,9 +1182,12 @@ void halbb_rx_gain_table_dbg(struct bb_info *bb, char input[][16],
 			} else if (i < 4) {
 				BB_DBG_CNSL(*_out_len, *_used, output + *_used, *_out_len - *_used,
 			 		"===[5G-%s]===\n", (i == 1) ? ("Low") : ((i == 2) ? "Mid" : "High"));
+			} else if (i < 8) {
+				BB_DBG_CNSL(*_out_len, *_used, output + *_used, *_out_len - *_used,
+			 		"===[6G-%s]===\n", (i == 4) ? ("L0") : ((i == 5) ? "M0" : ((i == 6) ? "H0" : "UH0")));
 			} else {
 				BB_DBG_CNSL(*_out_len, *_used, output + *_used, *_out_len - *_used,
-			 		"===[6G-%s]===\n", (i == 4) ? ("Low") : ((i == 5) ? "Mid" : ((i == 6) ? "High" : "Ultra-High")));
+			 		"===[6G-%s]===\n", (i == 8) ? ("L1") : ((i == 9) ? "M1" : ((i == 10) ? "H1" : "UH1")));
 			}
 			for (j = 0; j < HALBB_MAX_PATH; j++) {
 				BB_DBG_CNSL(*_out_len, *_used, output + *_used, *_out_len - *_used,
@@ -1246,9 +1269,12 @@ void halbb_rx_op1db_table_dbg(struct bb_info *bb, char input[][16],
 			} else if (i < 4) {
 				BB_DBG_CNSL(*_out_len, *_used, output + *_used, *_out_len - *_used,
 			 		"===[5G-%s]===\n", (i == 1) ? ("Low") : ((i == 2) ? "Mid" : "High"));
+			} else if (i < 8) {
+				BB_DBG_CNSL(*_out_len, *_used, output + *_used, *_out_len - *_used,
+			 		"===[6G-%s]===\n", (i == 4) ? ("L0") : ((i == 5) ? "M0" : ((i == 6) ? "H0" : "UH0")));
 			} else {
 				BB_DBG_CNSL(*_out_len, *_used, output + *_used, *_out_len - *_used,
-			 		"===[6G-%s]===\n", (i == 4) ? ("Low") : ((i == 5) ? "Mid" : ((i == 6) ? "High" : "Ultra-High")));
+			 		"===[6G-%s]===\n", (i == 8) ? ("L1") : ((i == 9) ? "M1" : ((i == 10) ? "H1" : "UH1")));
 			}
 			for (j = 0; j < HALBB_MAX_PATH; j++) {
 				BB_DBG_CNSL(*_out_len, *_used, output + *_used, *_out_len - *_used,
@@ -1322,7 +1348,7 @@ void halbb_hw_cfg_init(struct bb_info *bb)
 
 void halbb_cr_cfg_hw_cfg_init(struct bb_info *bb)
 {
-	struct bb_hw_cfg_cr_info *cr = &bb->bb_hw_cfg_i.bb_hw_cfg_cr_i;
+	struct bb_hw_cfg_cr_info *cr = &bb->bb_cmn_hooker->bb_hw_cfg_cr_i;
 
 	if (bb->bb_80211spec != BB_BE_IC)
 		return;

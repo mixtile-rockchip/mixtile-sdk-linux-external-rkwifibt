@@ -46,7 +46,7 @@ void halbb_cr_cfg_plcp_init_7(struct bb_info *bb);
 
 void halbb_plcp_init_7(struct bb_info *bb);
 
-enum plcp_sts halbb_plcp_gen_7(struct bb_info *bb, struct halbb_plcp_info *in,
+enum plcp_sts halbb_plcp_gen_be(struct bb_info *bb, struct halbb_plcp_info *in,
 		    struct usr_plcp_gen_in *user, enum phl_phy_idx phy_idx);
 
 #endif

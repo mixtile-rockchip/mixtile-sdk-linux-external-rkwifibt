@@ -29,7 +29,10 @@ struct rtb_struct;
 #define ROM_LMP_8723c           0x87c3 /* ??????? */
 #define ROM_LMP_8822b           0x8822
 #define ROM_LMP_8822c           0x8822
+#define ROM_LMP_8822e           0x8822
 #define ROM_LMP_8852a           0x8852
+#define ROM_LMP_8851b           0x8851
+#define ROM_LMP_8922a           0x8922
 #define ROM_LMP_8723cs_xx       0x8704
 #define ROM_LMP_8723cs_cg       0x8705
 #define ROM_LMP_8723cs_vf       0x8706
@@ -59,9 +62,21 @@ struct rtb_struct;
 #define CHIP_8822CS	0x73
 #define CHIP_8761B	0x74
 #define CHIP_8852AS	0x75
-#define CHIP_8723FS	0x76
+#define CHIP_8733BS	0x76
 #define CHIP_8852CS	0x77
 #define CHIP_8852BP	0x78
+#define CHIP_8822ES	0x79
+#define CHIP_8851BS	0x7A
+#define CHIP_8852DS	0x7B
+#define CHIP_8922AS	0x7C
+#define CHIP_8852BTS	0x7D
+#define CHIP_8761CTV	0x80
+#define CHIP_8723CS	0x81
+
+#define SUBOPCODE_CKUPG	0x01
+#define SUBOPCODE_NONE	0xff
+
+#define UPG_DL_BLOCK_SIZE   128
 
 #define RTL_FW_MATCH_CHIP_TYPE  (1 << 0)
 #define RTL_FW_MATCH_HCI_VER    (1 << 1)
@@ -76,6 +91,14 @@ struct patch_info {
 	char        *patch_file;
 	char        *config_file;
 	char        *ic_name;
+};
+
+enum rtk_read_class {
+	READ_NONE = 0,
+	READ_CHIP_TYPE = 1,
+	READ_LMP_SUB_VERSION = 2,
+	READ_CHIP_VER = 3,
+	READ_SEC_PROJ = 4
 };
 
 struct patch_info *get_patch_entry(struct rtb_struct *btrtl);

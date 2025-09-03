@@ -60,6 +60,7 @@ enum HALBB_CMD_ID {
 	HALBB_PER_TONE_EVM,
 	HALBB_DYN_TXPWR,
 	HALBB_PHY_STATUS,
+	HALBB_RX_DESC,
 	HALBB_DCC,
 	HALBB_PMAC_TX,
 	HALBB_FW_DBG,
@@ -83,7 +84,11 @@ enum HALBB_CMD_ID {
 	HALBB_FW_OFLD,
 	HALBB_MATH,
 	HALBB_LPS_CH_INFO,
-	HALBB_SPATIAL_REUSE
+	HALBB_SPATIAL_REUSE,
+	HALBB_DV_DBG,
+	HALBB_DV_PXP_DBG,
+	HALBB_PLCP_DBG,
+	HALBB_AGC
 };
 
 /*@--------------------------[Structure]-------------------------------------*/
@@ -132,6 +137,7 @@ static const struct halbb_cmd_info halbb_cmd_i[] = {
 	{"sta_info", HALBB_STA_INFO},
 	{"pause", HALBB_PAUSE_FUNC},
 	{"physts", HALBB_PHY_STATUS},
+	{"rxd", HALBB_RX_DESC},
 	{"pmac_tx", HALBB_PMAC_TX},
 	{"fw_dbg", HALBB_FW_DBG},
 	{"ch_info", HALBB_CH_INFO},
@@ -154,7 +160,11 @@ static const struct halbb_cmd_info halbb_cmd_i[] = {
 	{"fw_ofld", HALBB_FW_OFLD},
 	{"math", HALBB_MATH},
 	{"lps_ch_info", HALBB_LPS_CH_INFO},
-	{"sr", HALBB_SPATIAL_REUSE}
+	{"sr", HALBB_SPATIAL_REUSE},
+	{"dv_dbg", HALBB_DV_DBG},
+	{"dv_pxp_dbg", HALBB_DV_PXP_DBG},
+	{"plcp_tx", HALBB_PLCP_DBG},
+	{"agc", HALBB_AGC}
 	};
 
 /*@--------------------------[Prptotype]-------------------------------------*/

@@ -101,9 +101,11 @@ struct physts_result {
 	struct bb_snif_info	*bb_snif_i;
 	bool			bt_rx_during_cca;
 	bool			bt_tx_during_cca;
+	u16 			lsig_length;
 };
 
 struct bb_info;
+void halbb_bcn_mode_rssi_info_from_fw(struct bb_info *bb, u16 macid, u8 *addr, u8 bcn_num);
 void halbb_ch_idx_decode(struct bb_info *bb, u8 ch_idx_encoded,
 			 u8 *ch_idx, enum band_type *band);
 u8 halbb_drv_info_rssi_parsing(struct bb_info *bb, u16 rssi_in,
@@ -114,5 +116,7 @@ bool halbb_physts_parsing(struct bb_info *bb,
 			      u16 physts_total_length,
 			      struct physts_rxd *desc,
 			      struct physts_result *bb_rpt);
+
+bool halbb_rxd_parsing(struct bb_info *bb, u8 *addr, u16 rxd_total_length);
 
 #endif

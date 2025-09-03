@@ -894,11 +894,9 @@ void rtw_wapi_set_key(_adapter *padapter, RT_WAPI_KEY *pWapiKey, RT_WAPI_STA_INF
 	}
 
 	WAPI_DATA(WAPI_API, "new %s: ", psetstakeyparm->key, 32);
-#ifdef CONFIG_CMD_DISP
+
 	set_stakey_hdl(padapter, psetstakeyparm, PHL_CMD_DIRECTLY, 0);
-#else
-	set_stakey_hdl(padapter, (u8 *)psetstakeyparm);
-#endif
+
 	rtw_mfree((u8 *) psetstakeyparm, sizeof(struct setkey_parm));
 	WAPI_TRACE(WAPI_API, "Set Wapi Key :KeyId:%d,EntryId:%d,PairwiseKey:%d.\n", pWapiKey->keyId, EntryId, !bGroupKey);
 	WAPI_TRACE(WAPI_API, "<=========== %s\n", __FUNCTION__);

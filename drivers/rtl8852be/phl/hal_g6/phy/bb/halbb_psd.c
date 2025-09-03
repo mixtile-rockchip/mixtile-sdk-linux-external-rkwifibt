@@ -99,7 +99,6 @@ u32 halbb_get_psd_data(struct bb_info *bb, u32 psd_tone_idx, u32 igi_pin)
 			*/
 			break;
 		}
-		psd_report = 0;
 	} while (i < 20);
 
 	/*PSD trigger stop*/
@@ -172,7 +171,7 @@ bool halbb_psd_alloc_buff(struct bb_info *bb)
 	if (!psd->rpt) {
 		psd->rpt = halbb_mem_alloc(bb, psd_len);
 	} else if (psd->rpt && psd->fft_point != psd->fft_point_pre) {
-		halbb_mem_free(bb, psd->rpt, sizeof(psd->rpt));
+		halbb_mem_free(bb, psd->rpt, psd->fft_point_pre * sizeof(u32));
 		psd->rpt = halbb_mem_alloc(bb, psd_len);
 	}
 
@@ -419,8 +418,7 @@ void halbb_psd_dbg(struct bb_info *bb, char input[][16], u32 *_used,
 	} else if (var1[0] == 0) {
 
 		for (i = 1; i <= 10; i++) {
-			if (input[i + 1])
-				HALBB_SCAN(input[i + 1], DCMD_DECIMAL,
+			HALBB_SCAN(input[i + 1], DCMD_DECIMAL,
 					   &var1[i]);
 		}
 		BB_DBG_CNSL(out_len, used, output + used, out_len - used,
@@ -497,7 +495,7 @@ void halbb_psd_deinit(struct bb_info *bb)
 	struct bb_psd_info *psd = &bb->bb_cmn_hooker->bb_psd_i;
 
 	if (psd->rpt)
-		halbb_mem_free(bb, psd->rpt, sizeof(psd->rpt));
+		halbb_mem_free(bb, psd->rpt, psd->fft_point_pre * sizeof(u32));
 }
 
 bool halbb_get_psd_result(struct bb_info *bb, u32 *psd_data, u16 *psd_len)
@@ -507,9 +505,12 @@ bool halbb_get_psd_result(struct bb_info *bb, u32 *psd_data, u16 *psd_len)
 	if (!psd->rpt)
 		return false;
 
-	psd_data = psd->rpt;
-	*psd_len = psd->fft_point;
-	return true;
+	if (psd_data) {
+		psd_data = psd->rpt;
+		*psd_len = psd->fft_point;
+		return true;
+	} else
+		return false;
 }
 
 void halbb_cr_cfg_psd_init(struct bb_info *bb)

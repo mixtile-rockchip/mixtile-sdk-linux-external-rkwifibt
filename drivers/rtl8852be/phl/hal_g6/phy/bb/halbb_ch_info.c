@@ -102,7 +102,7 @@ bool halbb_ch_info_valid_chk_8852a(struct bb_info *bb, struct physts_rxd *desc)
 void halbb_ch_info_cr_dump(struct bb_info *bb)
 {
 	struct bb_ch_rpt_info *ch_rpt = &bb->bb_ch_rpt_i;
-	struct bb_ch_info_cr_info *cr = &ch_rpt->bb_ch_info_cr_i;
+	struct bb_ch_info_cr_info *cr = &bb->bb_cmn_hooker->bb_ch_info_cr_i;
 	struct bb_ch_info_cr_cfg_info *cfg = &ch_rpt->bb_ch_info_cr_cfg_i;
 	struct bb_ch_info_cr_cfg_info *cur_cfg = &ch_rpt->bb_ch_info_cur_cr_cfg_i;
 	u32 cr_table[4];
@@ -135,7 +135,8 @@ void halbb_ch_info_physts_get_buf(struct bb_info *bb, u8 *rpt_buf,
 	drv->get_ch_rpt_success = ch_physts->get_ch_rpt_success;
 	drv->seg_idx_curr = 0;
 	drv->raw_data_len = ch_physts->ch_info_len;
-	rpt_buf = (u8*)buf->octet;
+	if (rpt_buf)
+		rpt_buf = (u8*)buf->octet;
 }
 
 void halbb_ch_info_print(struct bb_info *bb, char input[][16], u32 *_used,
@@ -338,6 +339,11 @@ bool halbb_ch_info_chk_cr_valid(struct bb_info *bb, struct bb_ch_info_cr_cfg_inf
 	u8 mask_tmp = 0;
 	u16 per_tone_size = 0;
 
+	if ((bb->ic_type & BB_IC_1SS) && (cfg->ch_i_ele_bitmap != 0x1)){
+		BB_WARNING("Driver parm.ele_bitmap error. Please correct it, 1ss IC only supports act_parm.ele_bitmap = 0x1\n");
+		return false;
+	}
+
 	/*{Data_bit}*/
 	if (cfg->ch_i_cmprs == 0)
 		rpt_size->data_byte = 1;
@@ -448,7 +454,7 @@ void halbb_ch_info_cfg_mu_buff_cr(struct bb_info *bb, bool en)
 	struct bb_ch_rpt_info *ch_rpt = &bb->bb_ch_rpt_i;
 	struct bb_ch_info_cr_cfg_info *cfg = &ch_rpt->bb_ch_info_cr_cfg_i;
 	struct bb_ch_info_cr_cfg_info *cur_cfg = &ch_rpt->bb_ch_info_cur_cr_cfg_i;
-	struct bb_ch_info_cr_info *cr = &ch_rpt->bb_ch_info_cr_i;
+	struct bb_ch_info_cr_info *cr = &bb->bb_cmn_hooker->bb_ch_info_cr_i;
 	u32 val_32 = 0;
 
 	BB_DBG(bb, DBG_CH_INFO, "[%s], en=%d\n", __func__, en);
@@ -480,7 +486,7 @@ bool halbb_cfg_ch_info_cr(struct bb_info *bb, struct bb_ch_info_cr_cfg_info *cfg
 {
 	struct bb_ch_rpt_info *ch_rpt = &bb->bb_ch_rpt_i;
 	struct bb_ch_info_cr_cfg_info *cur_cfg = &ch_rpt->bb_ch_info_cur_cr_cfg_i;
-	struct bb_ch_info_cr_info *cr = &bb->bb_ch_rpt_i.bb_ch_info_cr_i;	
+	struct bb_ch_info_cr_info *cr = &bb->bb_cmn_hooker->bb_ch_info_cr_i;
 	u32 val_32;
 
 	BB_DBG(bb, DBG_CH_INFO, "src=%d, cmprs=%d, grp_num/he=%d/%d\n",
@@ -520,7 +526,8 @@ void halbb_ch_info_physts_en(struct bb_info *bb, bool en,
 			     u16 bitmap, enum phl_phy_idx phy_idx)
 {
 	struct bb_ch_rpt_info *ch_rpt = &bb->bb_ch_rpt_i;
-	struct bb_ch_info_cr_info *cr = &ch_rpt->bb_ch_info_cr_i;
+	struct bb_ch_info_cr_info *cr = &bb->bb_cmn_hooker->bb_ch_info_cr_i;
+	struct bb_ch_info_cr_cfg_info *cur_cfg = &ch_rpt->bb_ch_info_cur_cr_cfg_i;
 	u32 val_32 = 1;
 	u16 i = 0;
 
@@ -547,15 +554,30 @@ void halbb_ch_info_physts_en(struct bb_info *bb, bool en,
 
 	/*Phy-sts IE 8 Enable*/
 	for (i=0; i < PHYSTS_BITMAP_NUM; i++) {
-		if (bitmap & BIT(i))
-			halbb_physts_ie_bitmap_en(bb, i, IE08_FTR_CH, en);
+		if (bitmap & BIT(i)) {
+			if ((i == LEGACY_OFDM_PKT) && (cur_cfg->ch_i_ele_bitmap & 0xfefe)) {
+				BB_DBG(bb, DBG_CH_INFO, "Error for legacy bitmap setting, legacy only have 1 sts\n");
+			} else {
+				halbb_physts_ie_bitmap_en(bb, i, IE08_FTR_CH, en);
+			}
+		}
 	}
+
+	/*=== [fix lightmode IC bug] ==================================================*/
+	if (bb->ic_type & (BB_RTL8852C | BB_RTL8192XB))
+		halbb_ch_info_close_powersaving(bb, en, phy_idx);
+
+	if (bb->ic_type & (BB_RTL8852B | BB_RTL8852C | BB_RTL8192XB | BB_RTL8851B)) {
+		cur_cfg->ch_i_data_src = 1;
+		halbb_set_reg(bb, cr->ch_info_en_0, 0x4, cur_cfg->ch_i_data_src);
+	}
+
 }
 
 void halbb_ch_info_status_en(struct bb_info *bb, bool en, enum phl_phy_idx phy_idx)
 {
 	struct bb_ch_rpt_info *ch_rpt = &bb->bb_ch_rpt_i;
-	struct bb_ch_info_cr_info *cr = &ch_rpt->bb_ch_info_cr_i;
+	struct bb_ch_info_cr_info *cr = &bb->bb_cmn_hooker->bb_ch_info_cr_i;
 	//u32 val_32 = 1;
 
 	BB_DBG(bb, DBG_CH_INFO, "[%s] en=%d\n", __func__, en);
@@ -724,7 +746,7 @@ enum bb_ch_info_t halbb_ch_info_parsing(struct bb_info *bb, u8 *addr, u32 len,
 					struct bb_ch_info_drv_rpt *drv)
 {
 	struct bb_ch_rpt_info *ch_rpt = &bb->bb_ch_rpt_i;
-	enum bb_ch_info_t rpt;
+	enum bb_ch_info_t rpt = BB_CH_INFO_FAIL;
 
 	BB_DBG(bb, DBG_CH_INFO, "[%s] skip_en=%d\n", __func__, ch_rpt->skip_ch_info);
 
@@ -1302,8 +1324,7 @@ void halbb_ch_info_dbg(struct bb_info *bb, char input[][16], u32 *_used,
 
 void halbb_cr_cfg_ch_info_init(struct bb_info *bb)
 {
-	struct bb_ch_rpt_info *ch_rpt = &bb->bb_ch_rpt_i;
-	struct bb_ch_info_cr_info *cr = &ch_rpt->bb_ch_info_cr_i;
+	struct bb_ch_info_cr_info *cr = &bb->bb_cmn_hooker->bb_ch_info_cr_i;
 	
 	switch (bb->cr_type) {
 
@@ -1357,8 +1378,7 @@ void halbb_cr_cfg_ch_info_init(struct bb_info *bb)
 void halbb_ch_info_close_powersaving(struct bb_info *bb, bool en,
 			 enum phl_phy_idx phy_idx)
 {
-	struct bb_ch_rpt_info *ch_rpt = &bb->bb_ch_rpt_i;
-	struct bb_ch_info_cr_info *cr = &ch_rpt->bb_ch_info_cr_i;
+	struct bb_ch_info_cr_info *cr = &bb->bb_cmn_hooker->bb_ch_info_cr_i;
 	#if (defined(BB_8852C_SUPPORT) || defined(BB_8192XB_SUPPORT))
 	if ((bb->ic_type == BB_RTL8852C) || (bb->ic_type == BB_RTL8192XB)){
 		if (en) {
@@ -1569,6 +1589,29 @@ u8 halbb_ch_info_ack_verify(struct bb_info *bb, u16 *addr, u8 datasize, u16 len)
 		iscablelink = true;
 
 	return iscablelink;
+}
+
+u32 halbb_ch_info_ic_cfg(struct bb_info *bb, enum bb_ch_mode_t ch_i_type)
+{
+	u32 max_ele_bitmap = 0x0;
+
+	if (bb->ic_type & BB_IC_1SS) {
+		max_ele_bitmap = 0x1;
+	} else if (bb->ic_type & BB_IC_2SS) {
+		if (ch_i_type == BB_CH_LEGACY_CH)
+			max_ele_bitmap = 0x101;
+		else
+			max_ele_bitmap = 0x303;
+	} else if (bb->ic_type & BB_IC_4SS) {
+		if (ch_i_type == BB_CH_LEGACY_CH)
+			max_ele_bitmap = 0x01010101;
+		else
+			max_ele_bitmap = 0x0F0F0F0F;
+	} else {
+		max_ele_bitmap = 0x0;
+	}
+
+	return max_ele_bitmap;
 }
 
 #endif

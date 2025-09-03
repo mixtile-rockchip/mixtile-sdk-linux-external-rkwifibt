@@ -64,10 +64,9 @@ static u32 dp_intn_idx_set(struct mac_ax_adapter *adapter,
 			MAC_REG_W32(R_AX_PCIE_DBG_CTRL, val32);
 		}
 #endif
-#if MAC_AX_8852C_SUPPORT || MAC_AX_8192XB_SUPPORT || MAC_AX_8851E_SUPPORT || MAC_AX_8852D_SUPPORT
+#if MAC_AX_8852C_SUPPORT || MAC_AX_8192XB_SUPPORT || MAC_AX_8852D_SUPPORT
 		if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852C) ||
 		    is_chip_id(adapter, MAC_AX_CHIP_ID_8192XB) ||
-		    is_chip_id(adapter, MAC_AX_CHIP_ID_8851E) ||
 		    is_chip_id(adapter, MAC_AX_CHIP_ID_8852D)) {
 			val32 = MAC_REG_R32(R_AX_HAXI_DBG_CTRL);
 			val32 = SET_CLR_WORD(val32, intn_idx, B_AX_DBG_SEL);
@@ -96,10 +95,9 @@ static u32 dp_intn_idx_set(struct mac_ax_adapter *adapter,
 			MAC_REG_W32(R_AX_PCIE_DBG_CTRL, val32);
 		}
 #endif
-#if MAC_AX_8852C_SUPPORT || MAC_AX_8192XB_SUPPORT || MAC_AX_8851E_SUPPORT || MAC_AX_8852D_SUPPORT
+#if MAC_AX_8852C_SUPPORT || MAC_AX_8192XB_SUPPORT || MAC_AX_8852D_SUPPORT
 		if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852C) ||
 		    is_chip_id(adapter, MAC_AX_CHIP_ID_8192XB) ||
-		    is_chip_id(adapter, MAC_AX_CHIP_ID_8851E) ||
 		    is_chip_id(adapter, MAC_AX_CHIP_ID_8852D)) {
 			val32 = MAC_REG_R32(R_AX_HAXI_DBG_CTRL);
 			val32 = SET_CLR_WORD(val32, intn_idx, B_AX_DBG_SEL);
@@ -125,10 +123,9 @@ static u32 dp_intn_idx_set(struct mac_ax_adapter *adapter,
 			MAC_REG_W32(R_AX_PCIE_DBG_CTRL, val32);
 		}
 #endif
-#if MAC_AX_8852C_SUPPORT || MAC_AX_8192XB_SUPPORT || MAC_AX_8851E_SUPPORT || MAC_AX_8852D_SUPPORT
+#if MAC_AX_8852C_SUPPORT || MAC_AX_8192XB_SUPPORT || MAC_AX_8852D_SUPPORT
 		if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852C) ||
 		    is_chip_id(adapter, MAC_AX_CHIP_ID_8192XB) ||
-		    is_chip_id(adapter, MAC_AX_CHIP_ID_8851E) ||
 		    is_chip_id(adapter, MAC_AX_CHIP_ID_8852D)) {
 			val32 = MAC_REG_R32(R_AX_HAXI_DBG_CTRL);
 			val32 = SET_CLR_WORD(val32, intn_idx, B_AX_DBG_SEL);
@@ -158,10 +155,9 @@ static u32 dp_intn_idx_set(struct mac_ax_adapter *adapter,
 			MAC_REG_W32(R_AX_PCIE_DBG_CTRL, val32);
 		}
 #endif
-#if MAC_AX_8852C_SUPPORT || MAC_AX_8192XB_SUPPORT || MAC_AX_8851E_SUPPORT || MAC_AX_8852D_SUPPORT
+#if MAC_AX_8852C_SUPPORT || MAC_AX_8192XB_SUPPORT || MAC_AX_8852D_SUPPORT
 		if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852C) ||
 		    is_chip_id(adapter, MAC_AX_CHIP_ID_8192XB) ||
-		    is_chip_id(adapter, MAC_AX_CHIP_ID_8851E) ||
 		    is_chip_id(adapter, MAC_AX_CHIP_ID_8852D)) {
 			val32 = MAC_REG_R32(R_AX_HAXI_DBG_CTRL);
 			val32 = SET_CLR_WORD(val32, intn_idx, B_AX_DBG_SEL);
@@ -204,10 +200,9 @@ static u32 dp_intn_idx_set(struct mac_ax_adapter *adapter,
 			MAC_REG_W32(R_AX_PCIE_DBG_CTRL, val32);
 		}
 #endif
-#if MAC_AX_8852C_SUPPORT || MAC_AX_8192XB_SUPPORT || MAC_AX_8851E_SUPPORT || MAC_AX_8852D_SUPPORT
+#if MAC_AX_8852C_SUPPORT || MAC_AX_8192XB_SUPPORT || MAC_AX_8852D_SUPPORT
 		if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852C) ||
 		    is_chip_id(adapter, MAC_AX_CHIP_ID_8192XB) ||
-		    is_chip_id(adapter, MAC_AX_CHIP_ID_8851E) ||
 		    is_chip_id(adapter, MAC_AX_CHIP_ID_8852D)) {
 			val32 = MAC_REG_R32(R_AX_HAXI_DBG_CTRL);
 			val32 = SET_CLR_WORD(val32, intn_val, B_AX_DBG_SEL);
@@ -238,10 +233,9 @@ static u32 dp_intn_idx_set(struct mac_ax_adapter *adapter,
 			MAC_REG_W32(R_AX_PCIE_DBG_CTRL, val32);
 		}
 #endif
-#if MAC_AX_8852C_SUPPORT || MAC_AX_8192XB_SUPPORT || MAC_AX_8851E_SUPPORT || MAC_AX_8852D_SUPPORT
+#if MAC_AX_8852C_SUPPORT || MAC_AX_8192XB_SUPPORT || MAC_AX_8852D_SUPPORT
 		if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852C) ||
 		    is_chip_id(adapter, MAC_AX_CHIP_ID_8192XB) ||
-		    is_chip_id(adapter, MAC_AX_CHIP_ID_8851E) ||
 		    is_chip_id(adapter, MAC_AX_CHIP_ID_8852D)) {
 			val32 = MAC_REG_R32(R_AX_HAXI_DBG_CTRL);
 			val32 = SET_CLR_WORD(val32, intn_idx, B_AX_DBG_SEL);
@@ -346,10 +340,16 @@ static u32 dp_intn_idx_set(struct mac_ax_adapter *adapter,
 		default:
 			return MACNOITEM;
 		}
+		PLTFM_MUTEX_LOCK(&adapter->lock_info.ind_access_lock);
+		adapter->dbg_info.ind_aces_cnt++;
+
 		MAC_REG_W32(R_AX_FILTER_MODEL_ADDR, AXIDMA_BASE_ADDR);
 		val32 = MAC_REG_R32(R_AX_INDIR_ACCESS_ENTRY + R_PL_AXIDMA_DBG_CTRL);
 		val32 = SET_CLR_WORD(val32, intn_val, B_PL_AXIDMA_DBG_SEL);
 		MAC_REG_W32(R_AX_INDIR_ACCESS_ENTRY + R_PL_AXIDMA_DBG_CTRL, val32);
+
+		adapter->dbg_info.ind_aces_cnt--;
+		PLTFM_MUTEX_UNLOCK(&adapter->lock_info.ind_access_lock);
 		break;
 	case MAC_AX_DP_SEL_WLPHYDBG_GPIO:
 		/* To do... */
@@ -600,10 +600,9 @@ static u32 dp_intn_idx_set(struct mac_ax_adapter *adapter,
 			val32 = SET_CLR_WORD(val32, 0x1, B_AX_SS_PLEA_STAT);
 		}
 #endif
-#if MAC_AX_8852C_SUPPORT || MAC_AX_8192XB_SUPPORT || MAC_AX_8851E_SUPPORT || MAC_AX_8852D_SUPPORT
+#if MAC_AX_8852C_SUPPORT || MAC_AX_8192XB_SUPPORT || MAC_AX_8852D_SUPPORT
 		if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852C) ||
 		    is_chip_id(adapter, MAC_AX_CHIP_ID_8192XB) ||
-		    is_chip_id(adapter, MAC_AX_CHIP_ID_8851E) ||
 		    is_chip_id(adapter, MAC_AX_CHIP_ID_8852D)) {
 			val32 = SET_CLR_WORD(val32, 0x1, B_AX_SS_WDEA_STAT_V1);
 			val32 = SET_CLR_WORD(val32, 0x1, B_AX_SS_PLEA_STAT_V1);
@@ -655,10 +654,9 @@ static u32 dp_intn_idx_set(struct mac_ax_adapter *adapter,
 					     B_AX_SS_TOP_DBG_SEL);
 		}
 #endif
-#if MAC_AX_8852C_SUPPORT || MAC_AX_8192XB_SUPPORT || MAC_AX_8851E_SUPPORT || MAC_AX_8852D_SUPPORT
+#if MAC_AX_8852C_SUPPORT || MAC_AX_8192XB_SUPPORT || MAC_AX_8852D_SUPPORT
 		if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852C) ||
 		    is_chip_id(adapter, MAC_AX_CHIP_ID_8192XB) ||
-		    is_chip_id(adapter, MAC_AX_CHIP_ID_8851E) ||
 		    is_chip_id(adapter, MAC_AX_CHIP_ID_8852D)) {
 			val32 = SET_CLR_WORD(val32, intn_idx,
 					     B_AX_SS_TOP_DBG_SEL_V1);
@@ -891,8 +889,8 @@ u32 mac_dbgport_hw_set(struct mac_ax_adapter *adapter,
 	u32 ret = MACSUCCESS, backup = 0, val32;
 	u8 dbg_sel, dbg_sel_16b, dbg_sel_4b, sel_idx;
 
-	PLTFM_MUTEX_LOCK(&adapter->hw_info->ind_access_lock);
-	adapter->hw_info->ind_aces_cnt++;
+	PLTFM_MUTEX_LOCK(&adapter->lock_info.ind_access_lock);
+	adapter->dbg_info.ind_aces_cnt++;
 
 	if (dp_hw->mode == MAC_AX_DP_MODE_LA) {
 		/* For AL mode, set GPIO PINMUX */
@@ -946,8 +944,8 @@ u32 mac_dbgport_hw_set(struct mac_ax_adapter *adapter,
 		MAC_REG_W32(R_AX_DBG_CTRL, backup);
 
 DONE:
-	adapter->hw_info->ind_aces_cnt--;
-	PLTFM_MUTEX_UNLOCK(&adapter->hw_info->ind_access_lock);
+	adapter->dbg_info.ind_aces_cnt--;
+	PLTFM_MUTEX_UNLOCK(&adapter->lock_info.ind_access_lock);
 
 	return ret;
 }

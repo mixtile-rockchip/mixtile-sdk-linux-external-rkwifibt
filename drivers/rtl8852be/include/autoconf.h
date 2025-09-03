@@ -50,6 +50,8 @@
 #define RTW_WKARD_PCI_DEVRM_DIS_INT
 
 #define RTW_WKARD_TX_DROP
+#define RTW_WKARD_TX_DROP_EN_HWCTS
+#define RTW_WKARD_TX_DROP_CHG_HWRTS
 
 /***** temporarily flag *******/
 /*
@@ -154,8 +156,8 @@
 #ifdef CONFIG_FW_SPECIFY_FROM_CORE
 	#define MAC_FW_8852B_U2
 	#define MAC_FW_8852B_U3
-	/* #define MAC_FW_CATEGORY_NIC */	/* with pwr gating */
-	#define MAC_FW_CATEGORY_NICCE		/* with clock gating */
+	#define MAC_FW_CATEGORY_NIC	/* with pwr gating */
+	/* #define MAC_FW_CATEGORY_NICCE */		/* with clock gating */
 	/* #define MAC_FW_CATEGORY_NIC_PLE */
 	#ifdef CONFIG_WOWLAN
 	#define MAC_FW_CATEGORY_WOWLAN
@@ -242,12 +244,13 @@
 #define BUF_DESC_ARCH		/* if defined, hardware follows Rx buffer descriptor architecture */
 
 #ifdef CONFIG_POWER_SAVE
-	/* #define CONFIG_RTW_IPS */
+	#define CONFIG_RTW_IPS
 	#define CONFIG_RTW_LPS
 	#ifdef CONFIG_RTW_IPS
 		#define CONFIG_FWIPS
 	#endif
 	#if defined(CONFIG_RTW_IPS) || defined(CONFIG_RTW_LPS)
+		#define CONFIG_RTW_WKARD_PS_DEFAULT_OFF
 		#define CONFIG_PS_FW_DBG
 	#endif
 	#ifdef CONFIG_WOWLAN
@@ -257,9 +260,6 @@
 		#endif /* CONFIG_RTW_IPS_WOW */
 		#define CONFIG_RTW_LPS_WOW
 	#endif /* CONFIG_WOWLAN */
-	#ifdef CONFIG_RTW_LPS
-	#define CONFIG_RTW_LPS_DEFAULT_OFF
-	#endif
 	/* #define CONFIG_HW_RADIO_ONOFF_DETECT */
 #endif /* CONFIG_POWER_SAVE */
 
@@ -275,11 +275,6 @@
 		#define WAKEUP_GPIO_IDX	12	/* WIFI Chip Side */
 	#endif /*!WAKEUP_GPIO_IDX*/
 #endif /* CONFIG_GPIO_WAKEUP */
-
-/*#define CONFIG_PCI_ASPM*/
-#ifdef CONFIG_PCI_ASPM
-#define CONFIG_PCI_DYNAMIC_ASPM
-#endif
 
 #define CONFIG_AP_MODE
 #ifdef CONFIG_AP_MODE
@@ -362,8 +357,6 @@
 /*
  * Interface  Related Config
  */
-/* #define CONFIG_RTW_FORCE_PCI_MSI_DISABLE */
-/* #define CONFIG_64BIT_DMA */
 
 /*
  * HAL  Related Config
@@ -409,10 +402,6 @@
  */
 #define DBG	1
 
-
-/*#define DBG_CONFIG_ERROR_DETECT*/
-/* #define DBG_CONFIG_ERROR_DETECT_INT */
-/* #define DBG_CONFIG_ERROR_RESET */
 
 /* #define DBG_IO */
 /* #define DBG_DELAY_OS */
@@ -482,6 +471,8 @@
 #error "Wrong DMA mode"
 #endif
 
+#define CONFIG_DIS_DYN_RXBUF
+
 #if !defined(CONFIG_DIS_DYN_RXBUF) && !defined(CONFIG_RX_BUFF_NONCACHE_ADDR)
 #define CONFIG_DYNAMIC_RX_BUF
 #endif
@@ -505,7 +496,7 @@
 	#ifndef CONFIG_RTW_WNM
 		#define CONFIG_RTW_WNM
 	#endif
-	#ifndef CONFIG_RTW_80211K
+	#ifndef CONFIG_RTW_FSM_RRM
 		#define CONFIG_RTW_80211K
 	#endif
 #endif /* CONFIG_RTW_MBO */

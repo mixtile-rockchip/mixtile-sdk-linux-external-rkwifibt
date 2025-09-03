@@ -15,7 +15,9 @@
 
 #include "hwamsdu.h"
 
+#if MAC_FEAT_HWAMSDU
 #if MAC_AX_FW_REG_OFLD
+
 u32 mac_enable_cut_hwamsdu(struct mac_ax_adapter *adapter,
 			   u8 enable,
 			   u8 low_th,
@@ -35,7 +37,7 @@ u32 mac_enable_cut_hwamsdu(struct mac_ax_adapter *adapter,
 	h2c_info.h2c_class = FWCMD_H2C_CL_FW_OFLD;
 	h2c_info.h2c_func = FWCMD_H2C_FUNC_AMSDU_CUT_REG;
 	h2c_info.rec_ack = 0;
-	h2c_info.done_ack = 1;
+	h2c_info.done_ack = 0;
 
 	content = (struct mac_ax_en_amsdu_cut *)PLTFM_MALLOC(h2c_info.content_len);
 	if (!content)
@@ -72,7 +74,7 @@ u32 mac_enable_hwmasdu(struct mac_ax_adapter *adapter,
 	h2c_info.h2c_class = FWCMD_H2C_CL_FW_OFLD;
 	h2c_info.h2c_func = FWCMD_H2C_FUNC_HWAMSDU_REG;
 	h2c_info.rec_ack = 0;
-	h2c_info.done_ack = 1;
+	h2c_info.done_ack = 0;
 
 	content = (struct mac_ax_en_hwamsdu *)PLTFM_MALLOC(h2c_info.content_len);
 	if (!content)
@@ -132,7 +134,6 @@ u32 mac_hwamsdu_fwd_search_en(struct mac_ax_adapter *adapter, u8 enable)
 
 	if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852C) ||
 	    is_chip_id(adapter, MAC_AX_CHIP_ID_8192XB) ||
-	    is_chip_id(adapter, MAC_AX_CHIP_ID_8851E) ||
 	    is_chip_id(adapter, MAC_AX_CHIP_ID_8852D)) {
 		val = MAC_REG_R32(R_AX_HWAMSDU_CTRL);
 		if (!enable)
@@ -206,3 +207,4 @@ u8 mac_hwamsdu_get_max_len(struct mac_ax_adapter *adapter, u8 macid)
 	else
 		return (u8)info.amsdu_max_length;
 }
+#endif

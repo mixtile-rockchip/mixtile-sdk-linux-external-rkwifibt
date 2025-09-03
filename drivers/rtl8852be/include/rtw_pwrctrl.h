@@ -22,6 +22,23 @@ typedef _sema _pwrlock;
 	BIT[4] = sub-state
 */
 
+enum ps_ips_level {
+	PS_IPS_NONE = 0,
+	PS_PWR_OFF = 1,
+	PS_IPS_RF_OFF = 2,
+	PS_IPS_CLK_GATED = 3,
+	PS_IPS_PWR_GATED = 4,
+	PS_IPS_MAX = 5
+};
+
+enum ps_lps_level {
+	PS_LPS_NONE = 0,
+	PS_LPS_RF_OFF = 1,
+	PS_LPS_CLK_GATED = 2,
+	PS_LPS_PWR_GATED = 3,
+	PS_LPS_MAX = 4
+};
+
 struct pwrctrl_priv {
 	_pwrlock	lock;
 	u32	alives;
@@ -36,6 +53,7 @@ struct pwrctrl_priv {
 	u8		wowlan_ap_mode;
 	u8		wowlan_mode;
 	u8		wowlan_p2p_mode;
+	u8		wowlan_no_link_mode;
 	u8		wowlan_pno_enable;
 	u8		wowlan_in_resume;
 
@@ -105,4 +123,11 @@ void rtw_unregister_early_suspend(struct pwrctrl_priv *pwrpriv);
 #endif /* CONFIG_HAS_EARLYSUSPEND || CONFIG_ANDROID_POWER */
 void rtw_ssmps_enter(_adapter *adapter, struct sta_info *sta);
 void rtw_ssmps_leave(_adapter *adapter, struct sta_info *sta);
+void rtw_update_ips_setting(int make_level, int ins_level, u8 *mode, u8 *cap, bool is_wow);
+void rtw_update_lps_setting(int make_level, int ins_level, u8 *mode, u8 *cap, bool is_wow);
+#if defined(CONFIG_RTW_LPS) || defined(CONFIG_RTW_LPS_WOW)
+void rtw_update_lps_listen_beacon_mode(
+	u8 bcn_mode, u8 awake_interval,
+	enum rtw_lps_listen_bcn_mode *lps_bcn_mode, u8 *lps_awake_interval);
+#endif /* defined(CONFIG_RTW_LPS) || defined(CONFIG_RTW_LPS_WOW) */
 #endif /* __RTL871X_PWRCTRL_H_ */

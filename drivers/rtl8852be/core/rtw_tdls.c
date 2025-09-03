@@ -530,17 +530,19 @@ void rtw_tdls_process_ht_cap(_adapter *padapter, struct sta_info *ptdls_sta, PND
 			ptdls_sta->ampdu_priv.ampdu_enable = _TRUE;
 
 		/* AMPDU Parameters field */
+
 		/* Get MIN of MAX AMPDU Length Exp */
-		if ((pmlmeinfo->HT_caps.u.HT_cap_element.AMPDU_para & 0x3) > (pIE->data[2] & 0x3))
-			max_AMPDU_len = (pIE->data[2] & 0x3);
+		if ((pmlmeinfo->HT_caps.u.HT_cap_element.AMPDU_para & 0x3) > (*(pIE->data + 2) & 0x3))
+			max_AMPDU_len = (*(pIE->data + 2) & 0x3);
 		else
 			max_AMPDU_len = (pmlmeinfo->HT_caps.u.HT_cap_element.AMPDU_para & 0x3);
 		/* Get MAX of MIN MPDU Start Spacing */
-		if ((pmlmeinfo->HT_caps.u.HT_cap_element.AMPDU_para & 0x1c) > (pIE->data[2] & 0x1c))
+		if ((pmlmeinfo->HT_caps.u.HT_cap_element.AMPDU_para & 0x1c) > (*(pIE->data + 2) & 0x1c))
 			min_MPDU_spacing = (pmlmeinfo->HT_caps.u.HT_cap_element.AMPDU_para & 0x1c);
 		else
-			min_MPDU_spacing = (pIE->data[2] & 0x1c);
+			min_MPDU_spacing = (*(pIE->data + 2) & 0x1c);
 		ptdls_sta->ampdu_priv.rx_ampdu_min_spacing = max_AMPDU_len | min_MPDU_spacing;
+
 
 		/* Check if sta support s Short GI 20M */
 		if ((phtpriv->sgi_20m == _TRUE) && (ptdls_sta->htpriv.ht_cap.cap_info & cpu_to_le16(IEEE80211_HT_CAP_SGI_20)))
@@ -591,14 +593,14 @@ void rtw_tdls_process_ht_cap(_adapter *padapter, struct sta_info *ptdls_sta, PND
 u8 *rtw_tdls_set_ht_cap(_adapter *padapter, u8 *pframe, struct pkt_attrib *pattrib)
 {
 	struct _ADAPTER_LINK *padapter_link = pattrib->adapter_link;
-	rtw_ht_use_default_setting(padapter, padapter_link, _TRUE);
+	rtw_ht_use_default_setting(padapter, padapter_link);
 
 	if (padapter->registrypriv.wifi_spec == 1) {
 		padapter_link->mlmepriv.htpriv.sgi_20m = _FALSE;
 		padapter_link->mlmepriv.htpriv.sgi_40m = _FALSE;
 	}
 
-	rtw_restructure_ht_ie(padapter, padapter_link, NULL, pframe, 0, &(pattrib->pktlen), padapter_link->mlmeextpriv.chandef.chan, _TRUE);
+	rtw_restructure_ht_ie(padapter, padapter_link, NULL, pframe, 0, &(pattrib->pktlen), padapter_link->mlmeextpriv.chandef.chan);
 
 	return pframe + pattrib->pktlen;
 }
@@ -818,9 +820,9 @@ u8 *rtw_tdls_set_vht_cap(_adapter *padapter, u8 *pframe, struct pkt_attrib *patt
 {
 	u32 ie_len = 0;
 
-	rtw_vht_get_real_setting(padapter, pattrib->adapter_link, _TRUE);
+	rtw_vht_get_real_setting(padapter, pattrib->adapter_link);
 
-	ie_len = rtw_build_vht_cap_ie(padapter, pattrib->adapter_link, pframe, _TRUE);
+	ie_len = rtw_build_vht_cap_ie(padapter, pattrib->adapter_link, pframe);
 	pattrib->pktlen += ie_len;
 
 	return pframe + ie_len;
@@ -3842,9 +3844,7 @@ void rtw_tdls_teardown_post_hdl(_adapter *padapter, struct sta_info *psta, u8 en
 		}
 	}
 
-	status = rtw_phl_cmd_update_media_status(phl, psta->phl_sta,
-						 psta->phl_sta->mac_addr, false,
-						 PHL_CMD_DIRECTLY, 0);
+	rtw_sta_hal_media_status_rpt_cmd(padapter, psta, false, RTW_CMDF_DIRECTLY);
 
 	/* Free tdls sta info */
 	rtw_free_mld_stainfo(padapter, psta->phl_sta->mld);

@@ -20,16 +20,12 @@
 #include "../type.h"
 #include "../mac_ax.h"
 
+#if MAC_FEAT_LAMODE
 /*--------------------Define ----------------------------------------*/
 #define BITS_AX_LA_BUF_CFG 0xFFF00
 #define BITS_AX_LA_CFG 0xFFF000FF
 #define LA_SIZE_192K_BUF_BNDY 0x20
 #define LA_SIZE_256K_BUF_BNDY 0x18
-
-#define LA_BUF_SEL_256K 0x3
-#define LA_BUF_SEL_192K 0x2
-#define LA_BUF_SEL_128K 0x1
-#define LA_BUF_SEL_64K 0x0
 
 #define DLE_BLOCK_SIZE 0x2000
 #define DLE_BUF_BNDY_8852A 0x70000
@@ -40,8 +36,6 @@
 #define LA_BUF_END_8852C_128K 0x50000
 #define LA_BUF_END_8192XB_256K 0x70000
 #define LA_BUF_END_8192XB_128K 0x50000
-#define LA_BUF_END_8851E_256K 0x70000
-#define LA_BUF_END_8851E_128K 0x50000
 #define LA_BUF_END_8852D_256K 0x70000
 #define LA_BUF_END_8852D_128K 0x50000
 #define LA_SIZE_128K_BUF_BNDY_8852B 0x8
@@ -139,4 +133,7 @@ struct mac_ax_la_status mac_get_lamode_st
  * @}
  */
 
-#endif
+u32 mac_query_lamode_buf(struct mac_ax_adapter *adapter, u8 *la_buf_sel);
+
+#endif //MAC_FEAT_LAMODE
+#endif //_MAC_AX_LA_MODE_H_

@@ -55,7 +55,7 @@
 #include "rtk_coex.h"
 #endif
 
-#define VERSION "2.2.813d11a.20230526-133752"
+#define VERSION "2.2.a66a125.20250515-181346"
 
 
 #if HCI_VERSION_CODE > KERNEL_VERSION(3, 4, 0)
@@ -1065,7 +1065,11 @@ static void hci_uart_tty_wakeup(struct tty_struct *tty)
  */
 static void hci_uart_tty_receive(struct tty_struct *tty, const u8 * data,
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 14, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+				 const u8 *flags, size_t count)
+#else
 				 const char *flags, int count)
+#endif
 #else
 				 char *flags, int count)
 #endif
@@ -1169,6 +1173,7 @@ static int hci_uart_register_dev(struct hci_uart *hu)
 #endif
 #endif
 
+#if HCI_VERSION_CODE < HCI_AMP_REMOVED_VERSION
 #if HCI_VERSION_CODE >= KERNEL_VERSION(3, 4, 0)
 	if (test_bit(HCI_UART_CREATE_AMP, &hu->hdev_flags))
 		hdev->dev_type = HCI_AMP;
@@ -1177,6 +1182,7 @@ static int hci_uart_register_dev(struct hci_uart *hu)
 		hdev->dev_type = HCI_BREDR;
 #else
 		hdev->dev_type = HCI_PRIMARY;
+#endif
 #endif
 #endif
 
@@ -1238,7 +1244,9 @@ static int hci_uart_set_flags(struct hci_uart *hu, unsigned long flags)
 	/* TODO: Add HCI_UART_INIT_PENDING, HCI_UART_VND_DETECT check  */
 	unsigned long valid_flags = BIT(HCI_UART_RAW_DEVICE) |
 				    BIT(HCI_UART_RESET_ON_INIT) |
+#if HCI_VERSION_CODE < HCI_AMP_REMOVED_VERSION
 				    BIT(HCI_UART_CREATE_AMP) |
+#endif
 				    BIT(HCI_UART_EXT_CONFIG);
 
 	if (flags & ~valid_flags)

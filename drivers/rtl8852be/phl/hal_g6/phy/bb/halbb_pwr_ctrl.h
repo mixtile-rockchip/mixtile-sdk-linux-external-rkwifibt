@@ -30,6 +30,7 @@
 #define MACREG_PWRMACID_CR	0x0D36c
 #define HALBB_PWR_STATE_NUM	3
 #define DTP_FLOOR_UP_GAP 3
+#define TX_HP_LV_INIT 0xf
 #define TX_HP_LV_0 0
 #define TX_HP_LV_1 1
 #define TX_HP_LV_2 2
@@ -117,6 +118,7 @@ void halbb_pwr_ctrl_dbg(struct bb_info *bb, char input[][16], u32 *_used,
 		   char *output, u32 *_out_len);
 #endif
 void halbb_macid_ctrl_init(struct bb_info *bb);
+void halbb_per_macid_ctrl_init(struct bb_info *bb, u16 macid);
 void halbb_tpu_mac_cr_init(struct bb_info *bb, enum phl_phy_idx phy_idx);
 void halbb_tssi_ctrl_mac_cr_init(struct bb_info *bb, enum phl_phy_idx phy_idx);
 void halbb_tssi_ctrl_set_dbw_table(struct bb_info *bb);

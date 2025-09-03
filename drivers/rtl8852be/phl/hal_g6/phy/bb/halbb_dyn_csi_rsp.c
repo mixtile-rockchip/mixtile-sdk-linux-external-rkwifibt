@@ -26,13 +26,6 @@
 
 #ifdef HALBB_DYN_CSI_RSP_SUPPORT
 
-bool halbb_dyn_csi_rsp_rlt_get(struct bb_info *bb){
-	struct bf_ch_raw_info *bf = &bb->bb_cmn_hooker->bf_ch_raw_i;
-	
-	BB_DBG(bb, DBG_DCR, "CSI Rsp Rlt = %d.\n", bf->is_csi_rsp_en);
-	return bf->is_csi_rsp_en;
-}
-
 void halbb_csi_rsp_rlt(struct bb_info *bb, bool en)
 {
 	struct bf_ch_raw_info *bf = &bb->bb_cmn_hooker->bf_ch_raw_i;
@@ -141,32 +134,6 @@ bool halbb_dcr_get_ch_raw_info(struct bb_info *bb, bool is_csi_en)
 	}
 
 	return rpt;
-}
-
-bool halbb_dcr_en(struct bb_info *bb, bool en){
-	struct bf_ch_raw_info *bf = &bb->bb_cmn_hooker->bf_ch_raw_i;
-	bool ret = true;
-	u32 id = bb->phl_com->id.id & 0xFFFF;
-
-	if (id == 0x209 || id == 0x309) {
-	    BB_DBG(bb, DBG_DCR, "DCR_en=%d, cid=0x%x\n", en, id);
-	} else {
-		return false;
-	}
-
-	if (en) {
-		//Allocate Buffer
-		//ret = halbb_ch_info_buf_alloc(bb);
-		//if (ret) {
-			bf->dyn_csi_rsp_en = true;
-		//}
-	} else {
-		//halbb_ch_info_buf_rls(bb);
-		halbb_dcr_reset(bb);
-		bf->dyn_csi_rsp_en = false;
-	}
-
-	return ret;
 }
 
 void halbb_dcr_init(struct bb_info *bb)
@@ -417,11 +384,10 @@ void halbb_dcr_env_det(struct bb_info *bb)
 	u32 id = bb->phl_com->id.id & 0xFFFF;
 	bool cbl_lnk_state = false;
 
-	/*BB_DBG(bb, DBG_DCR,
-	       "[START] is_link = %d, period_cnt = %d, cable_link = %d, pkt_cnt_1ss = %d, pkt_cnt_2ss = %d, cbl_lnk_cnt = %d, AP_num = %d, csi_on_chk = %d\n",
+	BB_DBG(bb, DBG_DCR,
+	       "[START] is_link = %d, period_cnt = %d, cable_link = %d, pkt_cnt_1ss = %d, pkt_cnt_2ss = %d, csi_on_chk = %d\n",
 	       link->is_linked, bf->period_cnt, bf->cbl_lnk_state,
-	       pkt_cnt->pkt_cnt_1ss, pkt_cnt->pkt_cnt_2ss, bf->cbl_lnk_cnt,
-	       bb->phl_com->phl_stats.bss_cnt, bf->csi_on_chk);*/
+	       pkt_cnt->pkt_cnt_1ss, pkt_cnt->pkt_cnt_2ss, bf->csi_on_chk);
 
 	if (id != 0x409)
 		return;
@@ -456,10 +422,10 @@ void halbb_dcr_env_det(struct bb_info *bb)
 	bf->cbl_lnk_state = cbl_lnk_state;
 	bf->period_cnt += 1;
 
-	/*BB_DBG(bb, DBG_DCR,
-	       "[END] is_link = %d, period_cnt = %d, cable_link = %d, pkt_cnt_1ss = %d, pkt_cnt_2ss = %d, cbl_lnk_cnt = %d\n",
+	BB_DBG(bb, DBG_DCR,
+	       "[END] is_link = %d, period_cnt = %d, cable_link = %d, pkt_cnt_1ss = %d, pkt_cnt_2ss = %d\n",
 	       link->is_linked, bf->period_cnt, bf->cbl_lnk_state,
-	       pkt_cnt->pkt_cnt_1ss, pkt_cnt->pkt_cnt_2ss, bf->cbl_lnk_cnt);*/
+	       pkt_cnt->pkt_cnt_1ss, pkt_cnt->pkt_cnt_2ss);
 }
 
 void halbb_dyn_csi_rsp_dbg(struct bb_info *bb, char input[][16], 
@@ -522,3 +488,44 @@ void halbb_dyn_csi_rsp_dbg(struct bb_info *bb, char input[][16],
 	}
 }
 #endif
+
+bool halbb_dyn_csi_rsp_rlt_get(struct bb_info *bb)
+{
+#ifdef HALBB_DYN_CSI_RSP_SUPPORT
+	struct bf_ch_raw_info *bf = &bb->bb_cmn_hooker->bf_ch_raw_i;
+
+	BB_DBG(bb, DBG_DCR, "CSI Rsp Rlt = %d.\n", bf->is_csi_rsp_en);
+	return bf->is_csi_rsp_en;
+#else
+	return false;
+#endif
+}
+
+bool halbb_dcr_en(struct bb_info *bb, bool en)
+{
+	bool ret = true;
+#ifdef HALBB_DYN_CSI_RSP_SUPPORT
+	struct bf_ch_raw_info *bf = &bb->bb_cmn_hooker->bf_ch_raw_i;
+	u32 id = bb->phl_com->id.id & 0xFFFF;
+
+	if (id == 0x209 || id == 0x309) {
+		 BB_DBG(bb, DBG_DCR, "DCR_en=%d, cid=0x%x\n", en, id);
+	} else {
+		return false;
+	}
+
+	if (en) {
+		//Allocate Buffer
+		//ret = halbb_ch_info_buf_alloc(bb);
+		//if (ret) {
+			bf->dyn_csi_rsp_en = true;
+		//}
+	} else {
+		//halbb_ch_info_buf_rls(bb);
+		halbb_dcr_reset(bb);
+		bf->dyn_csi_rsp_en = false;
+	}
+#endif
+	return ret;
+}
+

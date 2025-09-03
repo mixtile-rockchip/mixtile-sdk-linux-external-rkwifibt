@@ -21,6 +21,7 @@
 #include "hw.h"
 #include "init.h"
 #include "role.h"
+#include "security_cam.h"
 #include "cmac_tx.h"
 #include "rx_filter.h"
 #include "dle.h"
@@ -72,10 +73,8 @@
 #define CMAC1_START_ADDR	0xE000
 #define CMAC1_END_ADDR		0xFFFF
 
-#if MAC_AX_ASIC_TEMP
 #define R_AX_LTECOEX_CTRL 0x38
 #define R_AX_LTECOEX_CTRL_2 0x3C
-#endif
 
 #define S_AX_CTS2S_TH_1K 4
 #define S_AX_CTS2S_TH_SEC_256B 1
@@ -167,9 +166,6 @@
  * @retval u32
  */
 u32 mac_enable_imr(struct mac_ax_adapter *adapter, u8 band,
-		   enum mac_ax_hwmod_sel sel);
-
-u32 ser_imr_config(struct mac_ax_adapter *adapter, u8 band,
 		   enum mac_ax_hwmod_sel sel);
 
 /**

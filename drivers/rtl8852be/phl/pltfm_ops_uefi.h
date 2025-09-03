@@ -90,10 +90,10 @@ static __inline char *_os_strchr(const char *s, int c)
 	return strchr(s, c);
 }
 
-#define _os_snprintf(s, sz, fmt, ...) 0
-#define _os_vsnprintf(str, size, fmt, args) UnicodeVSPrintAsciiFormat(str, size, fmt, args)
-#define _os_va_start(args, fmt) 0
-#define _os_va_end(args) 0
+#define _os_snprintf(s, sz, fmt, ...) rum_sys_snprintf(s, sz, fmt, ##__VA_ARGS__)
+#define _os_vsnprintf(str, size, fmt, args) rum_sys_vsnprintf(str, size, fmt, args)
+#define _os_va_start(args, fmt) va_start(args, fmt)
+#define _os_va_end(args) va_end(args)
 
 #define _os_strncat strncat
 
@@ -102,7 +102,7 @@ static __inline u32 _os_strlen(u8 *buf)
 	return (u32)strlen((const char *)buf);
 }
 
-#define _os_sscanf(buf, fmt, ...) 0
+#define _os_sscanf(buf, fmt, ...) rum_sys_sscanf(buf, fmt, ##__VA_ARGS__)
 
 /* delay */
 static __inline void _os_delay_ms(void * drv_priv, u32 ms)
@@ -133,6 +133,13 @@ static inline u32 _os_get_cur_time_ms(void)
 {
 	u64 ret;
 	ret = PlatformGetCurrentTime() / 1000;
+	return (u32)ret;
+}
+
+static inline _os_raw_time _os_get_cur_raw_time(void)
+{
+	u64 ret;
+	ret = PlatformGetCurrentTime();
 	return (u32)ret;
 }
 
@@ -650,6 +657,27 @@ static __inline int _os_atomic_dec_return(void *d, _os_atomic *v)
 }
 
 /* File Operation */
+
+/*
+* if _os_file_readable() is supported
+*/
+static inline bool _os_file_readable_supported(void)
+{
+	return false;
+}
+
+/*
+* Test if the specific @param path is a file and readable.
+* If readable, @param sz is set to file size
+* @param path the path of the file to test
+* @param sz the file size if file is readable
+* @return true or false
+*/
+static inline bool _os_file_readable(const char *path, u32 *sz)
+{
+	return false;
+}
+
 static inline u32 _os_read_file(const char *path, u8 *buf, u32 sz)
 {
 	/* OS Dependent API */
@@ -692,6 +720,23 @@ static __inline u32 _os_write32_pcie(void *drv_priv, u32 addr, u32 val)
 	PlatformEFIOWrite4Byte(drv_priv, addr, val);
 	return 0;
 }
+
+static __inline bool _os_get_pci_cfg(void *drv_priv, u32 offset, void *buf, u32 len)
+{
+	if (len == platform_pci_get_conf_space(drv_priv, offset, buf, len))
+		return true;
+	else
+		return false;
+}
+
+static __inline bool _os_set_pci_cfg(void *drv_priv, u32 offset, void *buf, u32 len)
+{
+	if (len == platform_pci_set_conf_space(drv_priv, offset, buf, len))
+		return true;
+	else
+		return false;
+}
+
 #endif/*#ifdef CONFIG_PCI_HCI*/
 
 #ifdef CONFIG_USB_HCI

@@ -39,7 +39,7 @@
 #define SND_MEE_CFG	 (B_AX_BFMEE_BFPARAM_SEL | B_AX_BFMEE_USE_NSTS | \
 			 B_AX_BFMEE_CSI_FORCE_RETE_EN | B_AX_BFMEE_BFINF0_NR | \
 			 B_AX_BFMEE_BFINFO0_NC)
-#define MAX_SNDTXCMDINFO_NUM		0x4
+#define MAX_SNDTXCMDINFO_NUM		0x7
 #define MAX_FWCMD_SND_LEN 600
 
 enum FrameExchangeType {
@@ -64,6 +64,7 @@ enum SND_NDPA_MODE {
 	SND_NDPA_PATCH_STA = 1
 };
 
+#if MAC_FEAT_BFMER
 /**
  * @addtogroup Sounding
  * @{
@@ -166,7 +167,113 @@ u32 mac_init_snd_mer(struct mac_ax_adapter *adapter, u8 band);
 /**
  * @}
  */
+#endif
 
+#if MAC_FEAT_MUMIMO
+/**
+ * @addtogroup Sounding
+ * @{
+ */
+
+/**
+ * @brief mac_set_mu_table
+ *
+ * @param *adapter
+ * @param *mu_table
+ * @return Please Place Description here.
+ * @retval u32
+ */
+
+u32 mac_set_mu_table(struct mac_ax_adapter *adapter,
+		     struct mac_mu_table *mu_table);
+/**
+ * @}
+ */
+#endif
+
+#if MAC_FEAT_BFMER
+/**
+ * @addtogroup Sounding
+ * @{
+ */
+
+/**
+ * @brief mac_hw_snd_pause_release
+ *
+ * @param *adapter
+ * @param band
+ * @param pr
+ * @return Please Place Description here.
+ * @retval u32
+ */
+
+u32 mac_hw_snd_pause_release(struct mac_ax_adapter *adapter, u8 band, u8 pr);
+/**
+ * @}
+ */
+
+/**
+ * @addtogroup Sounding
+ * @{
+ */
+
+/**
+ * @brief mac_bypass_snd_sts
+ *
+ * @param *adapter
+ * @return Please Place Description here.
+ * @retval u32
+ */
+
+u32 mac_bypass_snd_sts(struct mac_ax_adapter *adapter);
+/**
+ * @}
+ */
+#endif
+
+#if MAC_FEAT_BFMER
+/**
+ * @addtogroup Sounding
+ * @{
+ */
+
+/**
+ * @brief mac_snd_sup
+ *
+ * @param *adapter
+ * @param *bf_sup
+ * @return Please Place Description here.
+ * @retval u32
+ */
+u32 mac_snd_sup(struct mac_ax_adapter *adapter, struct mac_bf_sup *bf_sup);
+/**
+ * @}
+ */
+#endif
+
+#if MAC_FEAT_BFMER_F2PSND
+/**
+ * @addtogroup Sounding
+ * @{
+ */
+
+/**
+ * @brief mac_set_snd_para_v1
+ *
+ * @param *adapter
+ * @param *snd_info
+ * @return Please Place Description here.
+ * @retval u32
+ */
+
+u32 mac_set_snd_para(struct mac_ax_adapter *adapter,
+		     struct mac_ax_fwcmd_snd *snd_info);
+/**
+ * @}
+ */
+#endif
+
+#if MAC_FEAT_BFMEE
 /**
  * @addtogroup Sounding
  * @{
@@ -230,26 +337,6 @@ u32 mac_csi_rrsc(struct mac_ax_adapter *adapter, u8 band, u32 rrsc);
  */
 
 /**
- * @addtogroup Sounding
- * @{
- */
-
-/**
- * @brief mac_set_mu_table
- *
- * @param *adapter
- * @param *mu_table
- * @return Please Place Description here.
- * @retval u32
- */
-
-u32 mac_set_mu_table(struct mac_ax_adapter *adapter,
-		     struct mac_mu_table *mu_table);
-/**
- * @}
- */
-
-/**
  * @}
  */
 
@@ -299,44 +386,6 @@ u32 mac_set_csi_para_cctl(struct mac_ax_adapter *adapter,
  */
 
 /**
- * @brief mac_hw_snd_pause_release
- *
- * @param *adapter
- * @param band
- * @param pr
- * @return Please Place Description here.
- * @retval u32
- */
-
-u32 mac_hw_snd_pause_release(struct mac_ax_adapter *adapter, u8 band, u8 pr);
-/**
- * @}
- */
-
-/**
- * @addtogroup Sounding
- * @{
- */
-
-/**
- * @brief mac_bypass_snd_sts
- *
- * @param *adapter
- * @return Please Place Description here.
- * @retval u32
- */
-
-u32 mac_bypass_snd_sts(struct mac_ax_adapter *adapter);
-/**
- * @}
- */
-
-/**
- * @addtogroup Sounding
- * @{
- */
-
-/**
  * @brief mac_deinit_mee
  *
  * @param *adapter
@@ -349,24 +398,26 @@ u32 mac_deinit_mee(struct mac_ax_adapter *adapter, u8 band);
 /**
  * @}
  */
-
-/**
+ 
+ /**
  * @addtogroup Sounding
  * @{
  */
 
 /**
- * @brief mac_snd_sup
+ * @brief set_csi_release_cfg
  *
  * @param *adapter
- * @param *bf_sup
+ * @param *cfg
  * @return Please Place Description here.
  * @retval u32
  */
-u32 mac_snd_sup(struct mac_ax_adapter *adapter, struct mac_bf_sup *bf_sup);
+u32 set_csi_release_cfg(struct mac_ax_adapter *adapter,
+			struct mac_ax_csi_release_cfg *cfg);
 /**
  * @}
  */
+#endif
 
 /**
  * @addtogroup Sounding
@@ -382,26 +433,6 @@ u32 mac_snd_sup(struct mac_ax_adapter *adapter, struct mac_bf_sup *bf_sup);
  * @retval u32
  */
 u32 mac_gidpos(struct mac_ax_adapter *adapter, struct mac_gid_pos *mu_gid);
-/**
- * @}
- */
-
-/**
- * @addtogroup Sounding
- * @{
- */
-
-/**
- * @brief mac_set_snd_para_v1
- *
- * @param *adapter
- * @param *snd_info
- * @return Please Place Description here.
- * @retval u32
- */
-
-u32 mac_set_snd_para(struct mac_ax_adapter *adapter,
-		     struct mac_ax_fwcmd_snd *snd_info);
 /**
  * @}
  */

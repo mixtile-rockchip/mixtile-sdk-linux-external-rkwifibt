@@ -14,6 +14,8 @@
  *****************************************************************************/
 #include "phl_headers.h"
 
+#ifdef CONFIG_PHL_PKTOFLD
+
 #define HAL_PKT_OFLD_ADD(_pkt, _id, _pkt_buf, _len) \
 	rtw_hal_pkt_ofld((_pkt)->phl_info->hal, _id, PKT_OFLD_ADD, _pkt_buf, _len)
 #define HAL_PKT_OFLD_READ(_pkt, _id) \
@@ -68,8 +70,8 @@ _phl_pkt_ofld_dbg_dump_pkt_info(struct pkt_ofld_obj *ofld_obj,
 	phl_list_for_loop(pos, struct pkt_ofld_req, &pkt_info->req_q, list) {
 
 		PHL_TRACE(COMP_PHL_PKTOFLD, _PHL_INFO_,
-			"[PKT] ## token %d, req name unknown\n",
-			pos->token);
+			"[PKT] ## token %d, req name:\"%s\"\n",
+			pos->token, pos->req_name ? pos->req_name : "unknown");
 	}
 
 	if (_phl_pkt_ofld_is_pkt_ofld(pkt_info)) {
@@ -978,7 +980,7 @@ void phl_pkt_ofld_del_all_entry_req(struct phl_info_t *phl_info)
 enum rtw_phl_status phl_pkt_ofld_add_entry(struct phl_info_t *phl_info, u16 macid)
 {
 	struct pkt_ofld_obj *ofld_obj = phl_info->pkt_ofld;
-	void *d = phl_to_drvpriv(ofld_obj->phl_info);
+	void *d = phl_to_drvpriv(phl_info);
 	struct pkt_ofld_entry *entry = NULL;
 
 	if (ofld_obj == NULL) {
@@ -1014,7 +1016,7 @@ enum rtw_phl_status phl_pkt_ofld_add_entry(struct phl_info_t *phl_info, u16 maci
 enum rtw_phl_status phl_pkt_ofld_del_entry(struct phl_info_t *phl_info, u16 macid)
 {
 	struct pkt_ofld_obj *ofld_obj = phl_info->pkt_ofld;
-	void *d = phl_to_drvpriv(ofld_obj->phl_info);
+	void *d = phl_to_drvpriv(phl_info);
 	struct pkt_ofld_entry *entry = NULL;
 
 	if (ofld_obj == NULL) {
@@ -1087,7 +1089,7 @@ rtw_phl_pkt_ofld_request(struct phl_info_t *phl_info, u16 macid, u8 type,
 		u32 *token, void *buf, const char *req_name)
 {
 	struct pkt_ofld_obj *ofld_obj = phl_info->pkt_ofld;
-	void *d = phl_to_drvpriv(ofld_obj->phl_info);
+	void *d = phl_to_drvpriv(phl_info);
 	struct pkt_ofld_entry *entry = NULL;
 	struct pkt_ofld_req *req = NULL;
 
@@ -1143,7 +1145,7 @@ enum rtw_phl_status rtw_phl_pkt_ofld_cancel(struct phl_info_t *phl_info,
 					u16 macid, u8 type, u32 *token)
 {
 	struct pkt_ofld_obj *ofld_obj = phl_info->pkt_ofld;
-	void *d = phl_to_drvpriv(ofld_obj->phl_info);
+	void *d = phl_to_drvpriv(phl_info);
 	struct pkt_ofld_entry *entry = NULL;
 	struct pkt_ofld_req *req = NULL;
 	struct pkt_ofld_info *pkt_info = NULL;
@@ -1240,7 +1242,7 @@ rtw_phl_pkt_ofld_null_request(struct rtw_phl_com_t* phl_com,
 void phl_pkt_ofld_show_info(struct phl_info_t *phl_info)
 {
 	struct pkt_ofld_obj *ofld_obj = phl_info->pkt_ofld;
-	void *d = phl_to_drvpriv(ofld_obj->phl_info);
+	void *d = phl_to_drvpriv(phl_info);
 
 	_os_mutex_lock(d, &ofld_obj->mux);
 
@@ -1257,7 +1259,7 @@ void phl_pkt_ofld_show_info(struct phl_info_t *phl_info)
 u8 phl_pkt_ofld_get_id(struct phl_info_t *phl_info, u16 macid, u8 type)
 {
 	struct pkt_ofld_obj *ofld_obj = phl_info->pkt_ofld;
-	void *d = phl_to_drvpriv(ofld_obj->phl_info);
+	void *d = phl_to_drvpriv(phl_info);
 	struct pkt_ofld_entry *entry = NULL;
 	struct pkt_ofld_info *pkt_info = NULL;
 
@@ -1305,3 +1307,5 @@ const char *phl_get_pkt_ofld_str(enum pkt_ofld_type type)
 		return "UNKNOWN_PKT_TYPE";
 	}
 }
+
+#endif

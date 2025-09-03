@@ -23,9 +23,4 @@ void _get_wl_cn_report(struct btc_t *btc);
 void _get_wl_evm_report(struct btc_t *btc);
 void _bt_psd_setup(struct btc_t *btc, u8 start_idx, u8 auto_rpt_type);
 void _bt_psd_update(struct btc_t *btc, u8 *buf, u32 len);
-
-
-
-
-
 #endif

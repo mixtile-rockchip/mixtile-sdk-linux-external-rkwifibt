@@ -19,6 +19,11 @@
 
 // for other submodule ref definition defined here
 /*--------------------Define -------------------------------------------*/
+#define RTW_MAC_LA_BUF_SEL_256K 0x3
+#define RTW_MAC_LA_BUF_SEL_192K 0x2
+#define RTW_MAC_LA_BUF_SEL_128K 0x1
+#define RTW_MAC_LA_BUF_SEL_64K 0x0
+
 /*--------------------Define MACRO--------------------------------------*/
 /*--------------------Define Enum---------------------------------------*/
 
@@ -131,12 +136,12 @@ enum rtw_fw_cap {
 struct rtw_mac_cmd {
 	enum rtw_mac_src_cmd_ofld src;
 	enum rtw_mac_cmd_type_ofld type;
-	u8 lc;
 	enum rtw_mac_rf_path rf_path;
-	u16 offset;
-	u16 id;
+	u32 offset;
 	u32 value;
 	u32 mask;
+	u16 id;
+	u8 lc;
 };
 
 /**
@@ -172,10 +177,10 @@ struct rtw_mac_cmd_v1 {
 	enum rtw_mac_src_cmd_ofld src1;
 	enum rtw_mac_rf_path rf_path1;
 	enum rtw_mac_cmd_type_ofld type;
-	u8 lc;
-	u16 offset0;
-	u16 offset1;
+	u32 offset0;
+	u32 offset1;
 	u32 mask0;
 	u32 value;
+	u8 lc;
 };
 #endif //_MAC_OUTSRC_DEF_H_

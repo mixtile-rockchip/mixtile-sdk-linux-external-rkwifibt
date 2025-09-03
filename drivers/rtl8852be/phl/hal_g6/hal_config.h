@@ -43,6 +43,18 @@
 	#define DRV_BB_TIMER_SUPPORT_DISABLE
 #endif
 
+/* HALMAC Features */
+/*
+ * CONFIG_HAL_MAC_DBG - HALMAC debug function is supported or not
+ *
+ * HALMAC would check this flag to decide debug code would be included or not.
+ * If debug feature doesn't be needed for stable/release version, undef this
+ * flag could help to reduce code size.
+ */
+#ifndef CONFIG_CORE_DBG_NONE
+#define CONFIG_HAL_MAC_DBG
+#endif
+
 /* Compile flag for fw for different cut versions.
 * This should be wrapped with the compile flags from core, and need to be discussed
 */
@@ -65,6 +77,7 @@
 #define MAC_FW_8851B_U1
 #endif
 #define MAC_FW_8851B_U2
+#define MAC_FW_CATEGORY_NICCE
 #endif
 
 /*8852A*/
@@ -77,7 +90,7 @@
 #endif
 
 /*8852B*/
-#if defined(CONFIG_RTL8852B) || defined(CONFIG_RTL8852BP)
+#if defined(CONFIG_RTL8852B) || defined(CONFIG_RTL8852BP) || defined(CONFIG_RTL8852BPT) || defined(CONFIG_RTL8852BT)
 #define MAC_FW_8852B_U1
 #define MAC_FW_8852B_U2
 #define MAC_FW_8852B_U3
@@ -106,8 +119,13 @@
 /*#define MAC_FW_CATEGORY_VRAP*/ /*sd7 only*/
 #endif /*CONFIG_RTL8852C*/
 
+#ifdef CONFIG_RTL8842A
+#define MAC_FW_8842A_U1
+#endif /*CONFIG_RTL8842A*/
+
 #ifdef CONFIG_RTL8852D
 #define MAC_FW_8852D_U1
+#define MAC_FW_8852D_U2
 #endif /*CONFIG_RTL8852D*/
 
 #if defined(CONFIG_RTL8192XB) || defined(CONFIG_RTL8832BR)

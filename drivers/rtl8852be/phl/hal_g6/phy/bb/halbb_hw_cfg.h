@@ -57,11 +57,15 @@ enum bb_band_t {
 	BB_BAND_5G_L	= 1,
 	BB_BAND_5G_M	= 2,
 	BB_BAND_5G_H	= 3,
-	BB_BAND_6G_L	= 4,
-	BB_BAND_6G_M	= 5,
-	BB_BAND_6G_H	= 6,
-	BB_BAND_6G_UH	= 7,
-	BB_GAIN_BAND_NUM	= 8
+	BB_BAND_6G_L0	= 4,
+	BB_BAND_6G_M0	= 5,
+	BB_BAND_6G_H0	= 6,
+	BB_BAND_6G_UH0	= 7,
+	BB_BAND_6G_L1	= 8,
+	BB_BAND_6G_M1	= 9,
+	BB_BAND_6G_H1	= 10,
+	BB_BAND_6G_UH1	= 11,
+	BB_GAIN_BAND_NUM	= 12
 };
 
 enum bb_func_type_gt2_t { /*GT2: Gain Table Gen2*/
@@ -128,7 +132,6 @@ struct bb_hw_cfg_cr_info {
 };
 
 struct bb_hw_cfg_info {
-	struct	bb_hw_cfg_cr_info	bb_hw_cfg_cr_i;
 	bool gain_table_init_ready_2g_a;
 	bool gain_table_init_ready_2g_b;
 	enum bb_bw_gt2_t	curr_5g_6g_cfg_bw_gt2;

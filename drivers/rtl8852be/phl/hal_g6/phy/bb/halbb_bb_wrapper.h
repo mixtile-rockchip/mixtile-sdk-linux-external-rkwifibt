@@ -15,6 +15,11 @@
 #ifndef __HALBB_BB_WRAPPER_H__
 #define __HALBB_BB_WRAPPER_H__
 
+/*@--------------------------[Define] ---------------------------------------*/
+#define ANT_GAIN_2P4G 14	// 3.5 dbi, ant gain divided by 4
+#define ANT_GAIN_56G  20	// 5 dbi, ant gain divided by 4
+
+
 
 struct bb_info;
 /*@--------------------------[Prptotype]-------------------------------------*/

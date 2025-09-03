@@ -43,6 +43,21 @@
 #define UART_TX_B_VAL 0x3F
 #define UART_RX_B_VAL 0xFC
 
+// externalPN  = 0x5EC[7:0]
+// customer    = 0x5ED[3:0]
+// serialNum   = 0x5ED[6:4]
+// securityRec = 0x5ED[7:7]
+#define _external_pn(byte)   ((byte & 0xFF) >> 0)
+#define _customer(byte)     ((byte & 0x0F) >> 0)
+#define _serial_num(byte)    ((byte & 0x70) >> 4)
+#define _security_rec(byte)  ((byte & 0x80) >> 7)
+
+#define _1st_double_bits(byte) ((byte & 0x03) >> 0)
+#define _2nd_double_bits(byte) ((byte & 0x0C) >> 2)
+#define _3rd_double_bits(byte) ((byte & 0x30) >> 4)
+#define _4th_double_bits(byte) ((byte & 0xC0) >> 6)
+
+
 enum mac_sec_mode {
 	MAC_NON_SEC,
 	MAC_SEC,
@@ -67,20 +82,6 @@ enum mac_uart_rx_mode {
 	MAC_UART_RX_EN,
 	MAC_UART_RX_DIS,
 };
-
-// externalPN  = 0x5EC[7:0]
-// customer    = 0x5ED[3:0]
-// serialNum   = 0x5ED[6:4]
-// securityRec = 0x5ED[7:7]
-#define _external_pn(byte)   ((byte & 0xFF) >> 0)
-#define _customer(byte)     ((byte & 0x0F) >> 0)
-#define _serial_num(byte)    ((byte & 0x70) >> 4)
-#define _security_rec(byte)  ((byte & 0x80) >> 7)
-
-#define _1st_double_bits(byte) ((byte & 0x03) >> 0)
-#define _2nd_double_bits(byte) ((byte & 0x0C) >> 2)
-#define _3rd_double_bits(byte) ((byte & 0x30) >> 4)
-#define _4th_double_bits(byte) ((byte & 0xC0) >> 6)
 
 u32 mac_chk_sec_rec(struct mac_ax_adapter *adapter, u8 *sec_mode);
 u32 mac_pg_sec_phy_wifi(struct mac_ax_adapter *adapter);

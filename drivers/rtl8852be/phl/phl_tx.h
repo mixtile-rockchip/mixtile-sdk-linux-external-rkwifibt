@@ -56,6 +56,11 @@ enum rtw_phl_status phl_enqueue_busy_h2c_pkt(struct phl_info_t *phl_info,
 enum rtw_phl_status phl_enqueue_idle_h2c_pkt(struct phl_info_t *phl_info,
 				struct rtw_h2c_pkt *h2c_pkt);
 
+#ifdef CONFIG_PHL_H2C_PKT_POOL_STATS_CHECK
+void phl_set_h2c_pkt_alloc_cnt(struct phl_info_t *phl_info, struct rtw_h2c_pkt *h2c_pkt);
+void phl_unset_h2c_pkt_alloc_cnt(struct phl_info_t *phl_info, struct rtw_h2c_pkt *h2c_pkt);
+#endif
+
 struct rtw_h2c_pkt *phl_query_busy_h2c_pkt(struct phl_info_t *phl_info);
 struct rtw_h2c_pkt *phl_query_idle_h2c_pkt(struct phl_info_t *phl_info, u8 type);
 

@@ -17,6 +17,8 @@
 #include "mac_priv.h"
 #include "cpuio.h"
 
+#if MAC_FEAT_DBCC
+
 u32 dbcc_info_init(struct mac_ax_adapter *adapter)
 {
 	u32 ret = MACSUCCESS;
@@ -336,7 +338,7 @@ u32 dbcc_trx_ctrl_bkp(struct mac_ax_adapter *adapter, enum mac_ax_band band)
 	struct mac_ax_dbcc_info *dbcc_info = adapter->dbcc_info;
 	struct mac_ax_phy_rpt_cfg *ppdu_rpt_cfg;
 	struct mac_ax_phy_rpt_cfg *chinfo_cfg;
-	u32 ret;
+	u32 ret = MACSUCCESS;
 
 	if (!dbcc_info) {
 		PLTFM_MSG_ERR("no dbcc info when bkp trx\n");
@@ -351,19 +353,23 @@ u32 dbcc_trx_ctrl_bkp(struct mac_ax_adapter *adapter, enum mac_ax_band band)
 	ppdu_rpt_cfg = &dbcc_info->ppdu_rpt_bkp[band];
 	ppdu_rpt_cfg->type = MAC_AX_PPDU_STATUS;
 	ppdu_rpt_cfg->u.ppdu.band = band;
+#if MAC_FEAT_PHY_RPT
 	ret = mops->get_phy_rpt_cfg(adapter, ppdu_rpt_cfg);
 	if (ret != MACSUCCESS) {
 		PLTFM_MSG_ERR("get ppdu stus rpt cfg %d\n", ret);
 		return ret;
 	}
+#endif
 
 	chinfo_cfg = &dbcc_info->chinfo_bkp[band];
 	chinfo_cfg->type = MAC_AX_CH_INFO;
+#if MAC_FEAT_PHY_RPT
 	ret = mops->get_phy_rpt_cfg(adapter, chinfo_cfg);
 	if (ret != MACSUCCESS) {
 		PLTFM_MSG_ERR("get ch info cfg %d\n", ret);
 		return ret;
 	}
+#endif
 
 	dbcc_info->bkp_flag[band] = 1;
 	return ret;
@@ -431,24 +437,62 @@ u32 mac_dbcc_trx_ctrl(struct mac_ax_adapter *adapter,
 	phyrpt_cfg.en = pause ? 0 : ppdu_rpt_bkp->en;
 	phyrpt_cfg.dest = ppdu_rpt_bkp->dest;
 	phyrpt_cfg.u.ppdu = ppdu_rpt_bkp->u.ppdu;
+#if MAC_FEAT_PHY_RPT
 	ret = mops->cfg_phy_rpt(adapter, &phyrpt_cfg);
 	if (ret != MACSUCCESS) {
 		PLTFM_MSG_ERR("B%d pause%d ppdu status cfg %d\n", band, pause, ret);
 		return ret;
 	}
+#endif
 
 	phyrpt_cfg.type = MAC_AX_CH_INFO;
 	phyrpt_cfg.en = pause ? 0 : chinfo_cfg_kbp->en;
 	phyrpt_cfg.dest = chinfo_cfg_kbp->dest;
 	phyrpt_cfg.u.chif = chinfo_cfg_kbp->u.chif;
+#if MAC_FEAT_PHY_RPT
 	ret = mops->cfg_phy_rpt(adapter, &phyrpt_cfg);
 	if (ret != MACSUCCESS) {
 		PLTFM_MSG_ERR("B%d pause%d ch info cfg %d\n", band, pause, ret);
 		return ret;
 	}
+#endif
 
 	if (!pause)
 		dbcc_info->bkp_flag[band] = 0;
+
+	return ret;
+}
+
+u32 mac_notify_fw_dbcc(struct mac_ax_adapter *adapter, u8 en)
+{
+	u32 ret;
+	struct fwcmd_notify_dbcc *dbcc;
+	struct h2c_info h2c_info = {0};
+
+	if (adapter->sm.fwdl != MAC_AX_FWDL_INIT_RDY) {
+		PLTFM_MSG_WARN("%s fw not ready\n", __func__);
+		return MACFWNONRDY;
+	}
+
+	h2c_info.agg_en = 0;
+	h2c_info.content_len = sizeof(struct fwcmd_notify_dbcc);
+	h2c_info.h2c_cat = FWCMD_H2C_CAT_MAC;
+	h2c_info.h2c_class = FWCMD_H2C_CL_MEDIA_RPT;
+	h2c_info.h2c_func = FWCMD_H2C_FUNC_NOTIFY_DBCC;
+	h2c_info.rec_ack = 0;
+	h2c_info.done_ack = 1;
+
+	dbcc = (struct fwcmd_notify_dbcc *)PLTFM_MALLOC(h2c_info.content_len);
+	if (!dbcc) {
+		PLTFM_MSG_ERR("%s: h2c MALLOC fail\n", __func__);
+		return MACNPTR;
+	}
+
+	dbcc->dword0 = en ? FWCMD_H2C_NOTIFY_DBCC_EN : 0;
+
+	ret = mac_h2c_common(adapter, &h2c_info, (u32 *)dbcc);
+
+	PLTFM_FREE(dbcc, h2c_info.content_len);
 
 	return ret;
 }
@@ -635,3 +679,4 @@ u32 mac_dbcc_move_wmm(struct mac_ax_adapter *adapter,
 	return MACSUCCESS;
 }
 
+#endif /* MAC_FEAT_DBCC */

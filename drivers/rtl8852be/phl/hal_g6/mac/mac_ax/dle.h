@@ -48,31 +48,12 @@
 #define B_AX_DLE_QEMPTY_GRP_MSK 0xffffffff
 
 #define QUEUE_EMPTY_CHK_CNT 2
-#define WDE_QEMPTY_NUM_8852A 18
-#define WDE_QEMPTY_NUM_8852B 5
-#define WDE_QEMPTY_NUM_8852C 19
-#define WDE_QEMPTY_NUM_8192XB 18
-#define WDE_QEMPTY_NUM_8851B 5
-#define WDE_QEMPTY_NUM_8851E 19
-#define WDE_QEMPTY_NUM_8852D 19
-#define WDE_QEMPTY_NUM_8852BT 5
-#define WDE_QEMPTY_NUM_1115E 36
-#define PLE_QEMPTY_NUM 2
-#define WDE_QEMPTY_ACQ_NUM_8852A 16 /* cannot over WDE_QEMPTY_ACQ_NUM_MAX */
-#define WDE_QEMPTY_ACQ_NUM_8852B 4 /* cannot over WDE_QEMPTY_ACQ_NUM_MAX */
-#define WDE_QEMPTY_ACQ_NUM_8852C 16 /* cannot over WDE_QEMPTY_ACQ_NUM_MAX */
-#define WDE_QEMPTY_ACQ_NUM_8192XB 16 /* cannot over WDE_QEMPTY_ACQ_NUM_MAX */
-#define WDE_QEMPTY_ACQ_NUM_8851B 4 /* cannot over WDE_QEMPTY_ACQ_NUM_MAX */
-#define WDE_QEMPTY_ACQ_NUM_8851E 16 /* cannot over WDE_QEMPTY_ACQ_NUM_MAX */
-#define WDE_QEMPTY_ACQ_NUM_8852D 16 /* cannot over WDE_QEMPTY_ACQ_NUM_MAX */
-#define WDE_QEMPTY_ACQ_NUM_8852BT 4 /* cannot over WDE_QEMPTY_ACQ_NUM_MAX */
-#define WDE_QEMPTY_ACQ_NUM_1115E 16 /* cannot over WDE_QEMPTY_ACQ_NUM_MAX */
+
 #define WDE_QEMPTY_MGQ_SEL_8852A 16
 #define WDE_QEMPTY_MGQ_SEL_8852B 4
 #define WDE_QEMPTY_MGQ_SEL_8852C 16
 #define WDE_QEMPTY_MGQ_SEL_8192XB 16
 #define WDE_QEMPTY_MGQ_SEL_8851B 4
-#define WDE_QEMPTY_MGQ_SEL_8851E 16
 #define WDE_QEMPTY_MGQ_SEL_8852D 16
 #define WDE_QEMPTY_MGQ_SEL_8852BT 4
 #define WDE_QEMPTY_MGQ_SEL_1115E 16
@@ -104,20 +85,12 @@
 #define DLE_LAMODE_SIZE_8852C 262144 // (256 * 1024)
 #define DLE_LAMODE_SIZE_8192XB 262144 // (256 * 1024)
 #define DLE_LAMODE_SIZE_8851B 131072 // (128 * 1024)
-#define DLE_LAMODE_SIZE_8851E 262144 // (256 * 1024)
 #define DLE_LAMODE_SIZE_8852D 262144 // (256 * 1024)
 #define DLE_LAMODE_SIZE_8852BT 262144 // (256 * 1024)
 
 #define DLE_SCC_RSVD_SIZE_8852B 98304 // (96 * 1024)
 #define DLE_SCC_RSVD_SIZE_8851B 98304 // (96 * 1024)
 #define DLE_SCC_RSVD_SIZE_8852BT 98304 // (96 * 1024)
-
-#define WDE_QTA_NUM 5
-#define PLE_QTA_NUM_8852AB 11
-#define PLE_QTA_NUM_8852C 12
-#define PLE_QTA_NUM_8192XB 12
-#define PLE_QTA_NUM_8851E 12
-#define PLE_QTA_NUM_8852D 12
 
 #define PLE_QTA_PG128B_12KB 96
 
@@ -139,6 +112,14 @@
 #define PRELD_B1_ENT_NUM 4
 #define PRELD_AMSDU_SIZE 52 // (1536 + 128) * 2 / 64
 #define PRELD_NEXT_WND 1
+
+#define QUE_NUM_IN_MACID 4
+#define WDE_QEMPTY_NUM(chip) ((DLE_WDE_QUE_NUM_##chip + 31) >> 5)
+#define PLE_QEMPTY_NUM(chip) ((DLE_PLE_QUE_NUM_##chip + 31) >> 5)
+#define WDE_QLINK_TBL_NUM(chip) (DLE_WDE_QUE_NUM_##chip << 1)
+#define PLE_QLINK_TBL_NUM(chip) (DLE_PLE_QUE_NUM_##chip << 1)
+#define WDE_ACQ_NUM(chip) (MACID_NUM_##chip * QUE_NUM_IN_MACID)
+#define WDE_QEMPTY_ACQ_NUM(chip) ((WDE_ACQ_NUM(chip) + 31) >> 5)
 
 /*--------------------Define Enum------------------------------------*/
 
@@ -315,6 +296,7 @@ struct dle_dfi_freepg_t {
 	u16 free_headpg;
 	u16 free_tailpg;
 	u16 pub_pgnum;
+	u16 rsvd;
 };
 
 /**
@@ -371,14 +353,14 @@ struct dle_dfi_qempty_t {
  */
 struct dle_dfi_ctrl_t {
 	enum DLE_CTRL_TYPE type;
-	u32 target;
-	u32 addr;
-	u32 out_data;
 	union {
 		struct dle_dfi_freepg_t freepg;
 		struct dle_dfi_quota_t quota;
 		struct dle_dfi_qempty_t qempty;
 	} u;
+	u32 target;
+	u32 addr;
+	u32 out_data;
 };
 
 /**
@@ -396,6 +378,7 @@ struct dle_size_t {
 	u16 pge_size;
 	u16 lnk_pge_num;
 	u16 unlnk_pge_num;
+	u16 rsvd;
 };
 
 /**
@@ -419,6 +402,7 @@ struct wde_quota_t {
 	u16 dcpu;
 	u16 pkt_in;
 	u16 cpu_io;
+	u16 rsvd;
 };
 
 /**
@@ -466,6 +450,7 @@ struct ple_quota_t {
 	u16 cpu_io;
 	u16 tx_rpt;
 	u16 h2d;
+	u16 rsvd;
 };
 
 /**

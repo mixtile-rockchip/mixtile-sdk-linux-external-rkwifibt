@@ -36,7 +36,7 @@
 #define MAC_AX_8852C_SUPPORT	0
 #endif
 
-#ifdef CONFIG_RTL8192XB
+#ifdef defined(CONFIG_RTL8192XB) || defined(CONFIG_RTL8832BR)
 #define MAC_AX_8192XB_SUPPORT	1
 #else
 #define MAC_AX_8192XB_SUPPORT	0
@@ -46,12 +46,6 @@
 #define MAC_AX_8851B_SUPPORT	1
 #else
 #define MAC_AX_8851B_SUPPORT	0
-#endif
-
-#ifdef CONFIG_RTL8851E
-#define MAC_AX_8851E_SUPPORT	1
-#else
-#define MAC_AX_8851E_SUPPORT	0
 #endif
 
 #ifdef CONFIG_RTL8852D

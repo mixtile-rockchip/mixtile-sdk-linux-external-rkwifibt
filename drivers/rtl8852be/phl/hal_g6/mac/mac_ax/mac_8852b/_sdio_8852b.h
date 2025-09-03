@@ -347,6 +347,29 @@ void aval_page_cfg_sdio_8852b(struct mac_ax_adapter *adapter,
  * @}
  */
 
+/**
+ * @addtogroup HCI
+ * @{
+ * @addtogroup SDIO
+ * @{
+ */
+
+/**
+ * @brief read_sdio_cccr_8852b
+ *
+ * @param *adapter
+ * @param addr
+ * @param *val
+ * @return Please Place Description here.
+ * @retval u32
+ */
+u32 read_sdio_cccr_8852b(struct mac_ax_adapter *adapter,
+			 u16 addr, u8 *val);
+/**
+ * @}
+ * @}
+ */
+
 #endif /*MAC_AX_SDIO_SUPPORT*/
 #endif /* MAC_AX_8852B_SUPPORT */
 #endif

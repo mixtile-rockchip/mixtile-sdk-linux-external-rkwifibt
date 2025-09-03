@@ -18,9 +18,12 @@
 /*@--------------------------Define Parameters-------------------------------*/
 
 enum halrf_dack_dz{
-	DZ_ADDCK_TIMEOUT	= BIT(0),
-	DZ_DADCK_TIMEOUT	= BIT(1),
-	DZ_MSBK_TIMEOUT	= BIT(2),
+	DZ_ADDCK0_TIMEOUT	= BIT(0),
+	DZ_DADCK0_TIMEOUT	= BIT(1),
+	DZ_MSBK0_TIMEOUT	= BIT(2),
+	DZ_ADDCK1_TIMEOUT	= BIT(16),
+	DZ_DADCK1_TIMEOUT	= BIT(17),
+	DZ_MSBK1_TIMEOUT	= BIT(18),
 };
 /*@-----------------------End Define Parameters-----------------------*/
 

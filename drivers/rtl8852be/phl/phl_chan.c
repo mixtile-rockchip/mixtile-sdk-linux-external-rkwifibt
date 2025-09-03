@@ -28,6 +28,7 @@ const char *const _bw_str[] = {
 	"BW_40M",
 	"BW_80M",
 	"BW_160M",
+	"BW_320M",
 	"BW_80_80M",
 	"BW_5M",
 	"BW_10M",
@@ -1661,9 +1662,9 @@ int rtw_phl_chanctx_del(void *phl,
 	struct rtw_phl_com_t *phl_com = phl_info->phl_com;
 	void *drv = phl_to_drvpriv(phl_info);
 	struct mr_ctl_t *mr_ctl = phlcom_to_mr_ctrl(phl_com);
-	u8 band_idx = rlink->hw_band;
-	struct hw_band_ctl_t *band_ctrl = &(mr_ctl->band_ctrl[band_idx]);
-	struct phl_queue *chan_ctx_queue = &band_ctrl->chan_ctx_queue;
+	u8 band_idx = 0;
+	struct hw_band_ctl_t *band_ctrl = NULL;
+	struct phl_queue *chan_ctx_queue = NULL;
 	struct rtw_chan_ctx *target_chanctx = NULL;
 	struct rtw_chan_ctx *chanctx = NULL;
 	int chctx_num = 0;
@@ -1682,6 +1683,9 @@ int rtw_phl_chanctx_del(void *phl,
 		goto _exit;
 	}
 
+	band_idx = rlink->hw_band;
+	band_ctrl = &(mr_ctl->band_ctrl[band_idx]);
+	chan_ctx_queue = &band_ctrl->chan_ctx_queue;
 	target_chanctx = rlink->chanctx;
 	if (target_chanctx == NULL) {
 		PHL_ERR("%s target chanctx == NULL\n", __func__);

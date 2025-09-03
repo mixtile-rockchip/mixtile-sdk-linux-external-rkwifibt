@@ -466,8 +466,10 @@
  * Please Place Description here.
  */
 
-struct fwcmd_test_para {
+/* manual define */
 #define MAX_SIGB_LEN 64
+
+struct fwcmd_test_para {
 	u32 dword0;
 	u32 dword1;
 	u32 dword2;

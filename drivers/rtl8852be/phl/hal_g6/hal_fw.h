@@ -26,6 +26,8 @@ rtw_hal_pg_redownload_fw(struct rtw_phl_com_t *phl_com, void *hal);
 
 void rtw_hal_fw_dbg_dump(void *hal);
 
+void rtw_hal_fw_recover_log_cfg(void *hal);
+
 void hal_fw_en_basic_log(struct rtw_hal_com_t *hal_com,
                         struct mac_ax_fw_log* fw_log_info);
 

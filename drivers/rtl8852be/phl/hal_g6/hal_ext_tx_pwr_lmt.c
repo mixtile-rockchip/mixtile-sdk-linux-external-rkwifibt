@@ -95,9 +95,9 @@ rtw_hal_enable_ext_pwr_lmt(void *hal, u8 hw_band,
 	 *   5g=> rf->pwr_info.tx_pwr_limit_5g[PW_LMT_REGU_EXT_PWR][bw][rate][bf][ch][tx_num]
 	 *   6g=> rf->pwr_info.tx_pwr_limit_6g[PW_LMT_REGU_EXT_PWR][bw][rate][bf][ch][tx_num]
 	 */
-	rtw_hal_rf_update_ext_pwr_lmt_table(hal_info, phy_idx);
 
 	/* enable external tx power limit mechanism */
 	tpu->ext_pwr_lmt_en = true;
+	rtw_hal_rf_update_ext_pwr_lmt_table(hal_info, phy_idx);
 }
 

@@ -44,6 +44,9 @@ void rtw_init_wow(_adapter *padapter)
 	u8 rsn_a_en = 0, rsn_a = 0, rsn_a_time_unit = 0, rsn_a_toggle_pulse = DEV2HST_TOGGLE;
 	u8 rsn_a_pulse_count = 0, rsn_a_pulse_period = 0, rsn_a_pulse_duration = 0;
 #endif
+#ifdef CONFIG_WOW_PERIODIC_WAKE
+	struct rtw_periodic_wake_info *wow_periodic_wake = &wowpriv->wow_periodic_wake;
+#endif
 
 #if defined(CONFIG_HAS_EARLYSUSPEND) || defined(CONFIG_ANDROID_POWER)
 	pwrctrlpriv->early_suspend.suspend = NULL;
@@ -118,6 +121,10 @@ void rtw_init_wow(_adapter *padapter)
 	pwrctrlpriv->wowlan_aoac_rpt_loc = 0;
 #endif /* CONFIG_WOWLAN */
 
+#ifdef CONFIG_WOW_PERIODIC_WAKE
+	wow_periodic_wake->wake_period = WOW_DEFAULT_WAKE_PERIOD;
+	wow_periodic_wake->wake_duration = WOW_DEFAULT_WAKE_DURATION;
+#endif
 }
 
 void rtw_free_wow(_adapter *adapter)
@@ -759,6 +766,84 @@ exit:
 #endif /* CONFIG_WOWLAN */
 
 #ifdef CONFIG_PNO_SUPPORT
+#ifdef CONFIG_PNO_SECURITY_OFFLOAD
+static void nlo_parse_cipher_list(struct rtw_nlo_info *wow_nlo, char *list_str)
+{
+	char *pch;
+	char *pnext;
+	char *pend;
+	u8 index = 0;
+
+	pch = list_str;
+	while (strlen(pch) != 0) {
+		pnext = strstr(pch, "key_mgmt=");
+		if (pnext == NULL)
+			break;
+
+		pch = pnext + strlen(CIPHER_IE);
+		pend = strstr(pch, "}");
+		if (strncmp(pch, CIPHER_NONE, strlen(CIPHER_NONE)) == 0) {
+			wow_nlo->chipertype[index] = NLO_CIPHER_OPEN;
+		} else if (strncmp(pch, CIPHER_WPA_PSK, strlen(CIPHER_WPA_PSK)) == 0) {
+			wow_nlo->chipertype[index] = NLO_CIPHER_WPA_TKIP |
+						     NLO_CIPHER_WPA_AES |
+						     NLO_CIPHER_WPA2_TKIP |
+						     NLO_CIPHER_WPA2_AES;
+		} else if (strncmp(pch, CIPHER_WPA_EAP, strlen(CIPHER_WPA_EAP)) == 0) {
+			wow_nlo->chipertype[index] = NLO_CIPHER_WEP;
+		}
+
+		index++;
+		pch = pend + 1;
+	}
+}
+
+static void nlo_security_init(struct rtw_nlo_info *wow_nlo)
+{
+	struct file *fp;
+	mm_segment_t fs;
+	loff_t pos = 0;
+	u8 *source = NULL;
+	long len = 0;
+
+	fp = filp_open("/data/misc/wifi/wpa_supplicant.conf", O_RDONLY,  0644);
+	if (IS_ERR(fp)) {
+		RTW_INFO("Error, wpa_supplicant.conf doesn't exist.\n");
+		RTW_INFO("Error, cipher array using default value.\n");
+		return;
+	} else {
+		RTW_INFO("Open wpa_supplicant.conf successfully.\n");
+	}
+
+	len = i_size_read(fp->f_path.dentry->d_inode);
+	if (len < 0 || len > 2048) {
+		RTW_INFO("Error, file size is bigger than 2048.\n");
+		RTW_INFO("Error, cipher array using default value.\n");
+		return;
+	}
+
+	fs = get_fs();
+	set_fs(KERNEL_DS);
+
+	source = rtw_zmalloc(2048);
+
+	if (source != NULL) {
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0))
+		len = kernel_read(fp, source, len, &pos);
+#else
+		len = vfs_read(fp, source, len, &pos);
+#endif
+		nlo_parse_cipher_list(wow_nlo, source);
+		rtw_mfree(source, 2048);
+	}
+
+	wow_nlo->compare_cipher_type = _TRUE;
+
+	set_fs(fs);
+	filp_close(fp, NULL);
+}
+#endif
+
 static void nlo_scan_ch_init(struct rtw_nlo_info *wow_nlo,
 			     struct ieee80211_channel **channels,
 			     u32 n_channels)
@@ -815,6 +900,9 @@ int rtw_nlo_enable(struct net_device *net, struct cfg80211_ssid *ssids,
 
 	nlo_scan_ch_init(wow_nlo, channels, n_channels);
 	nlo_ssid_init(wow_nlo, ssids, n_ssids);
+#ifdef CONFIG_PNO_SECURITY_OFFLOAD
+	nlo_security_init(wow_nlo);
+#endif
 
 	wow_nlo->delay = delay * 1000;
 	wow_nlo->period = interval * 1000;
@@ -847,10 +935,12 @@ void rtw_nlo_debug(struct net_device *net)
 	int i;
 
 	RTW_INFO("********NLO_INFO********\n");
+	RTW_INFO("compare_cipher_type: %d\n", wow_nlo->compare_cipher_type);
 	RTW_INFO("ssid_num: %d\n", wow_nlo->num_of_networks);
 	for (i = 0; i < wow_nlo->num_of_networks; i++) {
-		RTW_INFO("%d SSID (%s) length (%d)\n",
-			 i, wow_nlo->ssid[i], wow_nlo->ssidlen[i]);
+		RTW_INFO("%d SSID (%s) length (%d) cipher (%#x)\n",
+			 i, wow_nlo->ssid[i], wow_nlo->ssidlen[i],
+			 wow_nlo->chipertype[i]);
 	}
 	RTW_INFO("delay: %d\n", wow_nlo->delay);
 	RTW_INFO("fast_scan_iterations: %d\n", wow_nlo->cycle);

@@ -1130,7 +1130,8 @@ void _dump_reduced_nb_rpt(struct rtw_phl_rnb_rpt_element *reduced_nb_rpt)
 {
 	struct tbtt_info_header *hdr;
 	struct rtw_phl_tbtt_info *tbtt_info;
-	u8 i, j;
+	u8 i;
+	int	j;
 
 	PHL_INFO("###### _dump_reduced_nb_rpt #######\n");
 	for (i = 0; i < reduced_nb_rpt->nb_ap_num; i++) {
@@ -1150,7 +1151,7 @@ void _dump_reduced_nb_rpt(struct rtw_phl_rnb_rpt_element *reduced_nb_rpt)
 		PHL_INFO("%-25s: %d\n", "Operating Class", reduced_nb_rpt->nb_aps[i].op_class);
 		PHL_INFO("%-25s: %d\n", "Channel", reduced_nb_rpt->nb_aps[i].ch);
 
-		for (j = 0; j < hdr->cnt + 1; j++) {
+		for (j = 0; j < (hdr->cnt + 1); j++) {
 			tbtt_info = &reduced_nb_rpt->nb_aps[i].tbtt_infos[j];
 			PHL_INFO("%s - %d\n", "TBTT Info", j);
 			PHL_INFO("%-25s: %d\n", "Neighbor AP Offset", tbtt_info->offset);
@@ -1250,7 +1251,7 @@ u8 _parse_nb_info(struct rtw_phl_com_t *phl_com,
 	u8 *pos_tbtt_info;
 	struct tbtt_info_header *hdr = &nb_ap->tbtt_info_hdr;
 	struct rtw_phl_tbtt_info *tbtt_info;
-	u8 i = 0;
+	int i = 0;
 
 	/* TBTT Information Header */
 	pos += _parse_tbtt_header(phl_com, pos, hdr);
@@ -1323,7 +1324,7 @@ u8 _parse_nb_info(struct rtw_phl_com_t *phl_com,
 		pos = pos_tbtt_info + hdr->len;
 		i++;
 
-	} while (i < hdr->cnt + 1 && i < MAX_TBTT_INFO_NUM);
+	} while (i < (hdr->cnt + 1) && i < MAX_TBTT_INFO_NUM);
 
 exit:
 	return (u8)(pos - pos_start);

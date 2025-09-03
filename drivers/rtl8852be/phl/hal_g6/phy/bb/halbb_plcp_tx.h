@@ -194,6 +194,32 @@ static const u32 pwr_comp_2ss_efem_8852c[] = {
 		0x05021414, 0x05021414,
 		0x0F0B0907, 0x0F0B0907,
 		0x15151512, 0x15151512};
+
+static const u32 pwr_comp_1ss_8922a[] = {
+		0x012C0096, 0x044C02BC,
+		0x00322710, 0x015E0096,
+		0x03C8028A, 0x0BB80708,
+		0x17701194, 0x02020100,
+		0x03030303, 0x01000303,
+		0x05030302, 0x06060605,
+		0x06050300, 0x0A090807,
+		0x02000B0B, 0x09080604,
+		0x0D0D0C0B, 0x08060400,
+		0x110F0C0B, 0x05001111,
+		0x0D0C0907, 0x12121210};
+
+static const u32 pwr_comp_2ss_8922a[] = {
+		0x012C0096, 0x044C02BC,
+		0x00322710, 0x015E0096,
+		0x03C8028A, 0x0BB80708,
+		0x17701194, 0x04030201,
+		0x05050505, 0x01000505,
+		0x07060504, 0x09090908,
+		0x09070400, 0x0E0D0C0B,
+		0x03000E0E, 0x0D0B0907,
+		0x1010100F, 0x0B080500,
+		0x1512100D, 0x05001515,
+		0x100D0B08, 0x15151512};
 /*  ============================================================
  			   structure
     ============================================================
@@ -725,7 +751,6 @@ struct bb_plcp_info {
 	u8 ehtsig_sym_num;
 	u8 ru2su_flag;
 	u8 c2h_done;
-	struct bb_plcp_cr_info bb_plcp_cr_i;
 };
 
 
@@ -740,7 +765,14 @@ void halbb_cr_cfg_plcp_init(struct bb_info *bb);
 
 void halbb_plcp_init(struct bb_info *bb);
 
-enum plcp_sts halbb_plcp_gen_6(struct bb_info *bb, struct halbb_plcp_info *in,
+enum plcp_sts halbb_plcp_gen_ax(struct bb_info *bb, struct halbb_plcp_info *in,
+		    struct usr_plcp_gen_in *user, enum phl_phy_idx phy_idx);
+void halbb_plcp_cmd_dbg(struct bb_info *bb, enum phl_phy_idx phy_idx,
+		    char input[][16], u32 *_used, char *output, u32 *_out_len);
+void halbb_plcp_ofdm_6m(struct bb_info *bb, struct halbb_plcp_info *in,
+			struct usr_plcp_gen_in *user, char input[][16], u32 *_used,
+			char *output, u32 *_out_len);
+enum plcp_sts halbb_plcp_gen(struct bb_info *bb, struct halbb_plcp_info *in,
 		    struct usr_plcp_gen_in *user, enum phl_phy_idx phy_idx);
 
 #endif

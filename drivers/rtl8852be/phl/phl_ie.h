@@ -19,6 +19,37 @@
 
 #define MAX_ELE_LEN 255
 
+/* Action frame common */
+#define ACTION_CAT_SZ 1
+#define ACTION_CODE_SZ 1
+#define ACTION_TOKEN_SZ 1
+
+#define ML_INVALID_LINK_ID 0xFF
+
+
+/* OUI Related  */
+#ifdef CONFIG_PHL_IE_OUI
+#define OUI_SZ 3
+#define OUI_TP_SZ 4
+static u8 WFA_OUI[OUI_SZ] = {0x50, 0x6F, 0x9A};
+static u8 WFA_OUI_CAP[OUI_TP_SZ] = {0x50, 0x6F, 0x9A, 0x23};
+static u8 WFA_OUI_QM_ACT[OUI_TP_SZ] = {0x50, 0x6F, 0x9A, 0x1A};
+static u8 WFA_OUI_QM_ELE[OUI_TP_SZ] = {0x50, 0x6F, 0x9A, 0x22};
+#endif /* CONFIG_PHL_IE_OUI */
+
+#ifdef CONFIG_QOS_MG
+enum qm_oui_subtype {
+	DSCP_POL_Q = 0,
+	DSCP_POL_REQ = 1,
+	DSCP_POL_RSP = 2,
+	DSCP_POL_RSVD
+};
+#endif /* CONFIG_QOS_MG */
+
+
+#define ELE_SZ 1
+#define LEN_SZ 1
+
 /* Element ID */
 enum wlan_eid {
 	EID_SSID = 0,
@@ -218,6 +249,73 @@ enum wlan_eid {
 	EID_EXTENSION = 255
 };
 
+enum sts_code {
+	STS_SUCCESS = 0,
+	STS_REFUSED_REASON_UNSPECIFIED = 1,
+	STS_TCLAS_PROCESSING_TERMINATED_INSUFFICIENT_QOS = 128,
+	STS_TCLAS_PROCESSING_TERMINATED_POLICY_CONFLICT = 129
+};
+
+/* Action start */
+#define SET_ACT_DT(_ele, _dt) \
+	SET_BITS_TO_LE_1BYTE(_ele, 0, 8, _dt)
+
+#define GET_ACT_DT(_ele) \
+	LE_BITS_TO_1BYTE(_ele, 0, 8)
+
+
+#ifdef CONFIG_QOS_MG
+enum robust_av_streaming_action {
+	SCS_REQ = 0,
+	SCS_RSP = 1,
+	GROUP_MBRSHP_REQ = 2, /* Group Membership Request */
+	GROUP_MBRSHP_RSP = 3,
+	MSCS_REQ = 4,
+	MSCS_RSP = 5
+};
+#endif /* CONFIG_QOS_MG */
+
+#ifdef CONFIG_PHL_IE_ACT
+enum qos_action {
+	ADDTS_REQ = 0, /* ADDTS Request */
+	ADDTS_RSP = 1, /* ADDTS Response */
+	DELTS = 2,
+	SCHED = 3, /* Schedule */
+	QOS_MAP_CFG = 4, /* QoS Map Configure */
+	ADDTS_RSV_REQ = 5, /*  ADDTS Reserve Request */
+	ADDTS_RSV_RSP = 6 /* ADDTS Reserve Response */
+};
+
+enum act_category {
+	ACT_CAT_SPECTRUM_MGNT = 0,/* Spectrum management */
+	ACT_CAT_QOS = 1, /* Qos */
+	ACT_CAT_DLS = 2, /* Direct Link Protocol (DLS) */
+	ACT_CAT_BA = 3, /* Block Ack */
+	ACT_CAT_PUBLIC = 4, /* Public */
+	ACT_CAT_RM = 5, /* Radio Measurement (RM) */
+	ACT_CAT_FT = 6, /* Fast BSS Transition */
+	ACT_CAT_HT = 7, /* High Throughput */
+	ACT_CAT_SAQ = 8, /* Security Association Query */
+	ACT_CAT_SAQ_PD_PUBLIC = 9,    /* Protected Dual of Public Action */
+	ACT_CAT_WNM = 10, /* Wireless Network Management */
+	ACT_CAT_UNP_WNM = 11, /* Unprotected WNM */
+	ACT_CAT_TDLS = 12, /* Tunneled Direct Link Setup */
+	ACT_CAT_SELF_PROTECT = 15, /* Self-protected */
+	ACT_CAT_WMM = 17, /* WMM */
+	ACT_CAT_FST = 18, /* ACT_CAT_WMM */
+	ACT_CAT_ROBUST_AV_STREAMING = 19,
+	ACT_CAT_UNP_DMG = 20, /* Unprotected DMG */
+	ACT_CAT_VHT = 21, /* VHT */
+	ACT_CAT_UNP_SIG = 22, /* Unprotected S1G */
+	ACT_CAT_SIG = 23, /* S1G */
+	ACT_CAT_PROTECT_EHT = 37, /* Protected EHT */
+	ACT_CAT_VENDOR_PROTECT = 126, /* Vendor-specific Protected */
+	ACT_CAT_VENDOR = 127, /* Vendor-specific */
+};
+#endif /* CONFIG_PHL_IE_ACT */
+
+/* Action end */
+
 /* Element ID Extension */
 enum wlan_eid_ext {
 	EID_EXT_ASSOC_DELAY_INFO = 1,
@@ -253,11 +351,14 @@ enum wlan_eid_ext {
 	EID_EXT_SHORT_SSID_LIST = 58,
 	EID_EXT_HE_6GHZ_CAPABILITY = 59,
 	EID_EXT_UL_MU_POWER_CAPABILITY = 60,
+	EID_EXT_MSCS_DESC = 88,
+	EID_EXT_TCLAS_MASK = 89,
 	EID_EXT_EHT_OPERATION = 106,
 	EID_EXT_MULTI_LINK = 107,
 	EID_EXT_EHT_CAPABILITY = 108,
 	EID_EXT_TID_TO_LINK_MAPPING = 109,
 	EID_EXT_MULTI_LINK_TRAFFIC = 110,
+	EID_EXT_QOS_CHARACTERISTICS = 113
 };
 
 /* Subelement ID for ML */
@@ -268,7 +369,7 @@ enum wlan_eid_ext {
  *****************************************************************************/
 
 #define STA_CTRL_LEN 2
-#define MAX_STA_INFO_LEN 13
+#define MAX_STA_INFO_LEN 23
 
 enum ml_ele_type {
 	BASIC_ML = 0,
@@ -678,5 +779,213 @@ rtw_phl_parse_reduced_nb_rpt(struct rtw_phl_com_t *phl_com,
 	LE_BITS_TO_4BYTE(_pStart, 8, 4)
 #define GET_MLD_PARAMS_BSS_PARAMS_CHG_CNT(_pStart) \
 	LE_BITS_TO_4BYTE(_pStart, 12, 8)
+
+
+/************************************************************
+GET TCLAS - Type 0 Presence: _pStart = start of Classifier Mask subfield
+************************************************************/
+#define GET_TYPE_0_SOURCE_ADDRESS_PRESENT(_pStart) \
+	LE_BITS_TO_1BYTE(_pStart, 0, 1)
+#define GET_TYPE_0_DESTINATION_ADDRESS_PRESENT(_pStart) \
+	LE_BITS_TO_1BYTE(_pStart, 1, 1)
+#define GET_TYPE_0_TYPE_PRESENT(_pStart) \
+	LE_BITS_TO_1BYTE(_pStart, 2, 1)
+
+/************************************************************
+GET TCLAS - Type 1 Presence: _pStart = start of Classifier Mask subfield
+************************************************************/
+#define GET_TYPE_1_VERSION_PRESENT(_pStart) \
+	LE_BITS_TO_1BYTE(_pStart, 0, 1)
+#define GET_TYPE_1_SOURCE_IP_ADDRESS_PRESENT(_pStart) \
+	LE_BITS_TO_1BYTE(_pStart, 1, 1)
+#define GET_TYPE_1_DESTINATION_IP_ADDRESS_PRESENT(_pStart) \
+	LE_BITS_TO_1BYTE(_pStart, 2, 1)
+#define GET_TYPE_1_SOURCE_PORT_PRESENT(_pStart) \
+	LE_BITS_TO_1BYTE(_pStart, 3, 1)
+#define GET_TYPE_1_DESTINATION_PORT_PRESENT(_pStart) \
+	LE_BITS_TO_1BYTE(_pStart, 4, 1)
+#define GET_TYPE_1_DSCP_PRESENT(_pStart) \
+	LE_BITS_TO_1BYTE(_pStart, 5, 1)
+#define GET_TYPE_1_PROTOCOL_PRESENT(_pStart) \
+	LE_BITS_TO_1BYTE(_pStart, 6, 1)
+/************************************************************
+GET TCLAS - Type 4 Presence: _pStart = start of Classifier Mask subfield
+************************************************************/
+#define GET_TYPE_4_VERSION_PRESENT(_pStart) \
+		LE_BITS_TO_1BYTE(_pStart, 0, 1)
+#define GET_TYPE_4_SOURCE_IP_ADDRESS_PRESENT(_pStart) \
+		LE_BITS_TO_1BYTE(_pStart, 1, 1)
+#define GET_TYPE_4_DESTINATION_IP_ADDRESS_PRESENT(_pStart) \
+		LE_BITS_TO_1BYTE(_pStart, 2, 1)
+#define GET_TYPE_4_SOURCE_PORT_PRESENT(_pStart) \
+		LE_BITS_TO_1BYTE(_pStart, 3, 1)
+#define GET_TYPE_4_DESTINATION_PORT_PRESENT(_pStart) \
+		LE_BITS_TO_1BYTE(_pStart, 4, 1)
+#define GET_TYPE_4_DSCP_PRESENT(_pStart) \
+		LE_BITS_TO_1BYTE(_pStart, 5, 1)
+#define GET_TYPE_4_PROTOCOL_OR_NEXTHEADR_PRESENT(_pStart) \
+		LE_BITS_TO_1BYTE(_pStart, 6, 1)
+#define GET_TYPE_4_FLOW_LABEL_PRESENT(_pStart) \
+		LE_BITS_TO_1BYTE(_pStart, 7, 1)
+/************************************************************
+ SET Intra-Access Category Priority Elmement : _pStart = start of Intra-Access Priority subfield
+ ************************************************************/
+#define SET_IACP_USER_PRIORITY(_pStart, _val) \
+		SET_BITS_TO_LE_1BYTE(_pStart, 0, 3, _val)
+#define SET_IACP_ALTERNATE_QUEUE(_pStart, _val) \
+		SET_BITS_TO_LE_1BYTE(_pStart, 3, 1, _val)
+#define SET_IACP_DROP_ELIGIBILITY(_pStart, _val) \
+		SET_BITS_TO_LE_1BYTE(_pStart, 4, 1, _val)
+/************************************************************
+ SET TCLAS Elmement (type 4) : _pStart = start of Classifier Parameters subfield
+ ************************************************************/
+#define SET_TYPE_4_VERSION(_pStart, _val) \
+		SET_BITS_TO_LE_1BYTE(_pStart, 0, 8, _val)
+#define SET_TYPE_4_SOURCE_PORT(_pStart, _val) \
+		SET_BITS_TO_BE_2BYTE(_pStart, 0, 16, _val)
+#define SET_TYPE_4_DESTINATION_PORT(_pStart, _val) \
+		SET_BITS_TO_BE_2BYTE(_pStart, 0, 16, _val)
+#define SET_TYPE_4_DSCP(_pStart, _val) \
+		SET_BITS_TO_LE_1BYTE(_pStart, 0, 8, _val)
+#define SET_TYPE_4_PROTOCOL_OR_NHDR(_pStart, _val) \
+		SET_BITS_TO_LE_1BYTE(_pStart, 0, 8, _val)
+#define SET_TYPE_4_FLOW_LABEL(_pStart, _val) \
+		SET_BITS_TO_LE_4BYTE(_pStart, 0, 24, _val)
+/************************************************************
+ SET TCLAS Processing Elmement : _pStart = start of Element ID subfield
+ ************************************************************/
+#define SET_TCLAS_PROCS_ELE_ID(_pStart, _val) \
+		SET_BITS_TO_LE_1BYTE(_pStart, 0, 8, _val)
+#define SET_TCLAS_PROCS_LENGTH(_pStart, _val) \
+		SET_BITS_TO_LE_1BYTE(_pStart, 0, 8, _val)
+#define SET_TCLAS_PROCS_PROCESSING(_pStart, _val) \
+		SET_BITS_TO_LE_1BYTE(_pStart, 0, 8, _val)
+
+/* Action frame common */
+#define GET_ACTION_DT(_ele) \
+	LE_BITS_TO_1BYTE(_ele, 0, 8)
+
+/* Extended CAPABILITES */
+#ifdef CONFIG_QOS_MG
+/* QoS Map BIT32*/
+#define SET_EXTD_CAP_QOS_MAP_SUPPORT(_ele_start) \
+	SET_BITS_TO_LE_1BYTE((_ele_start) + 4, 0, 1, 1)
+/* SCS BIT54 */
+#define SET_EXTD_CAP_SCS_SUPPORT(_ele_start) \
+	SET_BITS_TO_LE_1BYTE((_ele_start) + 6, 6, 1, 1)
+/* MSCS BIT85 */
+#define SET_EXTD_CAP_MSCS_SUPPORT(_ele_start) \
+	SET_BITS_TO_LE_1BYTE((_ele_start) + 10, 5, 1, 1)
+#endif /* CONFIG_QOS_MG */
+
+
+#define SET_ELE_ID(_ele, _id) \
+	SET_BITS_TO_LE_1BYTE(_ele, 0, 8, _id)
+#define SET_ELE_LEN(_ele, _len) \
+	SET_BITS_TO_LE_1BYTE(_ele, 0, 8, _len)
+#define SET_EXTEND_ELE_ID(_ele, _exid) \
+	SET_BITS_TO_LE_1BYTE(_ele, 0, 8, _exid)
+
+#define GET_ELE_ID(_ele) \
+	LE_BITS_TO_1BYTE(_ele, 0, 8)
+#define GET_ELE_LEN(_ele) \
+	LE_BITS_TO_1BYTE(_ele, 0, 8)
+#define GET_EXTEND_ELE_ID(_ele) \
+	LE_BITS_TO_1BYTE(_ele, 0, 8)
+/* Vendor */
+#define SET_VENDOR_SPEC_ID(_ele) \
+	SET_BITS_TO_LE_1BYTE(_ele, 0, 8, EID_VENDOR_SPECIFIC)
+#define SET_OUI_AND_TYPE(_ele, _val) \
+	do { \
+		SET_BITS_TO_LE_1BYTE(_ele, 0, 8, _val[0]); \
+		SET_BITS_TO_LE_1BYTE(_ele + 1, 0, 8, _val[1]); \
+		SET_BITS_TO_LE_1BYTE(_ele + 2, 0, 8, _val[2]); \
+		SET_BITS_TO_LE_1BYTE(_ele + 3, 0, 8, _val[3]); \
+	} while (false)
+
+#define GET_OUI_AND_TYPE(_ele, _val) \
+	do { \
+		_val[0] = LE_BITS_TO_1BYTE(_ele, 0, 8); \
+		_val[1] = LE_BITS_TO_1BYTE(_ele + 1, 0, 8); \
+		_val[2] = LE_BITS_TO_1BYTE(_ele + 2, 0, 8); \
+		_val[3] = LE_BITS_TO_1BYTE(_ele + 3, 0, 8); \
+	} while (false)
+
+#define SET_RSNXE_CAP(_ele, _val) \
+	SET_BITS_TO_LE_1BYTE(_ele, 0, 8, _val)
+#define SET_RSNXE_LEN(_ele, _val) \
+	SET_BITS_TO_LE_1BYTE(_ele, 0, 8, _val)
+
+
+#ifdef CONFIG_QOS_MG
+u8
+rtw_phl_parse_scs_descriptor(struct rtw_phl_com_t *phl_com,
+		struct rtw_phl_stainfo_t *sta, u8 *ele_start, u16 ele_len);
+
+u8
+rtw_phl_build_scs_descriptor(struct rtw_phl_com_t *phl_com,
+		struct rtw_phl_stainfo_t *sta, u8 scs_id, u8 req_type, u8 *pbuf);
+
+u16
+rtw_phl_build_all_scs_desc(void *phl, struct rtw_phl_stainfo_t *sta, u8 *pbuf);
+
+u8
+rtw_phl_fill_scs_rsp(struct rtw_phl_scs_rsp_f *scs_rsp_f, u8 *buf);
+
+u8
+rtw_phl_parse_scs_rsp(struct rtw_phl_scs_rsp_f *scs_rsp_f, u8 *pkt,
+				u16 len);
+
+u16
+rtw_phl_fill_wfa_cap_ele(u8 *buf, struct rtw_phl_wfa_cap_ele *cap_i);
+
+u16
+rtw_phl_parse_qos_map(struct rtw_phl_qos_map_ele *map, u8 *ie, u16 ie_len);
+
+u16
+rtw_phl_fill_qos_map(u8 *buf, struct rtw_phl_qos_map_ele *map);
+
+u16
+rtw_phl_fill_mscs_desc(void *phl, u8 *buf, struct rtw_phl_mscs_desc *desc);
+
+u16
+rtw_phl_parse_mscs_rsp(struct rtw_phl_mscs_rsp *rsp, u8 *pkt, u16 len);
+
+u16
+rtw_phl_fill_mscs_rsp(void *phl, u8 *buf, struct rtw_phl_mscs_rsp *rsp);
+
+u16
+rtw_phl_fill_dscp_pol_qur(void *phl, u8 *buf, struct rtw_phl_dscp_pol_qur *qur);
+
+u16
+rtw_phl_fill_dscp_pol_req(void *phl, u8 *buf, struct rtw_phl_dscp_pol_req *req);
+
+u16
+rtw_phl_fill_dscp_pol_rsp(void *phl, u8 *buf, struct rtw_phl_dscp_pol_rsp *rsp);
+
+u16
+rtw_phl_parse_dscp_pol_qur(void *phl, u8 *pkt, u16 len,
+			struct rtw_phl_dscp_pol_qur *qur);
+
+u16
+rtw_phl_parse_dscp_pol_req(void *phl, u8 *pkt, u16 len,
+				struct rtw_phl_dscp_pol_req *req);
+
+u16
+rtw_phl_parse_dscp_pol_rsp(void *phl, u8 *pkt, u16 len,
+			struct rtw_phl_dscp_pol_rsp *rsp);
+
+bool
+rtw_phl_match_qm_pol(void *phl, u8 *pkt, u16 len, struct rtw_wifi_role_t *wr,
+		u8 *dscp, u8 *tid);
+
+bool
+rtw_phl_remove_dscp_pol(void *phl, struct rtw_phl_stainfo_t *sta, u8 id);
+
+bool
+rtw_phl_hdl_dscp_pol_req(void *phl, struct rtw_phl_stainfo_t *sta,
+	struct rtw_phl_dscp_pol_req *req, struct rtw_phl_dscp_pol_rsp *rsp);
+
+#endif /* CONFIG_QOS_MG */
 
 #endif  /*_PHL_STA_H_*/

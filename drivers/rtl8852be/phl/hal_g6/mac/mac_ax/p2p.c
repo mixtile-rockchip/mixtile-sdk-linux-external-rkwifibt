@@ -15,7 +15,17 @@
 
 #include "p2p.h"
 
+#if MAC_FEAT_P2P
+
+static u32 t32_togl_rpt_size =
+	sizeof(struct mac_ax_t32_togl_rpt) * MAC_AX_BAND_NUM * MAC_AX_PORT_NUM;
+
 static u32 p2p_info_size = sizeof(struct mac_ax_p2p_info) * P2P_MAX_NUM;
+
+u32 p2p_bp_idx(u8 band, u8 port)
+{
+	return (band * MAC_AX_BAND_NUM + port);
+}
 
 static u32 _get_valid_p2pid(struct mac_ax_adapter *adapter, u8 macid, u8 *p2pid)
 {
@@ -85,6 +95,7 @@ u32 get_wait_dack_p2pid(struct mac_ax_adapter *adapter, u8 *p2pid)
 u32 p2p_info_init(struct mac_ax_adapter *adapter)
 {
 	u32 i;
+	u8 b_idx, p_idx;
 
 	adapter->p2p_info =
 		(struct mac_ax_p2p_info *)PLTFM_MALLOC(p2p_info_size);
@@ -97,12 +108,26 @@ u32 p2p_info_init(struct mac_ax_adapter *adapter)
 		PLTFM_MEMSET(&adapter->p2p_info[i], 0,
 			     sizeof(struct mac_ax_p2p_info));
 
+	adapter->t32_togl_rpt =
+		(struct mac_ax_t32_togl_rpt *)PLTFM_MALLOC(t32_togl_rpt_size);
+	if (!adapter->t32_togl_rpt) {
+		PLTFM_MSG_ERR("%s malloc t32_togl_rpt fail\n", __func__);
+		return MACNOBUF;
+	}
+
+	for (b_idx = MAC_AX_BAND_0; b_idx < MAC_AX_BAND_NUM; b_idx++) {
+		for (p_idx = MAC_AX_PORT_0; p_idx < MAC_AX_PORT_NUM; p_idx++)
+			PLTFM_MEMSET(&adapter->t32_togl_rpt[p2p_bp_idx(b_idx, p_idx)], 0,
+				     sizeof(struct mac_ax_t32_togl_rpt));
+	}
+
 	return MACSUCCESS;
 }
 
 u32 p2p_info_exit(struct mac_ax_adapter *adapter)
 {
 	PLTFM_FREE(adapter->p2p_info, p2p_info_size);
+	PLTFM_FREE(adapter->t32_togl_rpt, t32_togl_rpt_size);
 
 	return MACSUCCESS;
 }
@@ -329,3 +354,73 @@ u32 mac_get_p2p_stat(struct mac_ax_adapter *adapter)
 	}
 }
 
+u32 mac_tsf32_togl_h2c(struct mac_ax_adapter *adapter,
+		       struct mac_ax_t32_togl_info *info)
+{
+	struct h2c_info h2c_info = {0};
+	struct fwcmd_tsf32_togl hdr;
+	u32 ret = MACSUCCESS;
+	u8 band = info->band;
+	u8 port = info->port;
+
+	if (!is_curr_dbcc(adapter) && band == MAC_AX_BAND_1) {
+		PLTFM_MSG_ERR("%s invalid band idx %d\n", __func__, band);
+		return MACFUNCINPUT;
+	}
+
+	if (port >= adapter->hw_info->port_num) {
+		PLTFM_MSG_ERR("%s invalid port idx %d\n", __func__, port);
+		return MACPORTERR;
+	}
+
+	if (adapter->sm.fwdl != MAC_AX_FWDL_INIT_RDY) {
+		PLTFM_MSG_WARN("%s fw not ready\n", __func__);
+		return MACFWNONRDY;
+	}
+
+	hdr.dword0 =
+		cpu_to_le32(SET_WORD(port, FWCMD_H2C_TSF32_TOGL_PORT) |
+			    SET_WORD(info->early, FWCMD_H2C_TSF32_TOGL_EARLY) |
+			    (band ? FWCMD_H2C_TSF32_TOGL_BAND : 0) |
+			    (info->en ? FWCMD_H2C_TSF32_TOGL_EN : 0));
+
+	h2c_info.agg_en = 0;
+	h2c_info.content_len = sizeof(struct fwcmd_tsf32_togl);
+	h2c_info.h2c_cat = FWCMD_H2C_CAT_MAC;
+	h2c_info.h2c_class = FWCMD_H2C_CL_FW_OFLD;
+	h2c_info.h2c_func = FWCMD_H2C_FUNC_TSF32_TOGL;
+	h2c_info.rec_ack = 0;
+	h2c_info.done_ack = 0;
+
+	ret = mac_h2c_common(adapter, &h2c_info, (u32 *)&hdr);
+	if (ret != MACSUCCESS) {
+		PLTFM_MSG_ERR("%s send h2c fail %d\n", __func__, ret);
+		return ret;
+	}
+
+	return ret;
+}
+
+u32 mac_get_t32_togl_rpt(struct mac_ax_adapter *adapter,
+			 struct mac_ax_t32_togl_rpt *ret_rpt)
+{
+	struct mac_ax_t32_togl_rpt *rpt;
+	u8 b_idx, p_idx;
+
+	for (b_idx = MAC_AX_BAND_0; b_idx < MAC_AX_BAND_NUM; b_idx++) {
+		for (p_idx = MAC_AX_PORT_0; p_idx < MAC_AX_PORT_NUM; p_idx++) {
+			rpt = &adapter->t32_togl_rpt[p2p_bp_idx(b_idx, p_idx)];
+			if (!rpt->valid)
+				continue;
+			PLTFM_MEMCPY(ret_rpt, rpt,
+				     sizeof(struct mac_ax_t32_togl_rpt));
+			rpt->valid = 0;
+			return MACSUCCESS;
+		}
+	}
+
+	PLTFM_MSG_WARN("[WARN]no tsf32 togl rpt find\n");
+	return MACNOITEM;
+}
+
+#endif

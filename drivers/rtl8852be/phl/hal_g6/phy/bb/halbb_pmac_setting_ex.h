@@ -57,6 +57,13 @@ struct bb_c2h_fw_tx_rpt {
 	bool tx_done;
 };
 
+struct halbb_lbk_info {
+	bool is_dgt_lbk;
+	u16 tx_delay;
+	enum rf_path tx_path;
+	enum rf_path rx_path;
+	enum channel_width bw;
+};
 
 /*  ============================================================
  		     Function Prototype

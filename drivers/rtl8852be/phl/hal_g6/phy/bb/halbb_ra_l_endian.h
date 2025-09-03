@@ -95,7 +95,7 @@ struct bb_h2c_ra_cfg_info {
 	*/
 	u8 bw_cap:2;
 
-	u8 macid;
+	u8 macid; /*macid_lsb, MACID[7:0]*/
 
 	u8 dcm_cap:1;
 	u8 er_cap:1;
@@ -125,19 +125,21 @@ struct bb_h2c_ra_cfg_info {
 	u8 fixed_csi_rate_l;
 
 	u8 is_noisy:1; /*nhm_ratio >= 1% then disable ra bw switch for 92XB, WLANBB-2227*/
-	u8 rsvd0:4;
+	u8 rsvd0:2;
+	u8 macid_msb:2;/*macid_msb, MACID[9:8]*/
 	u8 band:2;
 	u8 is_new_bb_ra_dbgreg:1;
 };
 
 struct bb_h2c_rssi_setting {
-	u8 macid;
+	u8 macid;  /*macid_lsb, MACID[7:0]*/
 	u8 rssi_a; /* BIT(7) : parse rssi_b*/
 	u8 bcn_rssi_a; /* BIT(7) : parse bcn_rssi*/
 	u8 bcn_rssi_b;
 
 	u8 dtp_lv: 2;
-	u8 rsvd1: 6;
+	u8 rsvd1: 4;
+	u8 macid_msb:2;/*macid_msb, MACID[9:8]*/
 
 	u8 is_fixed_rate:1;
 	u8 fixed_rate:6;
@@ -165,7 +167,7 @@ struct bb_h2c_ra_cfg_info_wifi7 {
 };
 
 struct bb_h2c_rssi_setting_wifi7 {
-	u8 macid;
+	u8 macid; /*macid_lsb, MACID[7:0]*/
 	u8 rssi_a; /* BIT(7) : parse rssi_b*/
 	u8 bcn_rssi_a; /* BIT(7) : parse bcn_rssi*/
 	u8 bcn_rssi_b;
@@ -173,7 +175,8 @@ struct bb_h2c_rssi_setting_wifi7 {
 	u8 fixed_rate_M:1;
 	u8 fixed_bw_M:1;
 	u8 fixed_rate_md_M:1;
-	u8 rsvd0_M:5;
+	u8 rsvd0_M:3;
+	u8 macid_msb:2;/*macid_msb, MACID[9:8]*/
 
 	u8 is_fixed_rate:1;
 	u8 fixed_rate:7;
@@ -206,7 +209,10 @@ struct bb_h2c_ra_adjust {
 	u8 drv_shift_value:7;
 	u8 drv_shift_en:1;
 
-	u8 rsvd[2];
+	u8 rsvd_0:6;
+	u8 macid_msb:2;/*macid_msb, MACID[9:8]*/
+
+	u8 rsvd_1;
 };
 
 struct bb_h2c_ra_d_o_timer {
@@ -233,6 +239,19 @@ struct bb_h2c_mu_cfg {
 	u8 en_256q:1;
 	u8 en_1024q:1;
 	u8 rsvd3:6;
+};
+
+struct bb_h2c_ra_tx_hist_info {
+	u16 macid;
+	u8 per_ppdu;
+	u8 rsvd;
+};
+
+#define TX_RATE_HIST_NUM (12 + 28) // Legacy rate + 2SS NUM_EHT_RATE
+
+struct bb_ra_tx_hist_c2h_rpt {
+	u32 ra_tbtt_cnt;
+	u32 tx_rate_tot_cnt_hist[TX_RATE_HIST_NUM];
 };
 
 struct bb_h2c_ra_tx_info {

@@ -56,6 +56,39 @@
 #define MACID_ENTRY_NUM		0x80
 #define KEYNUM_PER_MACID	0x07
 
+/**
+ * @enum SEC_FUNCTION_TYPE
+ *
+ * @brief SEC_FUNCTION_TYPE
+ *
+ * @var SEC_FUNCTION_TYPE::SEC_TX_ENC
+ * Please Place Description here.
+ * @var SEC_FUNCTION_TYPE::SEC_RX_ENC
+ * Please Place Description here.
+ * @var SEC_FUNCTION_TYPE::SEC_BC_ENC
+ * Please Place Description here.
+ * @var SEC_FUNCTION_TYPE::SEC_MC_ENC
+ * Please Place Description here.
+ * @var SEC_FUNCTION_TYPE::SEC_UC_MGNT_ENC
+ * Please Place Description here.
+ * @var SEC_FUNCTION_TYPE::SEC_BMC_MGNT_ENC
+ * Please Place Description here.
+ */
+enum SEC_FUNCTION_TYPE {
+	SEC_TX_ENC = 0,
+	SEC_RX_ENC = 1,
+	SEC_BC_ENC = 2,
+	SEC_MC_ENC = 3,
+	SEC_UC_MGNT_ENC  = 4,
+	SEC_BMC_MGNT_ENC = 5,
+};
+
+enum SEC_IV_UPD_TYPE {
+	SEC_IV_UPD_TYPE_NONE = 0,
+	SEC_IV_UPD_TYPE_WRITE = 1,
+	SEC_IV_UPD_TYPE_READ = 2
+};
+
 /*--------------------DSecurity cam type declaration-----------------*/
 
 /**
@@ -107,39 +140,6 @@ struct sec_cam_table_t {
 
 struct dctl_sec_info_t {
 	struct dctl_secinfo_entry_t *dctl_secinfo_entry[MACID_ENTRY_NUM];
-};
-
-/**
- * @enum SEC_FUNCTION_TYPE
- *
- * @brief SEC_FUNCTION_TYPE
- *
- * @var SEC_FUNCTION_TYPE::SEC_TX_ENC
- * Please Place Description here.
- * @var SEC_FUNCTION_TYPE::SEC_RX_ENC
- * Please Place Description here.
- * @var SEC_FUNCTION_TYPE::SEC_BC_ENC
- * Please Place Description here.
- * @var SEC_FUNCTION_TYPE::SEC_MC_ENC
- * Please Place Description here.
- * @var SEC_FUNCTION_TYPE::SEC_UC_MGNT_ENC
- * Please Place Description here.
- * @var SEC_FUNCTION_TYPE::SEC_BMC_MGNT_ENC
- * Please Place Description here.
- */
-enum SEC_FUNCTION_TYPE {
-	SEC_TX_ENC = 0,
-	SEC_RX_ENC = 1,
-	SEC_BC_ENC = 2,
-	SEC_MC_ENC = 3,
-	SEC_UC_MGNT_ENC  = 4,
-	SEC_BMC_MGNT_ENC = 5,
-};
-
-enum SEC_IV_UPD_TYPE {
-	SEC_IV_UPD_TYPE_NONE = 0,
-	SEC_IV_UPD_TYPE_WRITE = 1,
-	SEC_IV_UPD_TYPE_READ = 2
 };
 
 /*--------------------Funciton declaration----------------------------*/
@@ -349,4 +349,5 @@ u32 refresh_security_cam_info(struct mac_ax_adapter *adapter,
 u32 mac_wowlan_secinfo(struct mac_ax_adapter *adapter,
 		       struct mac_ax_sec_iv_info *sec_iv_info);
 
+u32 sec_eng_init(struct mac_ax_adapter *adapter);
 #endif

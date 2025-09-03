@@ -33,9 +33,6 @@
 #if MAC_AX_8851B_SUPPORT
 #include "mac_8851b/init_8851b.h"
 #endif
-#if MAC_AX_8851E_SUPPORT
-#include "mac_8851e/init_8851e.h"
-#endif
 #if MAC_AX_8852D_SUPPORT
 #include "mac_8852d/init_8852d.h"
 #endif
@@ -57,55 +54,6 @@
 /*--------------------Define Enum---------------------------------------*/
 /*--------------------Define Struct-------------------------------------*/
 
-#ifdef CONFIG_NEW_HALMAC_INTERFACE
-
-/**
- * @addtogroup Common
- * @{
- * @addtogroup System
- * @{
- */
-
-/**
- * @brief get_mac_ax_adapter
- *
- * @param intf
- * @param chip_id
- * @param cv
- * @param *phl_adapter
- * @param *drv_adapter
- * @param *pltfm_cb
- * @return Please Place Description here.
- * @retval  mac_ax_adapter
- */
-struct mac_ax_adapter *get_mac_ax_adapter(enum mac_ax_intf intf,
-					  u8 chip_id, u8 cv,
-					  void *phl_adapter, void *drv_adapter,
-					  struct mac_ax_pltfm_cb *pltfm_cb);
-/**
- * @}
- * @}
- */
-
-/**
- * @addtogroup Common
- * @{
- * @addtogroup System
- * @{
- */
-
-/**
- * @brief get_mac_ax_adapter
- *
- * @param intf
- * @param chip_id
- * @param cv
- * @param *drv_adapter
- * @param *pltfm_cb
- * @return Please Place Description here.
- * @retval  mac_ax_adapter
- */
-#else
 struct mac_ax_adapter *get_mac_ax_adapter(enum mac_ax_intf intf,
 					  u8 chip_id, u8 cv,
 					  void *drv_adapter,
@@ -131,7 +79,6 @@ struct mac_ax_adapter *get_mac_ax_adapter(enum mac_ax_intf intf,
  * @return Please Place Description here.
  * @retval u32
  */
-#endif
 u32 cmac_func_en(struct mac_ax_adapter *adapter, u8 band, u8 en);
 /**
  * @}

@@ -19,7 +19,18 @@
 
 #include "../type.h"
 #include "fwcmd.h"
+#if MAC_FEAT_HWSSN
 
+#define DCTL_HW_SEQ_MASK_0 0xfff
+#define DCTL_HW_SEQ_MASK_1 0xfff
+#define DCTL_HW_SEQ_MASK_2 0xfff
+#define DCTL_HW_SEQ_MASK_3 0xfff
+#define DCTL_HW_SEQ_SHIFT_0 0
+#define DCTL_HW_SEQ_SHIFT_1 12
+#define DCTL_HW_SEQ_SHIFT_2 0
+#define DCTL_HW_SEQ_SHIFT_3 12
+#define DCTL_HW_SEQ_OFFSET_0_1 8
+#define DCTL_HW_SEQ_OFFSET_2_3 12
 enum {
 	R_AX_HW_SEQ_0 = 0,
 	R_AX_HW_SEQ_1 = 1,
@@ -162,4 +173,5 @@ u32 mac_get_hwseq_cfg(struct mac_ax_adapter *adapter,
  * @}
  */
 
+#endif
 #endif

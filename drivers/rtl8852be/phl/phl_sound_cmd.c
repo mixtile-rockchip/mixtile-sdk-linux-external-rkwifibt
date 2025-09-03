@@ -14,6 +14,7 @@
  *****************************************************************************/
 #include "phl_headers.h"
 
+#ifdef CONFIG_PHL_BEAMFORM
 #ifdef CONFIG_PHL_CMD_BF
 /* START of sounding / beamform cmd_disp module */
 void
@@ -1101,4 +1102,5 @@ rtw_phl_snd_cmd_set_aid(void *phl,
 {
 	return RTW_PHL_STATUS_SUCCESS;
 }
+#endif
 #endif

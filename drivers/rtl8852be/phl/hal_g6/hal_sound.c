@@ -15,7 +15,7 @@
 #define _HAL_SOUND_C_
 
 #include "hal_headers.h"
-
+#ifdef CONFIG_PHL_BEAMFORM
 #ifdef CONFIG_PHL_CMD_BF
 struct csi_rpt_na {
 	u8 nr;
@@ -95,19 +95,6 @@ u32 _cal_he_csi_size(u8 mu, enum channel_width bw, u8 nr, u8 nc, u8 ng, u8 cb)
 		  "%s : expected he csi report size = %d byte",
 		  __func__, csi_size);
 	return csi_size;
-}
-
-u32 _cal_he_cqi_only_rpt_size(enum channel_width bw, u8 nc)
-{
-	u32 ret = 0;
-	if (CHANNEL_WIDTH_80 == bw)
-		ret = (u32)nc * 37;
-	else if(CHANNEL_WIDTH_40 == bw)
-		ret = (u32)nc * 18;
-	else if(CHANNEL_WIDTH_20 == bw)
-		ret = (u32)nc * 9;
-
-	return ret;
 }
 
 /*1. BF Resource Related*/
@@ -446,10 +433,11 @@ rtw_hal_snd_chk_bf_res(void *hal, struct rtw_phl_stainfo_t *sta,
 	bool mu, enum channel_width bw)
 {
 	enum rtw_hal_status hstatus = RTW_HAL_STATUS_FAILURE;
-	struct rtw_hal_stainfo_t *hal_sta = sta->hal_sta;
+	struct rtw_hal_stainfo_t *hal_sta = NULL;
 	do {
 		if (sta == NULL)
 			break;
+		hal_sta = sta->hal_sta;
 
 		if (false == rtw_hal_bf_chk_bf_type(hal, sta, mu))
 			break;
@@ -1054,5 +1042,6 @@ rtw_hal_snd_send_fw_cmd(void *hal, u8 *cmd)
 	PHL_TRACE(COMP_PHL_SOUND, _PHL_INFO_, "<== rtw_hal_snd_send_fw_cmd \n");
 	return hstatus;
 }
+#endif
 
 #endif

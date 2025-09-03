@@ -143,13 +143,17 @@ void phl_dump_stainfo_per_role(const char *caller,
 #endif
 /*********** phl stainfo section ***********/
 /*WIFI sta_info management section*/
+
+void rtw_phl_sta_dump_info(void *phl, bool show_caller, struct rtw_wifi_role_t *wr, u8 mode);
+
 struct rtw_phl_stainfo_t *
 phl_alloc_stainfo_sw(struct phl_info_t *phl_info,
                      u8 *sta_addr,
                      struct rtw_wifi_role_t *wrole,
                      enum rtw_device_type dtype,
                      u16 main_id,
-                     struct rtw_wifi_role_link_t *rlink);
+                     struct rtw_wifi_role_link_t *rlink,
+                     bool ext_q);
 
 enum rtw_phl_status
 phl_alloc_stainfo_hw(struct phl_info_t *phl_info, struct rtw_phl_stainfo_t *sta);
@@ -165,6 +169,20 @@ phl_update_stainfo_sw(struct phl_info_t *phl_info, struct rtw_phl_stainfo_t *sta
 
 enum rtw_phl_status
 rtw_phl_cmd_alloc_stainfo(void *phl,
+                          struct rtw_phl_stainfo_t **sta,
+                          u8 *sta_addr,
+                          struct rtw_wifi_role_t *wrole,
+                          enum rtw_device_type dtype,
+                          u16 main_id,
+                          struct rtw_wifi_role_link_t *rlink,
+                          bool alloc,
+                          bool only_hw,
+                          enum phl_cmd_type cmd_type,
+                          u32 cmd_timeout);
+
+
+enum rtw_phl_status
+rtw_phl_cmd_stainfo_ext_ctrl(void *phl,
                           struct rtw_phl_stainfo_t **sta,
                           u8 *sta_addr,
                           struct rtw_wifi_role_t *wrole,
@@ -194,11 +212,13 @@ phl_update_media_status_hdl(struct phl_info_t *phl_info, u8 *param);
 struct rtw_phl_stainfo_t *
 rtw_phl_get_stainfo_by_macid(void *phl, u16 macid);
 
+
 struct rtw_phl_stainfo_t *
 rtw_phl_get_stainfo_by_addr(void *phl,
                             struct rtw_wifi_role_t *wrole,
                             struct rtw_wifi_role_link_t *rlink,
-                            u8 *addr);
+                            u8 *addr,
+                            bool ext_q);
 
 struct rtw_phl_stainfo_t *
 rtw_phl_get_stainfo_by_addr_ex(void *phl, u8 *addr);
@@ -281,13 +301,14 @@ phl_mld_ctrl_init(struct phl_info_t *phl_info);
 
 /*********** phl mld section ***********/
 enum rtw_phl_status
-phl_free_mld(struct phl_info_t *phl_info, struct rtw_phl_mld_t *mld);
+phl_free_mld(struct phl_info_t *phl_info, struct rtw_phl_mld_t *mld, bool ext_q);
 
 struct rtw_phl_mld_t *
 phl_alloc_mld(struct phl_info_t *phl_info,
               struct rtw_wifi_role_t *wrole,
               u8 *mac_addr,
-              enum rtw_device_type type);
+              enum rtw_device_type type,
+              bool ext_q);
 
 enum rtw_phl_status
 phl_wifi_role_free_mld(struct phl_info_t *phl_info,
@@ -296,8 +317,17 @@ phl_wifi_role_free_mld(struct phl_info_t *phl_info,
 enum rtw_phl_status
 rtw_phl_free_mld(void *phl, struct rtw_phl_mld_t *mld);
 
+enum rtw_phl_status
+rtw_phl_free_mld_ext(void *phl, struct rtw_phl_mld_t *mld);
+
 struct rtw_phl_mld_t *
 rtw_phl_alloc_mld(void *phl,
+                  struct rtw_wifi_role_t *wrole,
+                  u8 *mac_addr,
+                  enum rtw_device_type type);
+
+struct rtw_phl_mld_t *
+rtw_phl_alloc_mld_ext(void *phl,
                   struct rtw_wifi_role_t *wrole,
                   u8 *mac_addr,
                   enum rtw_device_type type);
@@ -312,6 +342,11 @@ rtw_phl_unlink_mld_stainfo(struct rtw_phl_mld_t *mld,
 
 struct rtw_phl_mld_t *
 rtw_phl_get_mld_by_addr(void *phl,
+                        struct rtw_wifi_role_t *wrole,
+                        u8 *addr);
+
+struct rtw_phl_mld_t *
+rtw_phl_get_mld_by_addr_ext(void *phl,
                         struct rtw_wifi_role_t *wrole,
                         u8 *addr);
 

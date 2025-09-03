@@ -23,6 +23,36 @@
 
 #define MAC_MAX_4_USR	4
 #define MAC_MAX_8_USR	8
+#define MAC_AX_RX_CNT_SIZE 96
+#define MAC_AX_DFS_HDR_SIZE 8
+#define MAC_AX_DFS_RPT_SIZE 8
+#define MAC_AX_DFS_RPT_SIZE_SH 3
+#define MAC_AX_CH_INFO_BUF 0
+#define B_AX_CH_INFO_BUF_128 0
+#define B_AX_GET_CH_INFO_TO_DIS 0
+#define B_AX_GET_CH_INFO_TO_8 2
+#define B_AX_GET_CH_INFO_TO_28 7
+#define B_AX_CH_INFO_INTVL_DIS 0
+#define B_AX_CH_INFO_INTVL_1 1
+#define B_AX_CH_INFO_INTVL_2 2
+#define B_AX_CH_INFO_INTVL_4 4
+#define B_AX_CH_INFO_INTVL_7 7
+#define B_AX_CH_INFO_REQ_2 1
+#define B_AX_DFS_BUF_64 1
+
+#define MAC_AX_MAC_INFO_USE_SIZE 4
+#define MAC_AX_PHY_RPT_CNT 3000
+#define MAC_CHINFO_STOP_REQ_TIMEOUT	7000
+
+struct mac_ax_mac_info_t {
+	u32 dword0;
+	u32 dword1;
+};
+
+struct mac_ax_dfs_hdr_t {
+	u32 dword0;
+	u32 dword1;
+};
 
 /**
  * @addtogroup Common

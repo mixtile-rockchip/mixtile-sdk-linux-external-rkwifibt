@@ -16,6 +16,11 @@
 #define _PHL_PS_H_
 #ifdef CONFIG_POWER_SAVE
 
+enum phl_ps_op {
+	PS_OP_ENTER,
+	PS_OP_LEAVE
+};
+
 #define PS_MACID_NONE 0xFFFF
 
 enum phl_ps_ps_int_cfg_step {

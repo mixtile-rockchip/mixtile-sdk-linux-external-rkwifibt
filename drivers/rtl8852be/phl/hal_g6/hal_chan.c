@@ -28,7 +28,8 @@ enum rtw_hal_status rtw_hal_set_ch_bw(void *hal, u8 band_idx,
 	enum phl_phy_idx phy_idx = HW_PHY_0;
 	enum channel_width tmp_bw = chdef->bw;
 	struct rtw_phl_com_t *phl_com = hal_info->phl_com;
-#ifdef DBG_DBCC_MONITOR_TIME
+	bool is_reset = false;
+#ifdef DBG_MONITOR_TIME
 	u32 start_t = 0;
 #endif
 
@@ -41,12 +42,18 @@ enum rtw_hal_status rtw_hal_set_ch_bw(void *hal, u8 band_idx,
 		tmp_bw = CHANNEL_WIDTH_5;
 #endif /*CONFIG_PHL_NARROW_BW*/
 
-#ifdef DBG_DBCC_MONITOR_TIME
-	phl_fun_monitor_start(&start_t, true, __FUNCTION__);
+#ifdef DBG_MONITOR_TIME
+	PHL_FUN_MON_START(&start_t);
 #endif /* DBG_DBCC_MONITOR_TIME */
 
 
 	phy_idx = rtw_hal_hw_band_to_phy_idx(band_idx);
+
+	if (phy_idx >= HW_PHY_MAX) {
+		PHL_ERR("%s wrong phy_idx (%d)\n", __func__, phy_idx);
+		status = RTW_HAL_STATUS_FAILURE;
+		goto _exit;
+	}
 
 	if ((frc_switch) ||
 	    (chdef->band != cur_chdef->band) ||
@@ -63,6 +70,7 @@ enum rtw_hal_status rtw_hal_set_ch_bw(void *hal, u8 band_idx,
 				PHL_ERR("%s rtw_hal_reset en - failed\n", __func__);
 				_os_warn_on(1);
 			}
+			is_reset = true;
 		}
 		/* if central channel changed, reset BB & MAC */
 		center_ch = rtw_phl_get_center_ch(chdef);
@@ -77,7 +85,7 @@ enum rtw_hal_status rtw_hal_set_ch_bw(void *hal, u8 band_idx,
 						center_ch, change_band, chdef->bw, phl_com->chsw_ofld_info.rf_reload);
 			if (status != RTW_HAL_STATUS_SUCCESS) {
 				PHL_ERR("%s rtw_hal_mac_ch_switch_ofld - failed\n", __func__);
-				return status;
+				goto _exit;
 			}
 		} else
 #endif
@@ -87,19 +95,20 @@ enum rtw_hal_status rtw_hal_set_ch_bw(void *hal, u8 band_idx,
 							tmp_bw);
 			if (status != RTW_HAL_STATUS_SUCCESS) {
 				PHL_ERR("%s rtw_hal_mac_set_bw - failed\n", __func__);
-				return status;
+				goto _exit;
 			}
 
 			if (tmp_bw == CHANNEL_WIDTH_80_80 && central_ch_seg1 == 0) {
 				PHL_ERR("%s mising info for 80+80M configuration\n", __func__);
-				return RTW_HAL_STATUS_FAILURE;
+				status = RTW_HAL_STATUS_FAILURE;
+				goto _exit;
 			}
 			status = rtw_hal_bb_set_ch_bw(hal_info, phy_idx, chdef->chan,
 							center_ch, central_ch_seg1, change_band,
 							tmp_bw);
 			if (status != RTW_HAL_STATUS_SUCCESS) {
 				PHL_ERR("%s rtw_hal_bb_set_ch_bw - failed\n", __func__);
-				return status;
+				goto _exit;
 			}
 
 			status = rtw_hal_rf_set_ch_bw(hal_com,
@@ -110,7 +119,7 @@ enum rtw_hal_status rtw_hal_set_ch_bw(void *hal, u8 band_idx,
 
 			if (status != RTW_HAL_STATUS_SUCCESS) {
 				PHL_ERR("%s rtw_hal_rf_set_ch_bw - failed\n", __func__);
-				return status;
+				goto _exit;
 			}
 		}
 
@@ -128,14 +137,14 @@ enum rtw_hal_status rtw_hal_set_ch_bw(void *hal, u8 band_idx,
 
 		if (status != RTW_HAL_STATUS_SUCCESS) {
 			PHL_ERR("%s rtw_hal_rf_set_power - failed\n", __func__);
-			return status;
+			goto _exit;
 		}
 
 		status = rtw_hal_rf_set_power(hal_info, phy_idx, PWR_LIMIT_RU);
 
 		if (status != RTW_HAL_STATUS_SUCCESS) {
 			PHL_ERR("%s rtw_hal_rf_set_power - failed\n", __func__);
-			return status;
+			goto _exit;
 		}
 
 		PHL_INFO("%s phy_idx:%d, band:%d, ch:%d, bw:%d, offset:%d\n",
@@ -150,6 +159,7 @@ enum rtw_hal_status rtw_hal_set_ch_bw(void *hal, u8 band_idx,
 				PHL_ERR("%s rtw_hal_reset dis- failed\n", __func__);
 				_os_warn_on(1);
 			}
+			is_reset = false;
 		}
 
 		/*PHL_DUMP_CHAN_DEF_EX(chandef);*/
@@ -161,9 +171,20 @@ enum rtw_hal_status rtw_hal_set_ch_bw(void *hal, u8 band_idx,
 
 	PHL_INFO("%s: Switch chdef done, rt_type:%s, frc_switch(%d)\n", __func__,
 		(rt_type) ?"Y" : "N", frc_switch);
-#ifdef DBG_DBCC_MONITOR_TIME
-	phl_fun_monitor_end(&start_t, __FUNCTION__);
-#endif /* DBG_DBCC_MONITOR_TIME */
+_exit:
+	if (is_reset) {
+		PHL_INFO(
+		    "%s: unexpected error with reset, needs to dis-reset \n",
+		    __func__);
+		status = rtw_hal_reset(hal_com, phy_idx, band_idx, false);
+		if (status != RTW_HAL_STATUS_SUCCESS) {
+			PHL_ERR("%s rtw_hal_reset dis- failed\n", __func__);
+			_os_warn_on(1);
+		}
+	}
+#ifdef DBG_MONITOR_TIME
+	PHL_FUNC_MON_END(phl_com, &start_t, TIME_HAL_SET_CHAN);
+#endif /* DBG_MONITOR_TIME */
 	return status;
 }
 

@@ -97,6 +97,7 @@ enum mp_config_cmd {
 	MP_CONFIG_CMD_TRIGGER_FW_CONFLICT,
 	MP_CONFIG_CMD_GET_UUID,
 	MP_CONFIG_CMD_SET_REGULATION,
+	MP_CONFIG_CMD_GET_DRV_VER,
 	MP_CONFIG_CMD_SET_BT_UART,
 	MP_CONFIG_CMD_SWITCH_ANTENNA,
 	MP_CONFIG_CMD_SET_MAC_LOOPBK_ENTER,
@@ -106,6 +107,9 @@ enum mp_config_cmd {
 	MP_CONFIG_CMD_SET_MAC_L1SS_ENABLE,
 	MP_CONFIG_CMD_SET_MAC_ASPM_STATE,
 	MP_CONFIG_CMD_SET_GPIO,
+	MP_CONFIG_CMD_SET_MAC_PWR_STATE,
+	MP_CONFIG_CMD_GET_MAX_HCI_SPEED,
+	MP_CONFIG_CMD_ENABLE_PHY,
 	MP_CONFIG_CMD_MAX,
 };
 
@@ -252,6 +256,15 @@ enum mp_calibration_type {
 	MP_CAL_MAX,
 };
 
+#ifdef CONFIG_POWER_SAVE
+enum mp_ps_op {
+	MP_PS_RX_IDLE = 0,
+	MP_PS_DRIVER_IPS = 1,
+	MP_PS_FW_IPS = 2,
+	MP_PS_MAX,
+};
+#endif
+
 /*
  *	Command structure definition.
  *	Fixed part would be mp_class/cmd/cmd_ok for command and report parsing.
@@ -263,6 +276,19 @@ struct mp_mac_lbk_tx_rpt {
 	u32 idle_cnt;
 	u32 busy_cnt;
 };
+
+struct gpio_config_arg {
+	u8 gpio_mode;
+	u8 gpio_id;
+	u8 gpio_enable;
+};
+
+#ifdef CONFIG_POWER_SAVE
+struct pwr_config_arg {
+	u8 pwr_state;
+	u8 pwr_lvl;
+};
+#endif
 
 struct mp_arg_hdr {
 	u8 mp_class;
@@ -307,8 +333,11 @@ struct mp_config_arg {
 	u8 is_bt_uart;
 	u8 ant_sw;
 	u8 hci_speed;
-	u8 gpio_id;
-	u8 gpio_enable;
+	struct gpio_config_arg gpio_cfg;
+#ifdef CONFIG_POWER_SAVE
+	struct pwr_config_arg pwr_cfg;
+#endif
+	u8 en_phy;
 };
 
 struct mp_tx_arg {
@@ -588,7 +617,12 @@ struct mp_context {
 	u32 max_para;
 	struct phl_mp_watchdog mp_wdog;
 	struct mp_cal_arg cal_arg;
+	u8 is_phl_wdog_start;
 	u8 is_mp_wdog_start;
+#ifdef CONFIG_POWER_SAVE
+	u8 cur_pwr_lvl;
+	u16 ps_macid;
+#endif
 };
 #endif /* CONFIG_PHL_TEST_MP */
 

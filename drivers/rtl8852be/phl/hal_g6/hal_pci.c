@@ -116,6 +116,48 @@ void rtw_hal_cfg_dma_io(void *hal, u8 en)
 		PHL_ERR("%s failure \n", __func__);
 }
 
+#ifdef RTW_WKARD_DYNAMIC_PCIE_GEN
+/* pcie gen1 gen2 switch */
+void hal_pcie_gen_set(struct hal_info_t *hal_info, enum rtw_pcie_gen gen)
+{
+	struct bus_cap_t *cap = &(hal_info->hal_com->bus_cap);
+
+	if (!cap->pcie_gen_dm_en)
+		return;
+
+	PHL_INFO("%s: gen == %d\n", __func__, gen);
+
+	rtw_hal_mac_set_hci_speed(hal_info, (u8)gen);
+}
+
+enum rtw_pcie_gen hal_pcie_gen_get(struct hal_info_t *hal_info)
+{
+	u8 val = 0;
+
+	if (rtw_hal_mac_get_hci_speed(hal_info, &val) != RTW_HAL_STATUS_SUCCESS)
+		return RTW_PCIE_GEN_UNKNOWN;
+
+	if (val == 1)
+		return RTW_PCIE_GEN_1;
+
+	if (val == 2)
+		return RTW_PCIE_GEN_2;
+
+	return RTW_PCIE_GEN_UNKNOWN;
+}
+
+void rtw_hal_pcie_gen_set(void *hal, enum rtw_pcie_gen gen)
+{
+	hal_pcie_gen_set((struct hal_info_t *)hal, gen);
+}
+
+enum rtw_pcie_gen rtw_hal_pcie_gen_get(void *hal)
+{
+	return hal_pcie_gen_get((struct hal_info_t *)hal);
+}
+
+#endif /* RTW_WKARD_DYNAMIC_PCIE_GEN */
+
 enum rtw_hal_status
 rtw_hal_pcie_cfg_get(void *hal, struct rtw_pcie_cfgspc_param *cfg)
 {

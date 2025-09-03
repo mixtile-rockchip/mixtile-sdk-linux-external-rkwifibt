@@ -17,13 +17,13 @@
 
 #if MAC_AX_8852B_SUPPORT
 #if MAC_AX_SDIO_SUPPORT
+#define	SMALL_PKT_SIZE	1 /* 64 Byte */
+#define	SMALL_PKT_NUM	6
+
 void _patch_rx_agg_small_pkt_8852b(struct mac_ax_adapter *adapter)
 {
 	u32 val32;
 	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
-
-#define	SMALL_PKT_SIZE	1 /* 64 Byte */
-#define	SMALL_PKT_NUM	6
 
 	val32 = MAC_REG_R32(R_AX_RXAGG_1);
 	val32 = SET_CLR_WORD(val32, SMALL_PKT_SIZE, B_AX_RXAGG_SML_PKT_SIZE);
@@ -627,6 +627,15 @@ void aval_page_cfg_sdio_8852b(struct mac_ax_adapter *adapter,
 	else
 		val32 &= ~ch_thr.intrpt_en;
 	MAC_REG_W32(ch_thr.thr, val32);
+}
+
+u32 read_sdio_cccr_8852b(struct mac_ax_adapter *adapter, u16 addr, u8 *val)
+{
+	u32 ret = MACSUCCESS;
+
+	*val = PLTFM_SDIO_CMD52_CIA_R8((u16)addr);
+
+	return ret;
 }
 
 #endif /*MAC_AX_SDIO_SUPPORT*/

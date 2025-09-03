@@ -16,11 +16,13 @@
 #ifndef _HAL_LD_FILE_H_
 #define _HAL_LD_FILE_H_
 
-#define PHYPG_BAND2G 0
-#define PHYPG_BAND5G 1
-#define PHYPG_RF1Tx 0
-#define PHYPG_RF2Tx 1
-#define PHYPG_OFFSET 15
+enum PHY_PG_NSS_def {
+	PHYPG_1SS	= 0,
+	PHYPG_2SS	= 1,
+	PHYPG_NSS_MAX,
+
+	PHYPG_OFFSET	= 15,
+};
 
 enum PHY_PG_RATE_def {
 	CCK_11M_1M = 0,
@@ -40,33 +42,34 @@ enum PHY_PG_RATE_def {
 	OFDM_AllRate6_1 = 10,
 };
 
-struct _hal_file_regd_ext {
-		u16 domain;
-		char country[2];
-		char reg_name[10];
+struct hal_txpwr_byrate_t {
+	u32	band;	/* enum band_type */
+	u32	nss;	/* enum PHY_PG_NSS_def */
+	u32	rs;	/* enum PHY_PG_RATE_def */
+	u32	vals;
 };
 
 typedef struct hal_txpwr_lmt_t {
-	u8			band;
-	u8			bw;
-	u8			ntx;
-	u8			rs;
-	u8			bf;
-	u8			reg;
-	u8			ch;
-	s8			val;
-	u8			tx_shap_idx;
+	u8 band;
+	u8 bw;
+	u8 ntx;
+	u8 rs;
+	u8 bf;
+	u8 reg;
+	u8 ch;
+	s8 val;
+	u8 tx_shap_idx;
 } HAL_TXPWR_LMT_T , *PHAL_TXPWR_LMT_T;
 
 typedef struct hal_txpwr_lmt_ru_t {
-	u8			band;
-	u8			rubw;
-	u8			ntx;
-	u8			rs;
-	u8			reg;
-	u8			ch;
-	s8			val;
-	u8			tx_shap_idx;
+	u8 band;
+	u8 rubw;
+	u8 ntx;
+	u8 rs;
+	u8 reg;
+	u8 ch;
+	s8 val;
+	u8 tx_shap_idx;
 } Hal_Txpwr_lmt_Ru_t , *pHal_Txpwr_lmt_Ru_t;
 
 enum _halrf_tx_pw_lmt_ru_bandwidth_type {
@@ -247,6 +250,7 @@ struct hal_txpwr_track_t {
 	};
 
 int rtw_hal_find_ext_regd_num(struct rtw_para_pwrlmt_info_t *para_info, const char *regd_name);
+char *rtw_hal_get_ext_regd_name(struct rtw_para_pwrlmt_info_t *para_info, u8 idx);
 void rtw_hal_dl_all_para_file(struct rtw_phl_com_t *phl_com, char *ic_name, void *hal);
 u8 rtw_hal_efuse_shadow_file_load(void *hal, char *ic_name, bool is_limit);
 u8 rtw_hal_ld_fw_symbol(struct rtw_phl_com_t *phl_com,

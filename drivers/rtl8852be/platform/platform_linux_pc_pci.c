@@ -83,10 +83,16 @@ void *pci_alloc_cache_mem(struct pci_dev *pdev,
 
 	vir_addr = rtw_zmalloc(size);
 
-	if (!vir_addr)
+	if (!vir_addr) {
 		bus_addr = NULL;
-	else
+		RTW_ERR("%s: alloc %ld failed\n", __func__, size);
+	}
+	else {
 		pci_get_bus_addr(pdev, vir_addr, bus_addr, size, direction);
+		if (!vir_addr) {
+			RTW_ERR("%s: map %ld failed\n", __func__, size);
+		}
+	}
 
 	return vir_addr;
 }
@@ -112,8 +118,10 @@ void *pci_alloc_noncache_mem(struct pci_dev *pdev,
 				size, bus_addr,
 				(in_atomic() ? GFP_ATOMIC : GFP_KERNEL));
 	}
-	if (!vir_addr)
+	if (!vir_addr) {
 		bus_addr = NULL;
+		RTW_ERR("%s: alloc %ld failed\n", __func__, size);
+	}
 	else
 		bus_addr = (dma_addr_t *)((((SIZE_PTR)bus_addr + 3) / 4) * 4);
 

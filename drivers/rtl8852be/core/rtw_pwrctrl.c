@@ -247,21 +247,11 @@ static void _rtw_ssmps(_adapter *adapter, struct sta_info *sta)
 		rtw_phl_sta_assoc_cap_process(sta->phl_sta, _FALSE);
 	}
 
-	rtw_phl_cmd_change_stainfo(adapter_to_dvobj(adapter)->phl,
-				   sta->phl_sta,
-				   STA_CHG_RAMASK,
-				   NULL,
-				   0,
-				   PHL_CMD_DIRECTLY,
-				   0);
+	rtw_sta_hal_ra_mask_update_cmd(adapter, sta, RTW_CMDF_DIRECTLY);
 }
 
 void rtw_ssmps_enter(_adapter *adapter, struct sta_info *sta)
 {
-	/* P2P spec v1.9 3.3.1 */
-	if (MLME_IS_AP(adapter) && !MLME_IS_GO(adapter))
-		return;
-
 	if (sta->phl_sta->asoc_cap.sm_ps == SM_PS_STATIC)
 		return;
 
@@ -270,12 +260,9 @@ void rtw_ssmps_enter(_adapter *adapter, struct sta_info *sta)
 	sta->phl_sta->asoc_cap.sm_ps = SM_PS_STATIC;
 	_rtw_ssmps(adapter, sta);
 }
+
 void rtw_ssmps_leave(_adapter *adapter, struct sta_info *sta)
 {
-	/* P2P spec v1.9 3.3.1 */
-	if (MLME_IS_AP(adapter) && !MLME_IS_GO(adapter))
-		return;
-
 	if (sta->phl_sta->asoc_cap.sm_ps == SM_PS_DISABLE)
 		return;
 
@@ -283,3 +270,86 @@ void rtw_ssmps_leave(_adapter *adapter, struct sta_info *sta)
 	sta->phl_sta->asoc_cap.sm_ps = SM_PS_DISABLE;
 	_rtw_ssmps(adapter, sta);
 }
+
+void rtw_update_ips_setting(int make_level, int ins_level, u8 *mode, u8 *cap, bool is_wow)
+{
+	if (ins_level != PS_IPS_MAX)
+		make_level = ins_level;
+
+	switch (make_level) {
+	case PS_IPS_NONE:
+		*mode = PS_OP_MODE_DISABLED;
+		*cap = PS_CAP_PWRON;
+		break;
+	case PS_IPS_RF_OFF:
+		*mode = is_wow? PS_OP_MODE_FORCE_ENABLED: PS_OP_MODE_AUTO;
+		*cap = PS_CAP_PWRON | PS_CAP_RF_OFF;
+		break;
+	case PS_IPS_CLK_GATED:
+		*mode = is_wow? PS_OP_MODE_FORCE_ENABLED: PS_OP_MODE_AUTO;
+		*cap = PS_CAP_PWRON | PS_CAP_RF_OFF | PS_CAP_CLK_GATED;
+		break;
+	case PS_IPS_PWR_GATED:
+		*mode = is_wow? PS_OP_MODE_FORCE_ENABLED: PS_OP_MODE_AUTO;
+		*cap = PS_CAP_PWRON | PS_CAP_RF_OFF | PS_CAP_CLK_GATED | PS_CAP_PWR_GATED;
+		break;
+	case PS_PWR_OFF:
+		*mode = is_wow? PS_OP_MODE_FORCE_ENABLED: PS_OP_MODE_AUTO;
+		*cap = PS_CAP_PWR_OFF;
+		break;
+	default:
+		RTW_ERR("%s ips mode level (%d) invalid\n", __func__, ins_level);
+	}
+}
+
+void rtw_update_lps_setting(int make_level, int ins_level, u8 *mode, u8 *cap, bool is_wow)
+{
+	if (ins_level != PS_LPS_MAX)
+		make_level = ins_level;
+
+	switch (make_level) {
+	case PS_LPS_NONE:
+		*mode = PS_OP_MODE_DISABLED;
+		*cap = PS_CAP_PWRON;
+		break;
+	case PS_LPS_RF_OFF:
+		*mode = is_wow? PS_OP_MODE_FORCE_ENABLED: PS_OP_MODE_AUTO;
+		*cap = PS_CAP_PWRON | PS_CAP_RF_OFF;
+		break;
+	case PS_LPS_CLK_GATED:
+		*mode = is_wow? PS_OP_MODE_FORCE_ENABLED: PS_OP_MODE_AUTO;
+		*cap = PS_CAP_PWRON | PS_CAP_RF_OFF | PS_CAP_CLK_GATED;
+		break;
+	case PS_LPS_PWR_GATED:
+		*mode = is_wow? PS_OP_MODE_FORCE_ENABLED: PS_OP_MODE_AUTO;
+		*cap = PS_CAP_PWRON | PS_CAP_RF_OFF | PS_CAP_CLK_GATED | PS_CAP_PWR_GATED;
+		break;
+	default:
+		RTW_ERR("%s lps mode level (%d) invalid\n", __func__, ins_level);
+	}
+}
+
+#if defined(CONFIG_RTW_LPS) || defined(CONFIG_RTW_LPS_WOW)
+void rtw_update_lps_listen_beacon_mode(
+	u8 bcn_mode, u8 awake_interval,
+	enum rtw_lps_listen_bcn_mode *lps_bcn_mode, u8 *lps_awake_interval)
+{
+	if (bcn_mode == RTW_LPS_LISTEN_BCN_MAX) {
+		*lps_bcn_mode = RTW_LPS_RLBM_MAX;
+		*lps_awake_interval = 0;
+	} else if (bcn_mode == RTW_LPS_RLBM_MIN ||
+		   bcn_mode == RTW_LPS_RLBM_MAX) {
+		*lps_bcn_mode = bcn_mode;
+		*lps_awake_interval = 0;
+		RTW_INFO(
+			"%s: awake interval will not be applied, since beacon mode is not RTW_LPS_RLBM_USERDEFINE\n",
+			__func__);
+	} else if (bcn_mode == RTW_LPS_RLBM_USERDEFINE) {
+		*lps_bcn_mode = bcn_mode;
+		*lps_awake_interval = awake_interval;
+	} else {
+		RTW_ERR("%s lps listen beacon mode (%d) invalid\n", __func__,
+			bcn_mode);
+	}
+}
+#endif /* defined(CONFIG_RTW_LPS) || defined(CONFIG_RTW_LPS_WOW) */

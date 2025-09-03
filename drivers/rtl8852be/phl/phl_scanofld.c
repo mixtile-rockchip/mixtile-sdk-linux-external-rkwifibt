@@ -183,7 +183,7 @@ _scanofld_start(struct phl_info_t *phl_info, struct rtw_wifi_role_link_t *rlink,
 		return pstatus;
 
 	rtw_hal_notification(phl_info->hal, MSG_EVT_SCANOFLD_START, rlink->hw_band);
-	rtw_hal_en_fw_log(phl_info->hal, FL_COMP_SCAN, true);
+	rtw_hal_en_fw_log_comp(phl_info->hal, FL_COMP_SCAN, true);
 
 	/* trigger fw to start scan */
 	cfg.operation = SCAN_OFLD_OP_START;
@@ -215,7 +215,7 @@ _scanofld_stop(struct phl_info_t *phl_info, struct rtw_wifi_role_link_t *rlink,
 	rtw_hal_scan_ofld(phl_info->hal, sta->macid, rlink->hw_band,
 			  rlink->hw_port, &cfg);
 	rtw_hal_notification(phl_info->hal, MSG_EVT_SCANOFLD_END, rlink->hw_band);
-	rtw_hal_en_fw_log(phl_info->hal, FL_COMP_SCAN, false);
+	rtw_hal_en_fw_log_comp(phl_info->hal, FL_COMP_SCAN, false);
 }
 
 static void

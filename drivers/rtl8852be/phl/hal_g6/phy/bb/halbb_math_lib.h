@@ -121,6 +121,7 @@ u8 halbb_bitmask_msb(struct bb_info *bb, u32 mask);
 u32 halbb_cal_bit_shift(u32 bit_mask);
 s32 halbb_cnvrt_2_sign(u32 val, u8 bit_num);
 s64 halbb_cnvrt_2_sign_64(u64 val, u8 bit_num);
+u16 halbb_db_avg2(struct bb_info *bb, u16 val_db_1, u16 val_db_2);
 void halbb_print_sign_frac_digit(struct bb_info *bb, u32 val, u8 total_bit_num,
 				 u8 frac_bit_num, char *buf, u16 buf_size);
 char *halbb_print_sign_frac_digit2(struct bb_info *bb, u32 val, u8 total_bit_num,

@@ -325,9 +325,12 @@ _tdmra_handle(struct phl_info_t *phl_info,
 			break;
 		case MR_COEX_TRIG_BY_SCAN:
 			*coex_mode = MR_COEX_MODE_TDMRA;
-
-			cur_rlink = phl_get_rlink_by_hw_band(cur_wrole, band_idx);
-			psts = rtw_phl_tdmra_enable(phl_info, cur_wrole, cur_rlink);
+			cur_rlink = phl_mr_get_rlink_stay_in_cur_chdef(phl_info, band_idx);
+			if (!cur_rlink) {
+				PHL_ERR("%s: find no cur_rlink\n", __func__);
+			} else {
+				psts = rtw_phl_tdmra_enable(phl_info, cur_rlink->wrole, cur_rlink);
+			}
 			break;
 		case MR_COEX_TRIG_BY_ECSA:
 		case MR_COEX_TRIG_BY_ASSOC_TSF_EFFOR:

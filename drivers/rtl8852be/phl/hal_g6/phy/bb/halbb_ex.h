@@ -28,6 +28,7 @@
 #include "halbb_ic_hw_info.h"
 
 /*@--------------------------[Define] ---------------------------------------*/
+#define HALBB_PAUSE_MAX_LENGTH 5
 
 /*@--------------------------[Enum]------------------------------------------*/
 
@@ -185,6 +186,7 @@ bool halbb_sta_info_delete_entry(struct bb_info *bb,
 void halbb_media_status_update(struct bb_info *bb,
 			       struct rtw_phl_stainfo_t *phl_sta_info,
 			       bool is_connected);
+void halbb_watchdog_io_saving_en(struct bb_info *bb_0, bool en, enum phl_phy_idx phy_idx);
 void halbb_watchdog_reset(struct bb_info *bb);
 void halbb_watchdog(struct bb_info *bb, enum bb_watchdog_mode_t mode,
 		    enum phl_phy_idx phy_idx);

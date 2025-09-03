@@ -40,7 +40,7 @@ phl_edcca_cfg(struct phl_info_t *phl_info)
 	enum rtw_phl_status phl_status = RTW_PHL_STATUS_SUCCESS;
 	enum rtw_hal_status hal_status = RTW_HAL_STATUS_SUCCESS;
 
-	if (RTW_EDCCA_FCC == phl_com->edcca_mode) {
+	if (phl_com->edcca_mode != RTW_EDCCA_NORMAL) {
 		hal_status = rtw_hal_sifs_chk_cca_en(phl_info->hal, HW_BAND_0, true);
 		if (hal_status != RTW_HAL_STATUS_SUCCESS) {
 			PHL_ERR("%s: enable rtw_hal_sifs_chk_cca_en failed!\n", __FUNCTION__);
@@ -219,3 +219,40 @@ void phl_ltr_ctrl_watchdog(struct phl_info_t *phl_info)
 }
 #endif /* RTW_WKARD_DYNAMIC_LTR */
 #endif /* CONFIG_PCI_HCI */
+
+#ifdef RTW_WKARD_DYNAMIC_PCIE_GEN
+void rtw_phl_pcie_gen_dm(void *phl,
+			 bool (*condition)(void *priv,
+					   enum rtw_pcie_gen cur_gen),
+			 void *priv)
+{
+	struct phl_info_t *phl_info = (struct phl_info_t *)phl;
+	void *hal = phl_info->hal;
+	struct bus_sw_cap_t *cap = &(phl_info->phl_com->bus_sw_cap);
+
+	enum rtw_pcie_gen gen = RTW_PCIE_GEN_UNKNOWN;
+	enum rtw_pcie_gen target_gen = RTW_PCIE_GEN_UNKNOWN;
+
+	if (!cap->pcie_gen_dm_en)
+		return;
+
+	gen = rtw_hal_pcie_gen_get(hal);
+
+	if (gen == RTW_PCIE_GEN_2) {
+
+		target_gen = RTW_PCIE_GEN_1;
+
+	} else if (gen == RTW_PCIE_GEN_1) {
+
+		target_gen = RTW_PCIE_GEN_2;
+
+	} else {
+
+		PHL_ERR("%s unknown pcie gen: %d\n", __func__, gen);
+		return;
+	}
+
+	if (condition != NULL && condition(priv, gen))
+		rtw_hal_pcie_gen_set(hal, target_gen);
+}
+#endif /* RTW_WKARD_DYNAMIC_PCIE_GEN */

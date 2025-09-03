@@ -161,7 +161,7 @@ rtw_phl_cmd_updt_ext_txpwr_lmt(void *phl,
 	sts = phl_cmd_enqueue(phl,
 			HW_BAND_0,
 			MSG_EVT_UPDT_EXT_TXPWR_LMT,
-			(u8 *)cmd_param, 0,
+			(u8 *)cmd_param, cmd_param_len,
 			_phl_cmd_updt_epl_done,
 			cmd_type, cmd_timeout);
 
@@ -182,3 +182,66 @@ end:
 #endif
 }
 
+enum rtw_phl_status
+phl_cmd_set_tas_en(void *phl, u8 *param)
+{
+	struct phl_info_t *phl_info = (struct phl_info_t *)phl;
+	u8 en = false;
+
+	if (param)
+		en = *param;
+	else
+		return RTW_PHL_STATUS_FAILURE;
+
+	return (RTW_HAL_STATUS_SUCCESS == rtw_hal_tas_en(phl_info->hal, en) ?
+		RTW_PHL_STATUS_SUCCESS : RTW_PHL_STATUS_FAILURE);
+}
+
+enum rtw_phl_status
+rtw_phl_cmd_set_tas_en(void *phl,
+	u8 en,
+	enum phl_cmd_type cmd_type,
+	u32 cmd_timeout)
+{
+	struct phl_info_t *phl_info = (struct phl_info_t *)phl;
+	enum rtw_phl_status sts = RTW_PHL_STATUS_FAILURE;
+	u8 *cmd_param = NULL;
+	u32 cmd_param_len = 0;
+
+#ifdef CONFIG_CMD_DISP
+	if (cmd_type == PHL_CMD_DIRECTLY)
+		return phl_cmd_set_tas_en(phl, &en);
+
+	cmd_param_len = sizeof(u8);
+	cmd_param = _os_kmem_alloc(phl_to_drvpriv(phl_info), cmd_param_len);
+	if (cmd_param == NULL) {
+		PHL_ERR("%s: alloc cmd_param failed!\n", __func__);
+		goto end;
+	} else {
+		_os_mem_cpy(phl_to_drvpriv(phl_info), cmd_param,
+			&en, cmd_param_len);
+	}
+
+	sts = phl_cmd_enqueue(phl,
+			HW_BAND_0,
+			MSG_EVT_SET_TAS_EN,
+			(u8 *)cmd_param, cmd_param_len,
+			_phl_cmd_updt_epl_done,
+			cmd_type, cmd_timeout);
+
+	if (is_cmd_failure(sts)) {
+		/* Send cmd success, but wait cmd fail*/
+		sts = RTW_PHL_STATUS_FAILURE;
+	} else if (sts != RTW_PHL_STATUS_SUCCESS) {
+		/* Send cmd fail */
+		_os_kmem_free(phl_to_drvpriv(phl_info), cmd_param, cmd_param_len);
+		sts = RTW_PHL_STATUS_FAILURE;
+	}
+end:
+	return sts;
+#else
+	PHL_ERR("%s : CONFIG_CMD_DISP need to be enabled for MSG_EVT_SET_TAS_EN !! \n", __func__);
+
+	return sts;
+#endif
+}

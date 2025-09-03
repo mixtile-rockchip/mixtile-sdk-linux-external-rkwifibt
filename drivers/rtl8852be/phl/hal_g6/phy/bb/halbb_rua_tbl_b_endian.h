@@ -49,6 +49,11 @@ struct halbb_rua_tbl_hdr_info {
 	u8 tbl_class:6;
 };
 
+struct bb_cmd_ver{
+	u8 val;
+	u8 rsvd0[3];
+};
+
 struct halbb_ru_rate_info {
 	u8 mcs:4;
 	u8 ss:3;
@@ -228,27 +233,40 @@ struct halbb_ehtcap {
 };
 
 struct halbb_macid_info {
-	u8 rsvd1;
-	u8 rsvd0;
-	u8 macid_m;
+	struct bb_cmd_ver ver;
+
 	u8 macid_l;
+	u8 macid_m;
+	u8 rsvd1[2];
 
-	u8 rsvd2:2;
-	u8 band:2;
-	u8 is_mlo:1;
-	u8 sta_typ:3;
+	u8 wmode_l;
+	u8 wmode_m;
+	u8 rsvd2[2];
 
-	u8 rsvd3:1;
-	u8 bw:3;
-	u8 nss:3;
+	u8 link_type;
+	u8 rsvd3:4;
+	u8 link_id:4;
+	u8 rsvd4[2];
+
+	u8 hw_band:4;
+	u8 band_type:4;
+
+	u8 nss:4;
+	u8 bw:4;
+
+
+	u8 rsvd5:7;
 	u8 ldpc:1;
+	u8 rsvd6;
 
-	u8 rsvd4;
-	u8 rsvd5;
+	u8 rsvd7[4];
+	u8 rsvd8[4];
+	u8 rsvd9[4];
 
 	struct halbb_hecap he;
 	struct halbb_ehtcap eht;
 };
+
 
 struct halbb_ru_sta_info {
 	struct halbb_rua_tbl_hdr_info tbl_hdr;
@@ -415,25 +433,27 @@ struct halbb_rupos_fixtbl{
 };
 
 struct halbb_dlfix_sta_i_ext {
-	u8 mac_id;
+	u16 mac_id;
+	u16 rsvd0;
 
-	u8 rsvd0: 3;
+	u8 rsvd1: 3;
 	u8 macid_unspecified:1;
 	u8 fix_pwr_fac: 1;
 	u8 fix_txbf: 1;
 	u8 fix_coding: 1;
 	u8 fix_rate: 1;
 
-	u8 rsvd1: 1;
+	u8 rsvd2: 1;
 	u8 pwr_boost_fac: 5;
 	u8 coding: 1;
 	u8 txbf: 1;
 
+	u8 rsvd3;
+
 	struct halbb_ru_rate_info rate;
 
-	u32 rsvd2;
+	u32 rsvd4;
 };
-
 
 struct halbb_dlru_fixtbl_info_univrsl {
 	struct halbb_rua_tbl_hdr_info tbl_hdr;
@@ -523,21 +543,21 @@ struct halbb_ul_ru_fix_tbl_info_8ru {
 };
 
 struct halbb_ulfix_sta_i_ext {
-	u8 mac_id;
+	u16 mac_id;
+	u16 rsvd0;
 
-	u8 rsvd2: 3;
+	u8 rsvd1: 3;
 	u8 macid_unspecified: 1;
 	u8 coding: 1;
 	u8 fix_coding: 1;
 	u8 fix_rate: 1;
 	u8 fix_tgt_rssi: 1;
 
-	u8 rsvd1;
-
+	u8 rsvd2;
+	u8 rsvd3;
 	struct halbb_ru_rate_info rate;
-
-	u8 rsvd3[4];
 };
+
 
 struct halbb_ulru_fixtbl_info_univrsl {
 	struct halbb_rua_tbl_hdr_info tbl_hdr;
@@ -757,28 +777,32 @@ struct halbb_cqi_set{
 };
 
 struct halbb_rua_rawread_cfg{
-	u8 src_sel;
-	u8 id;
-	u8 ofst32;
+	struct bb_cmd_ver ver;
+
+	u32 src_sel;
+	u32 id;
+	u32 ofst32;
+
 	u8 band;
+	u8 rsvd1[3];
 };
 
 struct halbb_rua_rawwrite_cfg{
-	u8 src_sel;
-	u8 id;
-	u8 ofst32;
-	u8 ofst8;
+	struct bb_cmd_ver ver;
 
-	u8 w_val_0;
-	u8 w_val_1;
-	u8 w_val_2;
-	u8 w_val_3;
+	u32 src_sel;
+	u32 id;
+	u32 ofst32;
+	u32 ofst8;
+
+	u32 w_val;
 
 	u8 band;
-	u8 rsvd[3];
+	u8 rsvd1[3];
 };
 
 struct halbb_bb_info_cfg {
+	//cmd_ver0 -> cmd_ver1
 	//ch_bw info update
 	u8 rsvd0:7;
 	u8 chbw_upd_en:1;
@@ -788,7 +812,8 @@ struct halbb_bb_info_cfg {
 	u8 central_ch;
 
 	u8 cbw;
-	u8 rsvd1[3];
+	u8 rsvd1[2];
+	u8 cmd_ver; //added at cmd_ver1
 
 	//trx path info update
 	u8 rsvd2:7;
@@ -798,7 +823,8 @@ struct halbb_bb_info_cfg {
 	u8 rsvd3[2];
 
 	//txsc info update
-	u8 rsvd4:7;
+	u8 rsvd4:6;
+	u8 txsb_upd_en:1; //added at cmd_ver1
 	u8 txsc_upd_en:1;
 	u8 rsvd5[3];
 
@@ -808,6 +834,10 @@ struct halbb_bb_info_cfg {
 	u8 txsc_160;
 
 	//txsb info update
+	u8 txsb_20; //added at cmd_ver1
+	u8 txsb_40; //added at cmd_ver1
+	u8 txsb_80; //added at cmd_ver1
+	u8 txsb_160; //added at cmd_ver1
 };
 
 
@@ -854,23 +884,90 @@ struct halbb_pwr_by_rt_tbl{
 };
 
 struct halbb_ra_masking{
-    u8 macid_l;
-    u8 macid_m;
+	struct bb_cmd_ver ver;
 
-    u8 rsvd1:4;
-    u8 ra_sel:4;
+	u8 macid_l;
+	u8 macid_m;
 
-    u8 rsvd2:4;
-    u8 op_sel:4;
+	u8 rsvd1:4;
+	u8 ra_sel:4;
 
-    u32 mask_1ss;
+	u8 rsvd2:4;
+	u8 op_sel:4;
 
-    u32 mask_2ss;
-
-    u32 mask_3ss;
-
-    u32 mask_4ss;
+	u32 mask_1ss;
+	u32 mask_2ss;
+	u32 mask_3ss;
+	u32 mask_4ss;
 };
+
+
+struct halbb_rucmd_usr {
+	u16 macid;
+	u16 rsvd;
+};
+
+struct halbb_dlru_cmd {
+	struct bb_cmd_ver ver;
+
+	u8 rsvd1:2;
+	u8 stbc_permit: 1;
+	u8 giltf_ctrl_en:1;
+	u8 pwrlim_dis: 1;
+	u8 txpwr_ofld_en: 1;
+	u8 is_hwgrp: 1;
+	u8 fix_mode_flg: 1;
+	u8 rsvd2[3];
+
+	u8 tx_mode:4;
+	u8 band:4;
+	u8 grp_id;
+	u8 gi_ltf:4;
+	u8 ppdu_bw:4;
+	u8 rsvd3[1];
+
+	u16 grp_tx_pwr;
+	u16 rsvd4;
+
+
+	u8 op_cmd;
+	u8 usr_num;
+	u8 rsvd5[2];
+
+	u8 rsvd6[4];
+
+	struct halbb_rucmd_usr usr[HALBB_MAX_RUCMD_USR_NUM];
+};
+
+struct halbb_ulru_cmd {
+	struct bb_cmd_ver ver;
+
+	u8 rsvd1:4;
+	u8 stbc_permit: 1;
+	u8 giltf_ctrl_en:1;
+	u8 is_hwgrp: 1;
+	u8 fix_mode_flg: 1;
+	u8 rsvd2[3];
+
+	u8 tx_mode:4;
+	u8 band:4;
+	u8 grp_id;
+	u8 gi_ltf:4;
+	u8 ppdu_bw:4;
+	u8 rsvd3[1];
+
+	u16 rsvd4;
+	u16 rsvd5;
+
+	u8 op_cmd;
+	u8 usr_num;
+	u8 rsvd6[2];
+
+	u8 rsvd7[4];
+
+	struct halbb_rucmd_usr usr[HALBB_MAX_RUCMD_USR_NUM];
+};
+
 /*@--------------------------[Prptotype]-------------------------------------*/
 
 #endif /* HALBB_RUA_SUPPORT */

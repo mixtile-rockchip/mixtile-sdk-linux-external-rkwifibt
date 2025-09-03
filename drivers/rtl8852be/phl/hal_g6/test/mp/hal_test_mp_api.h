@@ -103,6 +103,10 @@ enum rtw_hal_status rtw_hal_mp_set_mac_l1ss_enable(
 	struct mp_context *mp, struct mp_config_arg *arg);
 enum rtw_hal_status
 rtw_hal_set_mac_aspm_test(struct mp_context *mp);
+enum rtw_hal_status rtw_hal_mp_get_max_hci_speed(struct mp_context *mp,
+						 struct mp_config_arg *arg);
+enum rtw_hal_status rtw_hal_mp_enable_bb_rf(struct mp_context *mp,
+					    struct mp_config_arg *arg);
 /* WIFI EFUSE */
 enum rtw_hal_status rtw_hal_mp_efuse_wifi_shadow_read(
 	struct mp_context *mp, struct mp_efuse_arg *arg);

@@ -15,6 +15,7 @@
 #ifndef _HAL_SOUND_H_
 #define _HAL_SOUND_H_
 
+#ifdef CONFIG_PHL_BEAMFORM
 #ifdef CONFIG_PHL_CMD_BF
 
 #define HAL_NPDA_RU_IDX_START 0
@@ -71,5 +72,8 @@ enum rtw_hal_status hal_snd_obj_deinit(void *hal);
 #define hal_snd_obj_init(_h) RTW_HAL_STATUS_SUCCESS
 #define hal_snd_obj_deinit(_h) RTW_HAL_STATUS_SUCCESS
 #endif
-
+#else
+#define hal_snd_obj_init(_h) RTW_HAL_STATUS_SUCCESS
+#define hal_snd_obj_deinit(_h) RTW_HAL_STATUS_SUCCESS
+#endif
 #endif

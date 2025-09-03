@@ -372,14 +372,6 @@ struct _twt_teardown {
 /*Bit0-4*/
 #define GET_BROADCAST_TWT_ID(_buf) \
 	LE_BITS_TO_1BYTE(_buf, 0, 5)
-
-
-#define GET_ELE_ID(_buf) \
-	LE_BITS_TO_1BYTE(_buf, 0, 8);
-#define GET_ELE_LEN(_buf) \
-	LE_BITS_TO_1BYTE(_buf, 0, 8);
-#define GET_DIALOG_TOKEN(_buf) \
-	LE_BITS_TO_1BYTE(_buf, 0, 8);
 /* TWT FLOW field-End */
 
 

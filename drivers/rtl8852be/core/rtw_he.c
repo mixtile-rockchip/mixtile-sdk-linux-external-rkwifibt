@@ -871,7 +871,6 @@ void HE_operation_handler(_adapter *padapter,
 		/* rx thread & assoc timer callback, use cmd no_wait */
 		if (pre_bsscolor != phl_sta->asoc_cap.bsscolor) {
 			RTW_INFO("%s, Update BSS Color = %d\n", __func__, phl_sta->asoc_cap.bsscolor);
-#ifdef CONFIG_CMD_DISP
 			rtw_phl_cmd_wrole_change(phl,
 			                         padapter->phl_role,
 			                         padapter_link->wrlink,
@@ -880,9 +879,6 @@ void HE_operation_handler(_adapter *padapter,
 			                         sizeof(phl_sta->asoc_cap.bsscolor),
 			                         PHL_CMD_NO_WAIT,
 			                         0);
-#else
-			/* role change here, but no implementation for not CMD_DISP case */
-#endif
 		}
 	}
 
@@ -901,7 +897,6 @@ void HE_operation_handler(_adapter *padapter,
 		/* rx thread & assoc timer callback, use cmd no_wait */
 		if (pre_rts_th != phl_sta->asoc_cap.rts_th) {
 			RTW_INFO("%s, Update TXOP Duration RTS Threshold =%d\n", __func__, phl_sta->asoc_cap.rts_th);
-#ifdef CONFIG_CMD_DISP
 			rtw_phl_cmd_wrole_change(phl,
 			                         padapter->phl_role,
 			                         padapter_link->wrlink,
@@ -910,9 +905,6 @@ void HE_operation_handler(_adapter *padapter,
 			                         sizeof(struct rtw_rts_threshold),
 			                         PHL_CMD_NO_WAIT,
 			                         0);
-#else
-			/* role change here, but no implementation for not CMD_DISP case */
-#endif
 		}
 	}
 }
@@ -992,7 +984,6 @@ void HE_mu_edca_handler(_adapter *padapter,
 		phl_sta->asoc_cap.mu_edca[3].timer =
 			GET_HE_MU_EDCA_VO_TIMER(ele_start);
 		for (i = 0; i < 4; i++) {
-#ifdef CONFIG_CMD_DISP
 			rtw_phl_cmd_wrole_change(phl,
 						 padapter->phl_role,
 						 padapter_link->wrlink,
@@ -1001,7 +992,7 @@ void HE_mu_edca_handler(_adapter *padapter,
 						 sizeof(struct rtw_mu_edca_param),
 						 PHL_CMD_NO_WAIT,
 						 0);
-#endif
+
 			RTW_INFO("%s, Update HE MU EDCA AC(%d) aifsn(%d) cw(0x%x) timer(0x%x)\n",
 					__func__,
 					phl_sta->asoc_cap.mu_edca[i].ac,
@@ -1011,7 +1002,6 @@ void HE_mu_edca_handler(_adapter *padapter,
 		}
 
 		if (first) {
-#ifdef CONFIG_CMD_DISP
 			rtw_phl_cmd_wrole_change(phl,
 						 padapter->phl_role,
 						 padapter_link->wrlink,
@@ -1020,9 +1010,6 @@ void HE_mu_edca_handler(_adapter *padapter,
 						 sizeof(first),
 						 PHL_CMD_NO_WAIT,
 						 0);
-#else
-			/* role change here, but no implementation for not CMD_DISP case */
-#endif
 		}
 	}
 }
@@ -1178,6 +1165,10 @@ static int rtw_build_he_phy_caps(_adapter *padapter, struct protocol_cap_t *prot
 
 	if (proto_cap->doppler_rx)
 		SET_HE_PHY_CAP_DOPPLER_RX(pbuf, 1);
+
+#ifdef CONFIG_FULL_BW_UL_MU_MIMO
+	SET_HE_PHY_CAP_FULL_BW_UL_MUMIMO(pbuf, 1);
+#endif
 
 	if (proto_cap->dcm_max_const_tx)
 		SET_HE_PHY_CAP_DCM_MAX_CONSTELLATION_TX(pbuf,
@@ -1862,14 +1853,7 @@ void rtw_he_om_ctrl_trx_ss(_adapter *adapter, struct _ADAPTER_LINK *alink,
 	issue_qos_nulldata(adapter, alink, NULL, 0, 0, 3, 10, _TRUE);
 
 	if (need_update_ra)
-		rtw_phl_cmd_change_stainfo(adapter_to_dvobj(adapter)->phl,
-					   sta->phl_sta,
-					   STA_CHG_RAMASK,
-					   NULL,
-					   0,
-					   PHL_CMD_DIRECTLY,
-					   0);
-
+		rtw_sta_hal_ra_mask_update_cmd(adapter, sta, RTW_CMDF_DIRECTLY);
 }
 
 int rtw_he_om_ctrl_ulmu_dis(_adapter *padapter, struct _ADAPTER_LINK *alink)

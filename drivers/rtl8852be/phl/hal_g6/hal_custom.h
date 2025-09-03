@@ -63,6 +63,17 @@ rtw_hal_set_spatial_reuse_en(void *hal, bool en);
 
 bool
 rtw_hal_is_spatial_reuse_en(void *hal);
+
+enum rtw_hal_status rtw_hal_set_usr_frame_to_act(
+    void *hal, enum rtw_mac_usr_frame_to_act_mode mode, u32 to_thr,
+    u8 trigger_cnt, u16 sw_def_bmp);
+
+#ifdef CONFIG_PHL_CUSTOM_FRAME_STAT
+enum rtw_hal_status
+rtw_hal_set_usr_tx_rpt_cfg(void *hal, struct rtw_phl_usr_tx_rpt_cfg *param);
+
+enum rtw_hal_status rtw_hal_set_ch_busy_stat_cfg(void *hal, u8 band);
+#endif /*CONFIG_PHL_CUSTOM_FRAME_STAT*/
 #endif
 
 #endif /*_HAL_CUSTOM_H_*/

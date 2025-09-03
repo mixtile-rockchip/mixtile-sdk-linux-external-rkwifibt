@@ -348,7 +348,7 @@ bool halbb_fwofld_btg_8852a_2(struct bb_info *bb, bool btg)
 	struct dev_cap_t *dev = &phl->dev_cap;
 	bool ret = true;
 
-	if (dev->rfe_type >= 50)
+	if (bb->bb_cmn_hooker->bb_drv_type == BB_AP_DRV)
 		return true;
 	BB_DBG(bb, DBG_PHY_CONFIG, "<====== %s ======>\n", __func__);
 	if (btg) {
@@ -1261,6 +1261,12 @@ void halbb_fwofld_init(struct bb_info *bb)
 
 	halbb_fwofld_flag_init(bb);
 	halbb_fwofld_bitmap_init(bb);
+
+	if (bb->bb_cmn_hooker->bb_fwofld_sup_bitmap & (BIT(FW_OFLD_DM_INIT) | BIT(FW_OFLD_PHY_1_DM_INIT))) {
+		bb->bb_cmn_hooker->skip_io_init_en = true;
+	} else {
+		bb->bb_cmn_hooker->skip_io_init_en = false;
+	}
 }
 
 void halbb_fw_ofld_dbg(struct bb_info *bb, char input[][16], u32 *_used,

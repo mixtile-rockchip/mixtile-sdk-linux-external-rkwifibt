@@ -18,12 +18,25 @@
 #include "halbb_api.h"
 /*@--------------------------[Prptotype]-------------------------------------*/
 struct bb_info;
+#define MAX_MR_NUM 3
 struct bb_mcc_i {
 	enum role_type type;
 	struct rtw_chan_def *chandef;
 	u32 *macid_bitmap;
 	u8 macid_map_len;
 	u8 self_macid;
+};
+
+struct bb_mr_i {
+	struct rtw_chan_def chandef;
+	u8 *all_macid; /* all used macid bitmap */
+	u8 all_macid_len;
+};
+
+struct bb_mrdm_i {
+	enum phl_phy_idx phy_idx;
+	struct bb_mr_i mr_info[MAX_MR_NUM];
+	u8 mr_num;
 };
 
 u8 halbb_ex_cn_report(struct bb_info * bb);
@@ -43,6 +56,8 @@ u8 halbb_get_txsb(struct bb_info *bb, u8 pri_ch, u8 central_ch,
 void halbb_bb_reset_all(struct bb_info *bb, enum phl_phy_idx phy_idx);
 bool halbb_bb_reset_cmn(struct bb_info *bb, bool en, enum phl_phy_idx phy_idx);
 void halbb_reset_bb(struct bb_info *bb);
+
+u32 halbb_read_rf_reg_dbg(struct bb_info *bb, enum rf_path path, u32 addr);
 
 u32 halbb_read_rf_reg(struct bb_info *bb, enum rf_path path, u32 addr, u32 mask);
 
@@ -118,6 +133,9 @@ void halbb_btg_bt_rx(struct bb_info *bb, bool en, enum phl_phy_idx phy_idx);
 
 void halbb_nbtg_bt_tx(struct bb_info *bb, bool en, enum phl_phy_idx phy_idx);
 
+void halbb_bt_btg_trx_cmn(struct bb_info *bb, bool btg, bool bt_en, bool is_2g,
+			  enum phl_phy_idx phy_idx);
+
 void halbb_pop_en(struct bb_info *bb, bool en, enum phl_phy_idx phy_idx);
 
 bool halbb_querry_pop_en(struct bb_info *bb, enum phl_phy_idx phy_idx);
@@ -150,6 +168,7 @@ void halbb_bb_wrap_set_pwr_ofst_bw_all(struct bb_info *bb, enum phl_phy_idx phy_
 
 void halbb_bb_wrap_set_pwr_limit_en(struct bb_info *bb, enum phl_phy_idx phy_idx);
 
+void halbb_bb_wrap_set_max_pwr_limit(struct bb_info *bb, enum phl_phy_idx phy_idx, s16 max_limit);
 enum rtw_hal_status halbb_emlsr_en(struct bb_info *bb, bool en);
 
 #if (HLABB_CODE_BASE_NUM >= 32)
@@ -173,6 +192,12 @@ void halbb_mcc_stop(struct bb_info *bb);
 u8 halbb_mcc_start(struct bb_info *bb, struct bb_mcc_i *mi_1,
 		   struct bb_mcc_i *mi_2);
 
+u8 halbb_mrdm_start(struct bb_info *bb, u8 phy_type, struct bb_mrdm_i *mrdm);
+
+void halbb_mrdm_stop(struct bb_info *bb, u8 phy_type);
+
+u8 halbb_upd_mrdm_macid(struct bb_info *bb, struct bb_mrdm_i *mrdm);
+
 void halbb_normal_efuse_verify_cck(struct bb_info *bb, s8 rx_gain_offset,
 				   enum rf_path rx_path,
 				   enum phl_phy_idx phy_idx);
@@ -192,4 +217,9 @@ void halbb_agc_elna_idx(struct bb_info *bb, bool elna_idx, enum rf_path path,
 void halbb_agc_tia_shrink(struct bb_info *bb, bool shrink_en, bool shrink_init,
 			  enum rf_path path, enum phl_phy_idx phy_idx);
 void halbb_npath_en_update(struct bb_info *bb, bool npath_en);
+void halbb_update_tx_path_div(struct bb_info *bb, struct rtw_phl_stainfo_t *phl_sta_i);
+void halbb_nvar_src_sel(struct bb_info *bb, bool is_BF);
+void halbb_1ss_4tx_csd_set(struct bb_info *bb, bool is_no_csd, enum phl_phy_idx phy_idx);
+void halbb_force_cfo_one_shot_comp_en(struct bb_info *bb, bool en, enum phl_phy_idx phy_idx);
+void halbb_extra_rx_path(struct bb_info *bb, bool en, enum bb_path rx_path, enum phl_phy_idx phy_idx);
 #endif

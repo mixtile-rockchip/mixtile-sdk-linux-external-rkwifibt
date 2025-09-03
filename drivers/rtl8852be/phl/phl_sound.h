@@ -28,6 +28,7 @@
 /* MAX_NUM_STA_SND_GRP :phl sounding design limit = 4, hw/fw support maximum 8 STA in a sounding frame exchange*/
 #define MAX_NUM_STA_SND_GRP 4
 
+#ifdef CONFIG_PHL_BEAMFORM
 enum snd_type {
 	PHL_SND_TYPE_INVALID,
 	PHL_SND_TYPE_VHT_HW,
@@ -187,8 +188,6 @@ struct phl_sound_obj {
 /* phl sounding intern api*/
 enum rtw_phl_status phl_snd_func_snd_init(struct phl_info_t *phl_info);
 
-enum rtw_phl_status phl_snd_func_pre_config(struct phl_info_t *phl_info);
-
 enum rtw_phl_status phl_snd_init_snd_grp(struct phl_info_t *phl_info);
 
 /* phl sounding extern api*/
@@ -197,11 +196,6 @@ rtw_phl_sound_start(void *phl, u8 wrole_idx, u8 st_dlg_tkn, u8 period, u8 test_f
 
 enum rtw_phl_status
 rtw_phl_sound_abort(void *phl);
-
-enum rtw_phl_status
-rtw_phl_sound_down_ev(void *phl);
-
-void rtw_phl_snd_fix_tx_he_mu(struct phl_info_t *phl_info, u8 gid, bool en);
 
 /* snd func grp */
 struct phl_snd_grp *
@@ -239,13 +233,6 @@ enum rtw_phl_status
 phl_snd_proc_chk_condition(struct phl_info_t *phl_info, struct phl_snd_grp *grp);
 
 void
-phl_snd_proc_chk_prev_grp(struct phl_info_t *phl_info,
-			  struct phl_snd_grp *grp);
-
-enum rtw_phl_status
-phl_snd_polling_pri_sta_sts(struct phl_info_t *phl_info,
-			    struct phl_snd_grp *grp);
-void
 phl_snd_mac_ctrl(struct phl_info_t *phl_info,
 		 enum phl_band_idx band, u8 ctrl);
 
@@ -264,7 +251,6 @@ rtw_phl_sound_start_ex(void *phl, u8 wrole_idx, u8 st_dlg_tkn, u8 period, u8 tes
 
 #else
 #define phl_snd_func_snd_init(_phl_info) RTW_PHL_STATUS_SUCCESS
-#define phl_snd_func_pre_config(_phl_info) RTW_PHL_STATUS_SUCCESS
 #define phl_snd_init_snd_grp(_phl_info) RTW_PHL_STATUS_SUCCESS
 #define phl_snd_get_grp_byidx(_phl_info, _gidx) NULL
 #define phl_snd_func_remove_grp_all(_phl_info)
@@ -275,8 +261,7 @@ rtw_phl_sound_start_ex(void *phl, u8 wrole_idx, u8 st_dlg_tkn, u8 period, u8 tes
 #define phl_snd_proc_start_sounding_fw(_phl_info, _grp) RTW_PHL_STATUS_SUCCESS
 #define phl_snd_proc_postcfg(_phl_info, _grp) RTW_PHL_STATUS_SUCCESS
 #define phl_snd_proc_chk_condition(_phl_info, _grp) RTW_PHL_STATUS_SUCCESS
-#define phl_snd_proc_chk_prev_grp(_phl_info, _grp)
-#define phl_snd_polling_pri_sta_sts(_phl_info, _grp) RTW_PHL_STATUS_SUCCESS
 #define phl_snd_mac_ctrl(_phl_info, _band, _ctrl)
+#endif
 #endif
 #endif

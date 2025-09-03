@@ -79,29 +79,30 @@ enum nhm_opt_rssi_th_en {
 };
 
 enum clm_opt_input {
-	CLM_CCA_P20		= 0,
-	CLM_CCA_S20		= 1,
-	CLM_CCA_S40		= 2,
-	CLM_CCA_S80		= 3,
-	CLM_FROM_DBG		= 4,
-	CLM_TXON_CCA		= 5,
-	CLM_CCA_S80_S40_S20	= 6,
-	CLM_CCA_S80_S40_S20_P20	= 7,
+	CLM_CCA_P20			= 0,
+	CLM_CCA_S20			= 1,
+	CLM_CCA_S40			= 2,
+	CLM_CCA_S80			= 3,
+	CLM_CCA_S160			= 4,
+	CLM_FROM_DBG			= 5,
+	CLM_TXON_CCA			= 6,
+	CLM_CCA_S160_S80_S40_S20	= 7,
+	CLM_CCA_S160_S80_S40_S20_P20	= 8,
 	CLM_CCA_INIT
 };
 
-enum be_clm_opt_input {
-	BE_CLM_CCA_P20			= 0,
-	BE_CLM_CCA_S20			= 1,
-	BE_CLM_CCA_S40			= 2,
-	BE_CLM_CCA_S80			= 3,
-	BE_CLM_CCA_S160			= 4,
-	BE_CLM_FROM_DBG			= 5,
-	BE_CLM_TXON_CCA			= 6,
-	BE_CLM_CCA_S160_S80_S40_S20	= 7,
-	BE_CLM_CCA_S160_S80_S40_S20_P20	= 8,
-	BE_CLM_CCA_INIT
+#if 0 /*CR Setting Note for AX ICs*/
+enum clm_opt_input_ax {
+	CLM_CCA_P20_ax			= 0,
+	CLM_CCA_S20_ax			= 1,
+	CLM_CCA_S40_ax			= 2,
+	CLM_CCA_S80_ax			= 3,
+	CLM_FROM_DBG_ax			= 4,
+	CLM_TXON_CCA_ax			= 5,
+	CLM_CCA_S80_S40_S20_ax		= 6,
+	CLM_CCA_S80_S40_S20_P20_ax	= 7,
 };
+#endif
 
 enum clm_opt_nav_en {
 	CLM_NAV_EN_DISABLED	= 0,

@@ -44,7 +44,7 @@
 #include "hciattach.h"
 #include "hciattach_h4.h"
 
-#define RTK_VERSION "3.1.390bad8.20220519-142434"
+#define RTK_VERSION "3.1.d5a90fd.20250515-181347"
 
 #define TIMESTAMP_PR
 
@@ -67,9 +67,11 @@ uint8_t DBG_ON = 1;
 
 #define HCI_CMD_READ_BD_ADDR		0x1009
 #define HCI_VENDOR_CHANGE_BAUD		0xfc17
+#define HCI_VENDOR_ENABLE_GEN_ISO	0xfdbd
+#define HCI_VENDOR_8761C_COMMON		0xfdbb
 #define HCI_VENDOR_READ_ROM_VER		0xfc6d
 #define HCI_CMD_READ_LOCAL_VER		0x1001
-#define HCI_VENDOR_READ_CHIP_TYPE	0xfc61
+#define HCI_VENDOR_READ_CMD		0xfc61
 #define HCI_CMD_RESET			0x0c03
 
 /* HCI data types */
@@ -104,11 +106,15 @@ struct hci_ev_cmd_complete {
 #define OP_H5_CONFIG		0x02
 #define OP_ROM_VER		((1 << 24) | HCI_VENDOR_READ_ROM_VER)
 #define OP_LMP_VER		((1 << 24) | HCI_CMD_READ_LOCAL_VER)
-#define OP_CHIP_TYPE		((1 << 24) | HCI_VENDOR_READ_CHIP_TYPE)
+#define OP_VENDOR_READ		((1 << 24) | HCI_VENDOR_READ_CMD)
 #define OP_SET_BAUD		((1 << 24) | HCI_VENDOR_CHANGE_BAUD)
+#define OP_GEN_ISO		((1 << 24) | HCI_VENDOR_ENABLE_GEN_ISO)
+#define OP_8761C_COMMON		((1 << 24) | HCI_VENDOR_8761C_COMMON)
 #define OP_HCI_RESET		((1 << 24) | HCI_CMD_RESET)
 
 struct rtb_struct rtb_cfg;
+
+static uint8_t need_ota_upgrade = 0;
 
 /* bite reverse in bytes
  * 00000001 -> 10000000
@@ -148,6 +154,8 @@ const uint8_t byte_rev_table[256] = {
 	0x0f, 0x8f, 0x4f, 0xcf, 0x2f, 0xaf, 0x6f, 0xef,
 	0x1f, 0x9f, 0x5f, 0xdf, 0x3f, 0xbf, 0x7f, 0xff,
 };
+
+int rtb_init_h5(int fd, struct termios *ti);
 
 static __inline uint8_t bit_rev8(uint8_t byte)
 {
@@ -413,7 +421,12 @@ static struct sk_buff *h5_prepare_pkt(struct rtb_struct * h5, uint8_t *data,
 	uint8_t hdr[4];
 	uint16_t H5_CRC_INIT(h5_txmsg_crc);
 	int rel, i;
-
+	/*
+	if (!data)
+	{
+		return NULL;
+	}
+	*/
 	switch (pkt_type) {
 	case HCI_ACLDATA_PKT:
 	case HCI_COMMAND_PKT:
@@ -505,18 +518,18 @@ static struct sk_buff *h5_prepare_pkt(struct rtb_struct * h5, uint8_t *data,
  * 	int pkts_to_be_removed = 0;
  * 	int seqno = 0;
  * 	int i = 0;
- * 
+ *
  * 	seqno = h5->msgq_txseq;
  * 	// pkts_to_be_removed = GetListLength(h5->unacked);
- * 
+ *
  * 	while (pkts_to_be_removed) {
  * 		if (h5->rxack == seqno)
  * 			break;
- * 
+ *
  * 		pkts_to_be_removed--;
  * 		seqno = (seqno - 1) & 0x07;
  * 	}
- * 
+ *
  * 	if (h5->rxack != seqno) {
  * 		RS_DBG("Peer acked invalid packet");
  * 	}
@@ -529,11 +542,11 @@ static struct sk_buff *h5_prepare_pkt(struct rtb_struct * h5, uint8_t *data,
  * 		//__skb_unlink(skb, &h5->unack);
  * 		//skb_free(skb);
  * 	}
- * 
+ *
  * 	//  if (skb_queue_empty(&h5->unack))
  * 	//          del_timer(&h5->th5);
  * 	//  spin_unlock_irqrestore(&h5->unack.lock, flags);
- * 
+ *
  * 	if (i != pkts_to_be_removed)
  * 		RS_DBG("Removed only (%u) out of (%u) pkts", i,
  * 		       pkts_to_be_removed);
@@ -611,11 +624,22 @@ static void h5_init_hci_cc(struct sk_buff *skb)
 		RS_INFO("Read ROM version %02x", rtb_cfg.eversion);
 		break;
 
-	case HCI_VENDOR_READ_CHIP_TYPE:
-		rtb_cfg.chip_type = (skb->data[1] & 0x0f);
-		rtb_cfg.chip_ver = (skb->data[2] & 0x0f);
-		RS_INFO("Read chip type %02x", rtb_cfg.chip_type);
-		RS_INFO("Read chip ver %02x", rtb_cfg.chip_ver);
+	case HCI_VENDOR_READ_CMD:
+		if (rtb_cfg.cmd_state.subopcode == READ_CHIP_TYPE) {
+			rtb_cfg.chip_type = (skb->data[1] & 0x0f);
+			rtb_cfg.chip_ver = (skb->data[2] & 0x0f);
+			RS_INFO("Read chip type %02x", rtb_cfg.chip_type);
+			RS_INFO("Read chip ver %02x", rtb_cfg.chip_ver);
+		} else if (rtb_cfg.cmd_state.subopcode == READ_LMP_SUB_VERSION) {
+			rtb_cfg.lmp_subver = (skb->data[1] | (skb->data[2] << 8));
+			RS_INFO("LMP Subversion 0x%04x", rtb_cfg.lmp_subver);
+		} else if (rtb_cfg.cmd_state.subopcode == READ_CHIP_VER) {
+			rtb_cfg.hci_rev = (skb->data[1] | (skb->data[2] << 8));
+			RS_INFO("HCI Revision 0x%04x", rtb_cfg.hci_rev);
+		} else if (rtb_cfg.cmd_state.subopcode == READ_SEC_PROJ) {
+			rtb_cfg.key_id = skb->data[1];
+		}
+
 		break;
 
 	default:
@@ -634,6 +658,11 @@ static void h5_post_hci_cc(struct sk_buff *skb)
 	struct hci_ev_cmd_complete *ev = NULL;
 	uint16_t opcode = 0;
 	uint8_t status = 0;
+	struct cc_tail {
+		uint8_t status;
+		uint8_t subopcode;
+		uint8_t upgrade;
+	} __attribute__((packed)) *tail;
 
 	skb_pull(skb, HCI_EVENT_HDR_SIZE);
 	ev = (struct hci_ev_cmd_complete *)skb->data;
@@ -658,6 +687,21 @@ static void h5_post_hci_cc(struct sk_buff *skb)
 	rtb_cfg.cmd_state.state = CMD_STATE_SUCCESS;
 
 	switch (opcode) {
+	case HCI_VENDOR_ENABLE_GEN_ISO:
+		RS_INFO("Received cc of enable gen iso cmd");
+		break;
+	case HCI_VENDOR_8761C_COMMON:
+		RS_INFO("Received cc of 8761c common");
+		tail = (void *)skb->data;
+		if (tail->subopcode != SUBOPCODE_CKUPG)
+		{
+			RS_ERR("%s: Received unexpected subop %02x for cmd %04x",
+			       __func__, tail->subopcode, opcode);
+			break;
+		}
+
+		need_ota_upgrade = tail->upgrade;
+		break;
 	case HCI_CMD_RESET:
 		RS_INFO("Received cc of hci reset cmd");
 		rtb_cfg.link_estab_state = H5_ACTIVE;
@@ -701,7 +745,8 @@ static void hci_recv_frame(struct sk_buff *skb)
 		if (skb->data[0] == 0x0e)
 			h5_post_hci_cc(skb);
 	} else {
-		RS_ERR("receive packets in active state");
+		rtb_cfg.cmd_state.state = CMD_STATE_SUCCESS;
+		RS_INFO("receive packets in active state");
 	}
 }
 
@@ -855,7 +900,7 @@ static int h5_recv(struct rtb_struct *h5, void *data, int count)
 			if (h5->rx_skb->data[0] & 0x80 &&
 			    (h5->rx_skb->data[0] & 0x07) != h5->rxseq_txack) {
 				uint8_t rxseq_txack = (h5->rx_skb->data[0] & 0x07);
-				RS_ERR("Out-of-order packet arrived, got(%u)expected(%u)",
+				RS_ERR("Out-of-order packet arrived, got(%d)expected(%d)",
 				     h5->rx_skb->data[0] & 0x07,
 				     h5->rxseq_txack);
 				h5->is_txack_req = 1;
@@ -962,8 +1007,8 @@ static const char *op_string(uint32_t op)
 		return "OP_H5_CONFIG";
 	case OP_HCI_RESET:
 		return "OP_HCI_RESET";
-	case OP_CHIP_TYPE:
-		return "OP_CHIP_TYPE";
+	case OP_VENDOR_READ:
+		return "OP_VENDOR_READ";
 	case OP_ROM_VER:
 		return "OP_ROM_VER";
 	case OP_LMP_VER:
@@ -1203,6 +1248,16 @@ static int h5_download_patch(int dd, int index, uint8_t *data, int len,
 		 * 	       rtb_cfg.final_speed);
 		 * }
 		 */
+
+		if (rtb_cfg.chip_type == CHIP_8852DS) {
+			 usleep(50000);
+			 rtb_cfg.msgq_txseq = 0;
+			 rtb_cfg.rxseq_txack = 0;
+			 rtb_cfg.rxack = 0;
+			 rtb_cfg.rx_count = 0;
+			 rtb_init_h5(dd, ti);
+			 rtb_cfg.link_estab_state = H5_PATCH;
+		}
 	}
 
 	if (rtb_cfg.timerfd > 0)
@@ -1296,7 +1351,8 @@ int h5_vendor_change_speed(int fd, uint32_t baudrate)
 	cmd[1] = 0xfc;
 	cmd[2] = 4;
 
-	baudrate = cpu_to_le32(baudrate);
+	uint32_t baudrate_interim = baudrate;
+	baudrate = cpu_to_le32(baudrate_interim);
 #ifdef BAUDRATE_4BYTES
 	memcpy((uint16_t *) & cmd[3], &baudrate, 4);
 #else
@@ -1315,12 +1371,83 @@ int h5_vendor_change_speed(int fd, uint32_t baudrate)
 		return -1;
 	}
 
-	rtb_cfg.cmd_state.opcode = HCI_VENDOR_CHANGE_BAUD;;
+	rtb_cfg.cmd_state.opcode = HCI_VENDOR_CHANGE_BAUD;
 	rtb_cfg.cmd_state.state = CMD_STATE_UNKNOWN;
 	result = start_transmit_wait(fd, nskb, OP_SET_BAUD, 1000, 0);
 	skb_free(nskb);
 	if (result < 0) {
 		RS_ERR("OP_SET_BAUD Transmission error");
+		return result;
+	}
+
+	return 0;
+}
+
+int h5_needs_hci_upgrade(int fd, uint8_t *buf, uint32_t len)
+{
+	struct sk_buff *nskb = NULL;
+	uint8_t *cmd = NULL;
+	int result;
+	uint8_t plen = UPG_DL_BLOCK_SIZE;
+
+	if (len < plen)
+		plen = len;
+	cmd = malloc(MAX_HCI_COMMAND_SIZE);
+	if (!cmd)
+		return -1;
+	*cmd = 0xbb;
+	*(cmd + 1) = 0xfd;
+	*(cmd + 2) = plen + 1;
+	*(cmd + 3) = SUBOPCODE_CKUPG;
+	if (plen)
+	{
+		memcpy(cmd + 4, buf, plen);
+	}
+
+	nskb = h5_prepare_pkt(&rtb_cfg, cmd, plen + 4, HCI_COMMAND_PKT);
+	free(cmd);
+	if (!nskb) {
+		RS_ERR("Prepare command packet for ota upgrade pkt fail");
+		return -1;
+	}
+
+	rtb_cfg.cmd_state.opcode = HCI_VENDOR_8761C_COMMON;
+	rtb_cfg.cmd_state.state = CMD_STATE_UNKNOWN;
+	result = start_transmit_wait(fd, nskb, OP_8761C_COMMON, 1000, 0);
+	skb_free(nskb);
+	if (result < 0) {
+		RS_ERR("OP_8761C_COMMON Transmission error");
+		return result;
+	}
+
+	return 0;
+}
+
+int h5_enable_gen_iso_num_compl_pkt_evt(int fd)
+{
+	struct sk_buff *nskb = NULL;
+	unsigned char cmd[16] = { 0 };
+	int result;
+
+	cmd[0] = 0xbd;
+	cmd[1] = 0xfd;
+	cmd[2] = 3;
+	cmd[3] = 0x0b;
+	cmd[4] = 0x09;
+	cmd[5] = 0x01;
+
+	nskb = h5_prepare_pkt(&rtb_cfg, cmd, 6, HCI_COMMAND_PKT);
+	if (!nskb) {
+		RS_ERR("Prepare command packet for enable gen iso num compl pkt fail");
+		return -1;
+	}
+
+	rtb_cfg.cmd_state.opcode = HCI_VENDOR_ENABLE_GEN_ISO;
+	rtb_cfg.cmd_state.state = CMD_STATE_UNKNOWN;
+	result = start_transmit_wait(fd, nskb, OP_GEN_ISO, 1000, 0);
+	skb_free(nskb);
+	if (result < 0) {
+		RS_ERR("OP_GEN_ISO Transmission error");
 		return result;
 	}
 
@@ -1460,6 +1587,7 @@ static int rtb_download_fwc(int fd, uint8_t *buf, int size, int proto,
 	uint16_t num;
 	unsigned char *pkt_buf;
 	uint16_t i, j;
+	uint16_t idx = 0;
 	int result;
 #ifdef SERIAL_NONBLOCK_READ
 	int old_fl;
@@ -1490,6 +1618,10 @@ static int rtb_download_fwc(int fd, uint8_t *buf, int size, int proto,
 			add_pkts -= 1;
 		else
 			add_pkts += 7;
+		/* Make sure the last pkt is for config */
+		if (rtb_cfg.chip_type == CHIP_8761CTV ||
+		    rtb_cfg.chip_type == CHIP_8852DS)
+			add_pkts = 0;
 	} else
 		add_pkts = 0; /* No additional packets need */
 
@@ -1505,14 +1637,30 @@ static int rtb_download_fwc(int fd, uint8_t *buf, int size, int proto,
 
 	pkt_buf = buf;
 
+	if (proto == HCI_UART_H4) {
+		tcdrain(fd);
+
+		if (rtb_cfg.uart_flow_ctrl) {
+			RS_INFO("Enable host hw flow control");
+			ti->c_cflag |= CRTSCTS;
+		} else {
+			RS_INFO("Disable host hw flow control");
+			ti->c_cflag &= ~CRTSCTS;
+		}
+
+		if (tcsetattr(fd, TCSANOW, ti) < 0) {
+			RS_ERR("Can't set port settings");
+			return -1;
+		}
+	}
+
 	for (i = 0; i <= total_idx; i++) {
 		/* Index will roll over when it reaches 0x80
 		 * 0, 1, 2, 3, ..., 126, 127(7f), 1, 2, 3, ...
 		 */
-		if (i > 0x7f)
-			j = (i & 0x7f) + 1;
-		else
-			j = i;
+		j = idx++;
+		if (j == 0x7f)
+			idx = 1;
 
 		if (i < end_idx) {
 			curr_idx = j;
@@ -1648,14 +1796,91 @@ static inline void std_speed_to_vendor(int uart_speed, uint32_t *rtb_speed)
 	return;
 }
 
-void rtb_read_chip_type(int dd)
+int rtb_parse_vendor_rsp(uint8_t subopcode, uint8_t *rsp_cc)
 {
-	/* 0xB000A094 */
+	struct hci_cc_common *cc;
+	uint8_t *p;
+
+	p = rsp_cc + sizeof(*cc);
+	switch (subopcode) {
+	case READ_CHIP_TYPE:
+		rtb_cfg.chip_type = (p[1] & 0x0f);
+		rtb_cfg.chip_ver = (p[2] & 0x0f);
+		RS_INFO("Read chip type %02x", rtb_cfg.chip_type);
+		RS_INFO("Read chip ver %02x", rtb_cfg.chip_ver);
+		break;
+	case READ_LMP_SUB_VERSION:
+		rtb_cfg.lmp_subver = (p[1] | (p[2] << 8));
+		RS_INFO("LMP Subversion 0x%04x", rtb_cfg.lmp_subver);
+		break;
+	case READ_CHIP_VER:
+		rtb_cfg.hci_rev = (p[1] | (p[2] << 8));
+		RS_INFO("HCI Revision 0x%04x", rtb_cfg.hci_rev);
+		break;
+	case READ_SEC_PROJ:
+		rtb_cfg.key_id = p[1];
+		break;
+	}
+
+	return 0;
+}
+
+int rtb_vendor_read(int dd, uint16_t subopcode)
+{
+
+	/* 0x10A6AD00B0 */
 	unsigned char cmd_buff[] = {
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xB0
+	};
+	unsigned char cmd_chip_type_buff[] = {
 		0x61, 0xfc, 0x05, 0x10, 0xA6, 0xAD, 0x00, 0xB0
 	};
+	unsigned char cmd_lmp_sub_version_buf[] = {
+		0x61, 0xfc, 0x05, 0x10, 0x38, 0x04, 0x28, 0x80
+	};
+	unsigned char cmd_chip_version_buf[] =  {
+		0x61, 0xfc, 0x05, 0x10, 0x3A, 0x04, 0x28, 0x80
+	};
+	unsigned char cmd_sec_buf[] = {
+		0x61, 0xfc, 0x05, 0x10, 0xA4, 0xAD, 0x00, 0xb0
+	};
+
 	struct sk_buff *nskb;
 	int result;
+	switch (subopcode) {
+	case READ_CHIP_TYPE:
+		memcpy(cmd_buff, cmd_chip_type_buff, sizeof(cmd_buff));
+		break;
+	case READ_LMP_SUB_VERSION:
+		memcpy(cmd_buff, cmd_lmp_sub_version_buf, sizeof(cmd_buff));
+		break;
+	case READ_CHIP_VER:
+		memcpy(cmd_buff, cmd_chip_version_buf, sizeof(cmd_buff));
+		break;
+	case READ_SEC_PROJ:
+		memcpy(cmd_buff, cmd_sec_buf, sizeof(cmd_buff));
+		break;
+	default:
+		break;
+	}
+
+	if (rtb_cfg.proto == HCI_UART_H4) {
+		uint8_t *rsp;
+		struct hci_cmd_hdr *hdr = (void *)cmd_buff;
+		uint16_t opcode;
+
+		util_hexdump(cmd_buff, sizeof(cmd_buff));
+		opcode = cmd_buff[0] + (cmd_buff[1] << 8);
+		rsp = h4_vendor_cmd(dd, opcode, SUBOPCODE_NONE, hdr->plen,
+				    cmd_buff + sizeof(*hdr), 1000);
+		if (!rsp)
+			return -EIO;
+
+		rtb_parse_vendor_rsp(subopcode, rsp + 1);
+
+		free(rsp);
+		return 0;
+	}
 
 	nskb = h5_prepare_pkt(&rtb_cfg, cmd_buff, sizeof(cmd_buff),
 			      HCI_COMMAND_PKT);
@@ -1664,14 +1889,16 @@ void rtb_read_chip_type(int dd)
 		exit(EXIT_FAILURE);
 	}
 
-	rtb_cfg.cmd_state.opcode = HCI_VENDOR_READ_CHIP_TYPE;
+	rtb_cfg.cmd_state.opcode = HCI_VENDOR_READ_CMD;
+	rtb_cfg.cmd_state.subopcode = subopcode;
 	rtb_cfg.cmd_state.state = CMD_STATE_UNKNOWN;
-	result = start_transmit_wait(dd, nskb, OP_CHIP_TYPE, 250, 3);
+
+	result = start_transmit_wait(dd, nskb, OP_VENDOR_READ, 250, 3);
 	skb_free(nskb);
 	if (result < 0)
-		RS_ERR("OP_CHIP_TYPE Transmission error");
+		RS_ERR("OP_VENDOR_READ Transmission error");
 
-	return;
+	return 0;
 }
 
 /*
@@ -1723,6 +1950,20 @@ void rtb_read_local_version(int dd)
 	return;
 }
 
+static int check_fw_chip_ver(int fd)
+{
+	rtb_vendor_read(fd, READ_LMP_SUB_VERSION);
+	if(rtb_cfg.lmp_subver == 0x8822) {
+		rtb_vendor_read(fd, READ_CHIP_VER);
+		if(rtb_cfg.hci_rev == 0x000e) {
+			return 0;
+		}
+	}
+
+	rtb_read_local_version(fd);
+	return 0;
+}
+
 /*
  * Config Realtek Bluetooth.
  * Config parameters are got from Realtek Config file and FW.
@@ -1741,7 +1982,7 @@ static int rtb_config(int fd, int proto, int speed, struct termios *ti)
 	/* Read Local Version Information and RTK ROM version */
 	if (proto == HCI_UART_3WIRE) {
 		RS_INFO("Realtek H5 IC");
-		rtb_read_local_version(fd);
+		check_fw_chip_ver(fd);
 		rtb_read_eversion(fd);
 	} else {
 		RS_INFO("Realtek H4 IC");
@@ -1813,13 +2054,20 @@ static int rtb_config(int fd, int proto, int speed, struct termios *ti)
 	case ROM_LMP_8821a:
 		break;
 	case ROM_LMP_8761a:
-		rtb_read_chip_type(fd);
+		if (proto == HCI_UART_3WIRE)
+			rtb_vendor_read(fd, READ_CHIP_TYPE);
 		break;
 	case ROM_LMP_8703b:
-		rtb_read_chip_type(fd);
+		rtb_vendor_read(fd, READ_CHIP_TYPE);
+		switch (rtb_cfg.chip_type) {
+		case 0:
+			rtb_cfg.chip_type = CHIP_8723CS;
+			break;
+		}
 		break;
 	case ROM_LMP_8852a:
-		rtb_read_chip_type(fd);
+		if (rtb_cfg.hci_rev == 0x0b)
+			rtb_vendor_read(fd, READ_CHIP_TYPE);
 		break;
 	}
 
@@ -1835,7 +2083,10 @@ static int rtb_config(int fd, int proto, int speed, struct termios *ti)
 
 	rtb_cfg.patch_ent = get_patch_entry(&rtb_cfg);
 	if (rtb_cfg.patch_ent) {
-		RS_INFO("IC: %s", rtb_cfg.patch_ent->ic_name);
+		if (rtb_cfg.chip_type == CHIP_UNKNOWN)
+			rtb_cfg.chip_type = rtb_cfg.patch_ent->chip_type;
+		RS_INFO("IC: %s, chip_type 0x%02x", rtb_cfg.patch_ent->ic_name,
+			rtb_cfg.chip_type);
 		RS_INFO("Firmware/config: %s, %s",
 			rtb_cfg.patch_ent->patch_file,
 			rtb_cfg.patch_ent->config_file);
@@ -1899,7 +2150,7 @@ static int rtb_config(int fd, int proto, int speed, struct termios *ti)
 	case CHIP_8852AS:
 		max_patch_size = 0x114D0 + 529; /* 69.2KB */
 		break;
-	case CHIP_8723FS:
+	case CHIP_8733BS:
 		max_patch_size = 0xC4Cf + 529; /* 49.2KB */
 		break;
 	case CHIP_8852BS:
@@ -1908,6 +2159,24 @@ static int rtb_config(int fd, int proto, int speed, struct termios *ti)
 		break;
 	case CHIP_8852CS:
 		max_patch_size = 0x130D0 + 529; /* 76.2KB */
+		break;
+	case CHIP_8822ES:
+		max_patch_size = 0x24620 + 529; /* 145KB */
+		break;
+	case CHIP_8851BS:
+		max_patch_size = 0x10050 + 529; /* 64KB */
+		break;
+	case CHIP_8852DS:
+		max_patch_size = 0x20D90 + 529;  /* 131KB */
+		break;
+	case CHIP_8922AS:
+		max_patch_size = 0x23810 + 529;  /* 142KB */
+		break;
+	case CHIP_8852BTS:
+		max_patch_size = 0x27E00 + 529; /* 159.5KB */
+		break;
+	case CHIP_8761CTV:
+		max_patch_size = 1024 * 1024;
 		break;
 	default:
 		max_patch_size = 24 * 1024;
@@ -1980,19 +2249,103 @@ start_download:
 	if (rtb_cfg.chip_type == CHIP_8761BTC)
 		goto done;
 
+	if (rtb_cfg.chip_type == CHIP_8761CTV) {
+		uint8_t *tmp;
+		int tlen;
+		int c_len = rtb_cfg.config_len;
+		int t_len = rtb_cfg.total_len;
+
+#define DUMMY_DL_PDU_LEN	16
+		rtb_cfg.upg_buf = malloc(DUMMY_DL_PDU_LEN + c_len);
+		if (!rtb_cfg.upg_buf) {
+			RS_ERR("Can't allocate upg_buf");
+			goto buf_free;
+		}
+		if (c_len > 0) {
+			memcpy(rtb_cfg.upg_buf,
+			       rtb_cfg.total_buf + t_len - c_len, c_len);
+			tlen = c_len;
+		} else {
+			memset(rtb_cfg.upg_buf, 0, DUMMY_DL_PDU_LEN);
+			tlen = DUMMY_DL_PDU_LEN;
+		}
+
+		/* swap the buf/len, we will download config or dummy pdu first,
+		 * then check if upgrade is needed.
+		 */
+		tmp = rtb_cfg.total_buf;
+		rtb_cfg.total_buf = rtb_cfg.upg_buf;
+		rtb_cfg.upg_buf = tmp;
+
+		/* For upgrade, it does not need to download config. */
+		rtb_cfg.upg_len = rtb_cfg.total_len - c_len;
+		rtb_cfg.total_len = tlen;
+	}
+
 	if (rtb_cfg.total_len > 0 && rtb_cfg.dl_fw_flag) {
 		rtb_cfg.link_estab_state = H5_PATCH;
 		rtb_cfg.rx_index = -1;
 
 		ret = rtb_download_fwc(fd, rtb_cfg.total_buf, rtb_cfg.total_len,
 				       proto, ti);
-		free(rtb_cfg.total_buf);
 		if (ret < 0)
-			return ret;
+			goto buf_free;
+		/*
+		if (rtb_cfg.chip_type == CHIP_8761CTV)
+		{
+			rtb_cfg.link_estab_state = H5_HCI_RESET;
+			if (proto == HCI_UART_3WIRE)
+				h5_enable_gen_iso_num_compl_pkt_evt(fd);
+			else
+				h4_enable_gen_iso_num_compl_pkt_evt(fd);
+		}
+		*/
+	}
+
+	if (rtb_cfg.chip_type == CHIP_8761CTV && rtb_cfg.upg_buf) {
+		rtb_cfg.link_estab_state = H5_HCI_RESET;
+		if (proto == HCI_UART_3WIRE)
+		{
+			ret = h5_needs_hci_upgrade(fd, rtb_cfg.upg_buf,
+					   rtb_cfg.upg_len);
+			if (!need_ota_upgrade)
+			{
+				rtb_cfg.link_estab_state = H5_ACTIVE;
+				free(rtb_cfg.upg_buf);
+				goto done;
+			}
+		}
+		else
+		{
+			ret = h4_needs_hci_upgrade(fd, rtb_cfg.upg_buf,
+						rtb_cfg.upg_len);
+			if (ret <= 0) {
+				free(rtb_cfg.upg_buf);
+				goto done;
+			}
+		}
+
+		rtb_cfg.link_estab_state = H5_PATCH;
+		rtb_cfg.rx_index = -1;
+		rtb_download_fwc(fd, rtb_cfg.upg_buf, rtb_cfg.upg_len,
+				 proto, ti);
+		free(rtb_cfg.upg_buf);
+		goto buf_free;
 	}
 
 done:
+	/* Make sure that the last txseq is zero because kernel driver will
+	 * start with txseq 0
+	 */
+	if (rtb_cfg.msgq_txseq != 0x00) {
+		uint8_t addi_pkts;
 
+		addi_pkts = 8 - (rtb_cfg.msgq_txseq & 0x07);
+		do {
+			rtb_read_eversion(fd);
+			addi_pkts--;
+		} while (addi_pkts > 0);
+	}
 	RS_DBG("Init Process finished");
 	return 0;
 

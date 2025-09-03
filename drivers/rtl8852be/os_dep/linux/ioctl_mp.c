@@ -686,7 +686,6 @@ int rtw_mp_bandwidth(struct net_device *dev,
 	return 0;
 }
 
-
 int rtw_mp_txpower_index(struct net_device *dev,
 			 struct iw_request_info *info,
 			 struct iw_point *wrqu, char *extra)
@@ -698,6 +697,8 @@ int rtw_mp_txpower_index(struct net_device *dev,
 	char *pextra = extra;
 	u8 rf_type = GET_HAL_RFPATH(adapter_to_dvobj(padapter));
 	struct _ADAPTER_LINK *adapter_link = GET_PRIMARY_LINK(padapter);
+	struct mp_priv *pmp_priv = (struct mp_priv *)&padapter->mppriv;
+	u8 tx_nss = rtw_mp_rfpath2txnss(padapter, pmp_priv->curr_rfpath);
 
 	if (rtw_do_mp_iwdata_len_chk(__func__, (wrqu->length + 1)))
 		return -EFAULT;
@@ -712,65 +713,42 @@ int rtw_mp_txpower_index(struct net_device *dev,
 
 	if (wrqu->length == 2) {
 		if (input[0] != '\0' ) {
-		rfpath = rtw_atoi(input);
-#ifndef CONFIG_80211AX_HE
-			txpower_inx = mpt_ProQueryCalTxPower(padapter, rfpath);
-
-#else
-		pextra += sprintf(pextra, " %d\n", txpower_inx);
-		tarpowerdbm = mpt_get_tx_power_finalabs_val(padapter, rfpath);
+			rfpath = rtw_atoi(input);
+			tarpowerdbm = mpt_get_tx_power_finalabs_val(padapter, tx_nss);
 			if (tarpowerdbm > 0) {
-				pextra += sprintf(pextra, "\t\t dBm:%d.%d",
+				pextra += sprintf(pextra, "dBm:%d.%d",
 				(tarpowerdbm / TX_POWER_BASE), rtw_mpt_raw2dec_dbm(tarpowerdbm));
 				padapter->mppriv.txpowerdbm = tarpowerdbm;
 				rtw_mp_txpower_dbm(padapter, rfpath);
 			}
 		}
-#endif
 	} else {
 		u8 rfpath_i = 0;
 		u8 tx_nss = get_phy_tx_nss(padapter, adapter_link);
-#ifndef CONFIG_80211AX_HE
-		txpower_inx = mpt_ProQueryCalTxPower(padapter, 0);
-		pextra += sprintf(pextra, "patha=%d", txpower_inx);
-		if (rf_type > RF_1T2R) {
-			txpower_inx = mpt_ProQueryCalTxPower(padapter, 1);
-			pextra += sprintf(pextra, ",pathb=%d", txpower_inx);
-		}
-		if (rf_type > RF_2T4R) {
-			txpower_inx = mpt_ProQueryCalTxPower(padapter, 2);
-			pextra += sprintf(pextra, ",pathc=%d", txpower_inx);
-		}
-		if (rf_type > RF_3T4R) {
-			txpower_inx = mpt_ProQueryCalTxPower(padapter, 3);
-			pextra += sprintf(pextra, ",pathd=%d", txpower_inx);
-		}
-#endif
-		tarpowerdbm = mpt_get_tx_power_finalabs_val(padapter, 0);
-		pextra += sprintf(pextra, "\n\t\t\tpatha dBm:%d.%d",
+
+		tarpowerdbm = mpt_get_tx_power_finalabs_val(padapter, MP_NSS1);
+		pextra += sprintf(pextra, "\n\t\t\t 1SS dBm:%d.%d",
 				(tarpowerdbm / TX_POWER_BASE), rtw_mpt_raw2dec_dbm(tarpowerdbm));
 		if (rf_type > RF_1T2R) {
-			tarpowerdbm = mpt_get_tx_power_finalabs_val(padapter, 1);
-			pextra += sprintf(pextra, ",pathb dBm:%d.%d",
+			tarpowerdbm = mpt_get_tx_power_finalabs_val(padapter, MP_NSS2);
+			pextra += sprintf(pextra, ",2SS dBm:%d.%d",
 			(tarpowerdbm / TX_POWER_BASE), rtw_mpt_raw2dec_dbm(tarpowerdbm));
 		}
 		if (rf_type > RF_2T4R) {
-			tarpowerdbm = mpt_get_tx_power_finalabs_val(padapter, 2);
-			pextra += sprintf(pextra, ",pathc dBm:%d.%d",
+			tarpowerdbm = mpt_get_tx_power_finalabs_val(padapter, MP_NSS3);
+			pextra += sprintf(pextra, ",3SS dBm:%d.%d",
 			(tarpowerdbm / TX_POWER_BASE), rtw_mpt_raw2dec_dbm(tarpowerdbm));
 		}
 		if (rf_type > RF_3T4R) {
-			tarpowerdbm = mpt_get_tx_power_finalabs_val(padapter, 3);
-			pextra += sprintf(pextra, ",pathd dBm:%d.%d",
+			tarpowerdbm = mpt_get_tx_power_finalabs_val(padapter, MP_NSS4);
+			pextra += sprintf(pextra, ",4SS dBm:%d.%d",
 				(tarpowerdbm / TX_POWER_BASE), rtw_mpt_raw2dec_dbm(tarpowerdbm));
 		}
 		padapter->mppriv.txpowerdbm = tarpowerdbm;
 		for (rfpath_i = 0 ; rfpath_i < tx_nss; rfpath_i ++)
 			rtw_mp_txpower_dbm(padapter, rfpath_i);
 	}
-
 	wrqu->length = strlen(extra);
-
 	return 0;
 }
 
@@ -917,14 +895,14 @@ int rtw_mp_ant_tx(struct net_device *dev,
 
 	SetAntenna(padapter);
 	if(registry_par->mp_mode == 1) {
-		pwr_dbm = mpt_get_tx_power_finalabs_val(padapter, pmppriv->curr_rfpath);
+		u8 tx_nss = rtw_mp_rfpath2txnss(padapter, pmppriv->curr_rfpath);
+		pwr_dbm = mpt_get_tx_power_finalabs_val(padapter, tx_nss);
 		if ( pwr_dbm > 0) {
 			padapter->mppriv.txpowerdbm = pwr_dbm;
 			pextra += sprintf(pextra, "read pwr dbm:%d.%d",
 			(pwr_dbm / TX_POWER_BASE), rtw_mpt_raw2dec_dbm(pwr_dbm));
-		}	
+		}
 	}
-
 	wrqu->length = strlen(extra);
 	return 0;
 }
@@ -1686,6 +1664,7 @@ int rtw_mp_reset_stats(struct net_device *dev,
 	pmp_priv->rx_crcerrpktcount = 0;
 
 	rtw_mp_reset_phy_count(padapter);
+	rtw_mp_phl_rx_cal_cmd(padapter);
 
 	_rtw_memset(extra, 0, wrqu->length);
 	sprintf(extra, "mp_reset_stats ok\n");
@@ -1764,12 +1743,10 @@ int rtw_mp_SetRFPath(struct net_device *dev,
 	_adapter *padapter = rtw_netdev_priv(dev);
 	char	input[RTW_IWD_MAX_LEN];
 	int		bMain = 1, bTurnoff = 1;
-#ifdef CONFIG_ANTENNA_DIVERSITY
-	u8 ret = _TRUE;
-#endif
+	struct mp_priv *pmp_priv = &padapter->mppriv;
 
-	RTW_INFO("%s:iwpriv in=%s\n", __func__, input);
-#if 0
+	if (rtw_do_mp_iwdata_len_chk(__func__, (wrqu->length + 1)))
+		return -EFAULT;
 
 	if (copy_from_user(input, wrqu->pointer, wrqu->length))
 		return -EFAULT;
@@ -1778,30 +1755,18 @@ int rtw_mp_SetRFPath(struct net_device *dev,
 	bTurnoff = strncmp(input, "0", 3); /* strncmp TRUE is 0*/
 
 	_rtw_memset(extra, 0, wrqu->length);
-#ifdef CONFIG_ANTENNA_DIVERSITY
-	if (bMain == 0)
-		ret = rtw_mp_set_antdiv(padapter, _TRUE);
-	else
-		ret = rtw_mp_set_antdiv(padapter, _FALSE);
-	if (ret == _FALSE)
-		RTW_INFO("%s:ANTENNA_DIVERSITY FAIL\n", __func__);
-#endif
 
 	if (bMain == 0) {
-		MP_PHY_SetRFPathSwitch(padapter, _TRUE);
-		RTW_INFO("%s:PHY_SetRFPathSwitch=TRUE\n", __func__);
+		pmp_priv->ant_sw = true;
+		RTW_INFO("%s:rtw_mp_set_rfpath_switch=true\n", __func__);
 		sprintf(extra, "mp_setrfpath Main\n");
-
 	} else if (bTurnoff == 0) {
-		MP_PHY_SetRFPathSwitch(padapter, _FALSE);
-		RTW_INFO("%s:PHY_SetRFPathSwitch=FALSE\n", __func__);
+		pmp_priv->ant_sw = false;
+		RTW_INFO("%s:rtw_mp_set_rfpath_switch=false\n", __func__);
 		sprintf(extra, "mp_setrfpath Aux\n");
-	} else {
-		bMain = MP_PHY_QueryRFPathSwitch(padapter);
-		RTW_INFO("%s:Query RF Path = %s\n", __func__, (bMain ? "Main":"Aux"));
-		sprintf(extra, "RF Path %s\n" , (bMain ? "1":"0"));
 	}
-#endif
+	rtw_mp_set_rfpath_switch(padapter);
+
 	wrqu->length = strlen(extra);
 
 	return 0;
@@ -2171,6 +2136,10 @@ int rtw_mp_set_tsside(struct net_device *dev,
 
 	_adapter *padapter = rtw_netdev_priv(dev);
 	struct mp_priv *pmp_priv = &padapter->mppriv;
+        u8 rfpath_i = 0;
+        struct _ADAPTER_LINK *padapter_link = GET_PRIMARY_LINK(padapter);
+        u8 tx_nss = get_phy_tx_nss(padapter, padapter_link);
+        u8 bk_txpwr = pmp_priv->txpowerdbm;
 
 	if (rtw_do_mp_iwdata_len_chk(__func__, (wrqu->length + 1)))
 		return -EFAULT;
@@ -2208,15 +2177,19 @@ int rtw_mp_set_tsside(struct net_device *dev,
 				rf_path == RF_PATH_A ? "A" : rf_path == RF_PATH_B ? "B" :
 				rf_path == RF_PATH_C ? "C":"D", tsside_val);
 
-			if (pmp_priv->mode == MP_PACKET_TX && pmp_priv->txpowerdbm >= 18 * TX_POWER_BASE)
-				rtw_set_phl_packet_tx(padapter, false);
-
 			rtw_mp_set_tsside2verify(padapter, (u32)tsside_val, rf_path);
 			pmp_priv->bspecif_tssi_de = true;
 			pmp_priv->specif_tsside_val = tsside_val;
+			if (pmp_priv->tssi_mode >= RTW_MP_TSSI_ON && bk_txpwr > 17 * TX_POWER_BASE) {
+               			 pmp_priv->txpowerdbm = 16 * TX_POWER_BASE ;
+                		for (rfpath_i = 0 ; rfpath_i < tx_nss; rfpath_i ++)
+                        		rtw_mp_txpower_dbm(padapter, rfpath_i);
+                		rtw_msleep_os(60);
+                		pmp_priv->txpowerdbm = bk_txpwr;
+                		for (rfpath_i = 0 ; rfpath_i < tx_nss; rfpath_i ++)
+                        		rtw_mp_txpower_dbm(padapter, rfpath_i);
+        		}
 
-			if (pmp_priv->mode == MP_PACKET_TX && pmp_priv->txpowerdbm >= 18 * TX_POWER_BASE)
-				rtw_set_phl_packet_tx(padapter, true);	
 		}
 	} else
 		goto exit_err;
@@ -3076,11 +3049,9 @@ int rtw_mp_tx_plcp_tx_data(struct net_device *dev,
 			RTW_INFO("%s: preamble=%d\n", __func__, preamble);
 			_rtw_memset(extra, 0, wrqu->data.length);
 
-			if (rtw_mp_is_cck_rate(pmp_priv->rateidx)) {
 				pmp_priv->preamble = preamble;
 				sprintf(extra, "Config Preamble %d to %d", pmp_priv->preamble, preamble);
-			} else
-				sprintf(extra, "Error !!! only B mode Rate for Preamble!\n");
+
 		} else
 			sprintf(extra, "Error format ! input 'preamble=[num]'\n");
 
@@ -3579,7 +3550,8 @@ int rtw_mp_phl_btc_path(struct net_device *dev,
 	pmp_priv->btc_path = btc_mode;
 	if (rtw_mp_phl_config_arg(padapter, RTW_MP_CONFIG_CMD_SWITCH_BT_PATH)) {
 		sprintf(extra, "set BTC Path %s",
-				(btc_mode == 0)? "Normal":((btc_mode == 1)? "WL": "BT"));
+				(btc_mode == 0)? "Normal":((btc_mode == 1)? "WL":
+				((btc_mode == 2)? "BT":"DEFAULT WL")));
 
 	} else
 		sprintf(extra, "set BTC Path Fail");
@@ -3948,9 +3920,11 @@ int rtw_mp_mac_loopbk(struct net_device *dev,
 			i++;
 		}
 		RTW_INFO("Rx cnt=%d!\n", pmp_priv->rx_pktcount);
+#if 0
 #ifdef CONFIG_PCI_HCI
 		if (rtw_mp_get_tx_req_recycle(padapter) == 0)
 			sprintf(extra , "MAC Loopback [Tx Report] Fail\n");
+#endif
 #endif
 	} else {
 		sprintf(extra , "Error Format ! ,\

@@ -23,9 +23,6 @@
 #include <errno.h>
 #include <unistd.h>
 #include <ctype.h>
-#include <time.h>
-#include <sys/time.h>
-#include <sys/ioctl.h>
 
 #ifndef PATH_MAX
 #define PATH_MAX	1024
@@ -34,7 +31,7 @@
 #include "hciattach.h"
 #include "rtb_fwc.h"
 
-//#define BT_ADDR_FROM_VENDOR_STORAGE
+#define ARRAY_SIZE(a)	(sizeof(a) / sizeof(a[0]))
 
 #define FIRMWARE_DIRECTORY	"/lib/firmware/rtlbt/"
 #define BT_CONFIG_DIRECTORY	"/lib/firmware/rtlbt/"
@@ -63,6 +60,12 @@ struct rtb_cfg_item {
 	uint8_t data[0];
 } __attribute__ ((packed));
 
+struct rtk_bt_vendor_config {
+        uint32_t signature;
+        uint16_t data_len;
+        struct rtb_cfg_item entry[0];
+} __attribute__ ((packed));
+
 #define RTB_CFG_HDR_LEN		6
 
 struct rtb_patch_entry {
@@ -80,44 +83,84 @@ struct rtb_patch_hdr {
 	struct rtb_patch_entry entry[0];
 } __attribute__ ((packed));
 
-uint16_t project_id[]=
-{
-	ROM_LMP_8723a,
-	ROM_LMP_8723b, /* RTL8723BS */
-	ROM_LMP_8821a, /* RTL8821AS */
-	ROM_LMP_8761a, /* RTL8761ATV */
+#define PATCH_SNIPPETS		0x01
+#define PATCH_DUMMY_HEADER	0x02
+#define PATCH_SECURITY_HEADER	0x03
+#define PATCH_OTA_FLAG		0x04
+#define SECTION_HEADER_SIZE	8
 
-	ROM_LMP_8703a,
-	ROM_LMP_8763a,
-	ROM_LMP_8703b,
-	ROM_LMP_8723c, /* index 7 for 8723CS. What is for other 8723CS  */
-	ROM_LMP_8822b, /* RTL8822BS */
-	ROM_LMP_8723b, /* RTL8723DS */
-	ROM_LMP_8821a, /* id 10 for RTL8821CS, lmp subver 0x8821 */
-	ROM_LMP_NONE,
-	ROM_LMP_NONE,
-	ROM_LMP_8822c, /* id 13 for RTL8822CS, lmp subver 0x8822 */
-	ROM_LMP_8761a, /* id 14 for 8761B */
-	ROM_LMP_NONE,
-	ROM_LMP_NONE,
-	ROM_LMP_NONE,
-	ROM_LMP_8852a, /* id 18 for 8852AS */
-	ROM_LMP_8723b, /* id 19 for 8723FS */
-	ROM_LMP_8852a, /* id 20 for 8852BS */
-	ROM_LMP_NONE,
-	ROM_LMP_NONE,
-	ROM_LMP_NONE,
-	ROM_LMP_NONE,
-	ROM_LMP_8852a, /* id 25 for 8852CS */
-	ROM_LMP_NONE,
-	ROM_LMP_NONE,
-	ROM_LMP_NONE,
-	ROM_LMP_NONE,
-	ROM_LMP_NONE,
-	ROM_LMP_NONE,
-	ROM_LMP_NONE,
-	ROM_LMP_NONE,
-	ROM_LMP_8852a, /* id 34 for 8852BP */
+struct rtk_eversion_evt {
+	uint8_t status;
+	uint8_t version;
+} __attribute__ ((packed));
+
+struct rtk_epatch_entry {
+	uint16_t chipID;
+	uint16_t patch_length;
+	uint32_t start_offset;
+} __attribute__ ((packed));
+
+struct rtk_epatch {
+	uint8_t signature[8];
+	uint32_t fw_version;
+	uint16_t number_of_total_patch;
+	struct rtk_epatch_entry entry[0];
+} __attribute__ ((packed));
+
+struct rtk_extension_entry {
+	uint8_t opcode;
+	uint8_t length;
+	uint8_t *data;
+} __attribute__ ((packed));
+
+struct rtb_section_hdr {
+	uint32_t opcode;
+	uint32_t section_len;
+	uint32_t soffset;
+} __attribute__ ((packed));
+
+struct rtb_new_patch_hdr {
+	uint8_t signature[8];
+	uint8_t fw_version[8];
+	uint32_t number_of_section;
+} __attribute__ ((packed));
+
+//signature: Realtech
+const uint8_t RTK_EPATCH_SIGNATURE[8] =
+    { 0x52, 0x65, 0x61, 0x6C, 0x74, 0x65, 0x63, 0x68 };
+
+//signature: RTBTCore
+const uint8_t RTK_EPATCH_SIGNATURE_NEW[8] =
+    { 0x52, 0x54, 0x42, 0x54, 0x43, 0x6F, 0x72, 0x65 };
+
+//Extension Section IGNATURE:0x77FD0451
+const uint8_t Extension_Section_SIGNATURE[4] = { 0x51, 0x04, 0xFD, 0x77 };
+
+static const struct {
+	uint16_t lmp_subver;
+	uint8_t id;
+} project_id_to_lmp_subver[] = {
+	{ ROM_LMP_8723a, 0 },
+	{ ROM_LMP_8723b, 1 }, /* RTL8723BS */
+	{ ROM_LMP_8821a, 2 }, /* RTL8821AS */
+	{ ROM_LMP_8761a, 3 }, /* RTL8761ATV */
+	{ ROM_LMP_8723c, 7 }, /* index 7 for 8723CS. What is for other 8723CS */
+	{ ROM_LMP_8822b, 8 }, /* RTL8822BS */
+	{ ROM_LMP_8723b, 9 }, /* RTL8723DS */
+	{ ROM_LMP_8821a, 10 }, /* id 10 for RTL8821CS, lmp subver 0x8821 */
+	{ ROM_LMP_8822c, 13 }, /* id 13 for RTL8822CS, lmp subver 0x8822 */
+	{ ROM_LMP_8761a, 14 }, /* id 14 for 8761B */
+	{ ROM_LMP_8852a, 18 }, /* id 18 for 8852AS */
+	{ ROM_LMP_8723b, 19 }, /* id 19 for 8733BS */
+	{ ROM_LMP_8852a, 20 }, /* id 20 for 8852BS */
+	{ ROM_LMP_8852a, 25 }, /* id 25 for 8852CS */
+	{ ROM_LMP_8822b, 33 }, /* id 33 for 8822E */
+	{ ROM_LMP_8852a, 34 }, /* id 34 for 8852BP */
+	{ ROM_LMP_8851b, 36 }, /* id 36 for 8851BS */
+	{ ROM_LMP_8852a, 42 }, /* id 42 for 8852DS */
+	{ ROM_LMP_8922a, 44 }, /* id 44 for 8922AS */
+	{ ROM_LMP_8852a, 47 }, /* id 47 for 8852BTS */
+	{ ROM_LMP_8761a, 51 }, /* id 51 for 8761C */
 };
 
 static struct patch_info h4_patch_table[] = {
@@ -148,6 +191,10 @@ static struct patch_info h4_patch_table[] = {
 	{ RTL_FW_MATCH_HCI_VER | RTL_FW_MATCH_HCI_REV, CHIP_8723DS,
 		ROM_LMP_8723b, ROM_LMP_8723b, 8, 0x000d,
 		"rtl8723dsh4_fw", "rtl8723dsh4_config", "RTL8723DSH4"},
+	/* RTL8761C */
+	{ RTL_FW_MATCH_HCI_REV, CHIP_8761CTV,
+		ROM_LMP_8761a, 0xffff, 0x0c, 0x000e,
+		"rtl8761c_mx_fw", "rtl8761c_mx_config", "RTL8761CTV" },
 
 	{ 0, 0, 0, ROM_LMP_NONE, 0, 0, "rtl_none_fw", "rtl_none_config", "NONE"}
 };
@@ -195,6 +242,10 @@ static struct patch_info patch_table[] = {
 	{ RTL_FW_MATCH_HCI_REV, CHIP_8822CS,
 		ROM_LMP_8822c, ROM_LMP_8822c, 0, 0x000c,
 		"rtl8822cs_fw", "rtl8822cs_config", "RTL8822CS"},
+	/* RTL8822ES */
+	{ RTL_FW_MATCH_HCI_VER | RTL_FW_MATCH_HCI_REV, CHIP_8822ES,
+		ROM_LMP_8822e, ROM_LMP_8822e, 0, 0x000e,
+		"rtl8822es_fw", "rtl8822es_config", "RTL8822ES"},
 
 	/* RTL8852AS */
 	{ RTL_FW_MATCH_HCI_REV, CHIP_8852AS,
@@ -212,9 +263,29 @@ static struct patch_info patch_table[] = {
 		"rtl8852bps_fw", "rtl8852bps_config", "RTL8852BP" },
 
 	/* RTL8852CS */
-	{ RTL_FW_MATCH_CHIP_TYPE | RTL_FW_MATCH_HCI_VER | RTL_FW_MATCH_HCI_REV, CHIP_8852CS,
+	{ RTL_FW_MATCH_HCI_REV, CHIP_8852CS,
 		ROM_LMP_8852a, ROM_LMP_8852a, 11, 0x000c,
 		"rtl8852cs_fw", "rtl8852cs_config", "RTL8852CS" },
+
+	/* RTL8851BS */
+	{ RTL_FW_MATCH_HCI_REV, CHIP_8851BS,
+		ROM_LMP_8851b, ROM_LMP_8851b, 0x0c, 0x000b,
+		"rtl8851bs_fw", "rtl8851bs_config", "RTL8851BS" },
+
+	/* RTL8852DS */
+	{ RTL_FW_MATCH_HCI_REV, CHIP_8852DS,
+		ROM_LMP_8852a, ROM_LMP_8852a, 0x0c, 0x000d,
+		"rtl8852ds_fw", "rtl8852ds_config", "RTL8852DS" },
+
+	/* RTL8922AS */
+	{ RTL_FW_MATCH_HCI_REV, CHIP_8922AS,
+		ROM_LMP_8922a, ROM_LMP_8922a, 0x0c, 0x000a,
+		"rtl8922as_fw", "rtl8922as_config", "RTL8922AS" },
+
+	/* RTL8852BTS */
+	{ RTL_FW_MATCH_HCI_REV, CHIP_8852BTS,
+		ROM_LMP_8852a, ROM_LMP_8852a, 0x0c, 0x0087,
+		"rtl8852bts_fw", "rtl8852bts_config", "RTL8852BTS" },
 
 	/* RTL8703BS
 	 * RTL8723CS_XX
@@ -222,6 +293,11 @@ static struct patch_info patch_table[] = {
 	 * RTL8723CS_VF
 	 * Use the sampe lmp subversion 0x8703
 	 * */
+	{ RTL_FW_MATCH_CHIP_TYPE | RTL_FW_MATCH_HCI_VER | RTL_FW_MATCH_HCI_REV,
+		/* The real chip type will be read during init. */
+		CHIP_8723CS,
+		ROM_LMP_8703b, ROM_LMP_8703b, 7, 0x000b,
+		"rtl8723cs_0_fw", "rtl8723cs_0_config", "RTL8723CS"},
 	{ RTL_FW_MATCH_CHIP_TYPE, CHIP_8703BS,
 		ROM_LMP_8703b, ROM_LMP_8703b, 0, 0,
 		"rtl8703b_fw", "rtl8703b_config", "RTL8703BS"},
@@ -243,14 +319,20 @@ static struct patch_info patch_table[] = {
 	{ RTL_FW_MATCH_HCI_VER | RTL_FW_MATCH_HCI_REV, CHIP_8723DS,
 		ROM_LMP_8723b, ROM_LMP_8723b, 8, 0x000d,
 		"rtl8723d_fw", "rtl8723d_config", "RTL8723DS"},
-	/* RTL8723FS */
-	{ RTL_FW_MATCH_HCI_VER | RTL_FW_MATCH_HCI_REV, CHIP_8723FS,
-		ROM_LMP_8723b, ROM_LMP_8723b, 11, 0x000f,
-		"rtl8723fs_fw", "rtl8723fs_config", "RTL8723FS"},
+	/* RTL8733BS */
+	{ RTL_FW_MATCH_HCI_REV, CHIP_8733BS,
+		ROM_LMP_8723b, ROM_LMP_8723b, 0, 0x000f,
+		"rtl8733bs_fw", "rtl8733bs_config", "RTL8733BS"},
+	/* RTL8761C */
+	{ RTL_FW_MATCH_HCI_REV, CHIP_8761CTV,
+		ROM_LMP_8761a, 0xffff, 0x0c, 0x000e,
+		"rtl8761c_mx_fw", "rtl8761c_mx_config", "RTL8761CTV" },
 	/* add entries here*/
 
 	{ 0, 0, 0, ROM_LMP_NONE, 0, 0, "rtl_none_fw", "rtl_none_config", "NONE"}
 };
+
+extern int rtb_vendor_read(int dd, uint16_t subopcode);
 
 static __inline uint16_t get_unaligned_le16(uint8_t * p)
 {
@@ -307,6 +389,25 @@ static inline void __list_del(struct list_head *prev, struct list_head *next)
 {
 	next->prev = prev;
 	prev->next = next;
+}
+
+static inline bool __list_del_entry_valid(struct list_head *entry)
+{
+	return true;
+}
+
+static inline void __list_del_entry(struct list_head *entry)
+{
+	if (!__list_del_entry_valid(entry))
+		return;
+
+	__list_del(entry->prev, entry->next);
+}
+
+static inline void list_del_init(struct list_head *entry)
+{
+	__list_del_entry(entry);
+	INIT_LIST_HEAD(entry);
 }
 
 #define LIST_POISON1  ((void *) 0x00100100)
@@ -521,15 +622,21 @@ static int is_mac(uint8_t chip_type, uint16_t offset)
 	case CHIP_8723CS_XX:
 	case CHIP_8723CS_CG:
 	case CHIP_8723CS_VF:
+	case CHIP_8723CS:
 		if (offset == 0x0044)
 			return 1;
 		break;
 	case CHIP_8822CS:
 	case CHIP_8761B:
 	case CHIP_8852AS:
-	case CHIP_8723FS:
+	case CHIP_8733BS:
 	case CHIP_8852BS:
 	case CHIP_8852CS:
+	case CHIP_8851BS:
+	case CHIP_8852DS:
+	case CHIP_8922AS:
+	case CHIP_8852BTS:
+	case CHIP_8761CTV:
 		if (offset == 0x0030)
 			return 1;
 		break;
@@ -554,13 +661,22 @@ static uint16_t get_mac_offset(uint8_t chip_type)
 	case CHIP_8822BS:
 	case CHIP_8723DS:
 	case CHIP_8821CS:
+	case CHIP_8723CS_XX:
+	case CHIP_8723CS_CG:
+	case CHIP_8723CS_VF:
+	case CHIP_8723CS:
 		return 0x0044;
 	case CHIP_8822CS:
 	case CHIP_8761B:
 	case CHIP_8852AS:
-	case CHIP_8723FS:
+	case CHIP_8733BS:
 	case CHIP_8852BS:
 	case CHIP_8852CS:
+	case CHIP_8851BS:
+	case CHIP_8852DS:
+	case CHIP_8922AS:
+	case CHIP_8852BTS:
+	case CHIP_8761CTV:
 		return 0x0030;
 //	case 0: /* special for not setting chip_type */
 	case CHIP_8761AT:
@@ -607,6 +723,7 @@ static void merge_configs(struct list_head *head, struct list_head *head2)
 					       extra->len);
 					list_del(epos);
 					free(extra);
+					break;
 				} else {
 					/* Replace the item */
 					list_del(epos);
@@ -638,13 +755,14 @@ static void merge_configs(struct list_head *head, struct list_head *head2)
  */
 int rtb_parse_config(uint8_t *cfg_buf, size_t len)
 {
+	struct rtk_bt_vendor_config *config = (void *)cfg_buf;
 	uint16_t cfg_len;
 	uint16_t tmp;
-	struct rtb_cfg_item *entry;
+	struct rtb_cfg_item *entry = NULL;
 	uint16_t i;
 	struct cfg_list_item *item;
 
-	if (!cfg_buf || !len) {
+	if (!cfg_buf || (len < RTB_CFG_HDR_LEN)) {
 		RS_ERR("%s: Invalid parameter", __func__);
 		return -1;
 	}
@@ -655,14 +773,14 @@ int rtb_parse_config(uint8_t *cfg_buf, size_t len)
 		return -1;
 	}
 
-	cfg_len = ((uint16_t)cfg_buf[5] << 8) + cfg_buf[4];
+	cfg_len = le16_to_cpu(config->data_len);
 	if (cfg_len != len - RTB_CFG_HDR_LEN) {
 		RS_ERR("Config len %u is incorrect(%zd)", cfg_len,
 		       len - RTB_CFG_HDR_LEN);
 		return -1;
 	}
 
-	entry = (struct rtb_cfg_item *)(cfg_buf + 6);
+	entry = config->entry;
 	i = 0;
 	while (i < cfg_len) {
 		/* Add config item to list */
@@ -686,7 +804,7 @@ int rtb_parse_config(uint8_t *cfg_buf, size_t len)
 	return 0;
 }
 
-int bachk(const char *str)
+static int bachk(const char *str)
 {
 	if (!str)
 		return -1;
@@ -710,176 +828,18 @@ int bachk(const char *str)
 
 	return 0;
 }
+
 /*
  * Get random Bluetooth addr.
  */
 /* static void rtb_get_ram_addr(char bt_addr[0])
  * {
  * 	srand(time(NULL) + getpid() + getpid() * 987654 + rand());
- * 
+ *
  * 	uint32_t addr = rand();
  * 	memcpy(bt_addr, &addr, sizeof(uint8_t));
  * }
  */
-typedef uint8_t RT_U8, *PRT_U8;
-typedef int8_t RT_S8, *PRT_S8;
-typedef uint16_t RT_U16, *PRT_U16;
-typedef int32_t RT_S32, *PRT_S32;
-typedef uint32_t RT_U32, *PRT_U32;
-static void rtk_get_ram_addr(uint8_t bt_addr[0])
-{
-	srand(time(NULL) + getpid() + getpid() * 987654 + rand());
-
-	RT_U32 addr = rand();
-	memcpy(bt_addr, &addr, sizeof(RT_U8));
-}
-
-#ifdef BT_ADDR_FROM_VENDOR_STORAGE
-
-typedef         unsigned short      uint16;
-typedef         unsigned int        uint32;
-typedef         unsigned char       uint8;
-
-#define VENDOR_REQ_TAG          0x56524551
-#define VENDOR_READ_IO          _IOW('v', 0x01, unsigned int)
-#define VENDOR_WRITE_IO         _IOW('v', 0x02, unsigned int)
-
-#define VENDOR_ID_MAX   5
-static char *vendor_id_table[] = {
-        "VENDOR_SN_ID",
-        "VENDOR_WIFI_MAC_ID",
-        "VENDOR_LAN_MAC_ID",
-        "VENDOR_BT_MAC_ID",
-        "VENDOR_IMEI_ID",
-};
-
-#define VENDOR_SN_ID            1
-#define VENDOR_WIFI_MAC_ID      2
-#define VENDOR_LAN_MAC_ID       3
-#define VENDOR_BT_MAC_ID        4
-#define VENDOR_IMEI_ID          5
-
-#define VENDOR_STORAGE_DEBUG
-
-struct rk_vendor_req {
-        uint32 tag;
-        uint16 id;
-        uint16 len;
-        uint8 data[1024];
-};
-
-static void rknand_get_randeom_btaddr(uint8_t *bt_addr)
-{
-	int i;
-	/* No autogen BDA. Generate one now. */
-	bt_addr[4] = 0x22;
-	bt_addr[5] = 0x22;
-	for (i = 0; i < 4; i++)
-		rtk_get_ram_addr(&bt_addr[i]);
-}
-
-static void rknand_print_hex_data(char *s, struct rk_vendor_req *buf, uint32 len)
-{
-        unsigned char i = 0;
-
-#ifdef VENDOR_STORAGE_DEBUG
-        fprintf(stdout, "%s\n",s);
-        fprintf(stdout, "tag = %d // id = %d // len = %d // data = 0x%p\n", buf->tag, buf->id, buf->len, buf->data);
-#endif
-
-        printf("%s: ", vendor_id_table[buf->id - 1]);
-        if (buf->id == VENDOR_SN_ID ||
-            buf->id == VENDOR_IMEI_ID) {
-                for (i = 0; i < len; i++)
-                        printf("%c", buf->data[i]);
-        } else {
-                for (i = 0; i < len; i++)
-                        printf("%02x", buf->data[i]);
-        }
-        fprintf(stdout, "\n");
-}
-
-static int vendor_storage_read(int cmd, uint8_t *buf, int buf_len)
-{
-        int ret ;
-        uint8 p_buf[100]; /* malloc req buffer or used extern buffer */
-        struct rk_vendor_req *req;
-
-        req = (struct rk_vendor_req *)p_buf;
-        memset(p_buf, 0, 100);
-        int sys_fd = open("/dev/vendor_storage", O_RDWR, 0);
-        if(sys_fd < 0){
-                printf("vendor_storage open fail\n");
-                return -1;
-        }
-
-        req->tag = VENDOR_REQ_TAG;
-        req->id = cmd;
-        req->len = 50;
-
-        ret = ioctl(sys_fd, VENDOR_READ_IO, req);
-
-        if(ret){
-                printf("vendor read error %d\n", ret);
-                return -1;
-        }
-        close(sys_fd);
-
-        rknand_print_hex_data("vendor read:", req, req->len);
-		memcpy(buf, req->data, req->len);
-        return req->len;
-}
-static int vendor_storage_write(int cmd, uint8_t *num)
-{
-		int ret;
-        uint8 p_buf[100]; /* malloc req buffer or used extern buffer */
-        struct rk_vendor_req *req;
-
-        req = (struct rk_vendor_req *)p_buf;
-        int sys_fd = open("/dev/vendor_storage",O_RDWR,0);
-        if(sys_fd < 0){
-                printf("vendor_storage open fail\n");
-                return -1;
-        }
-
-        req->tag = VENDOR_REQ_TAG;
-        req->id = cmd;
-
-        if (cmd != VENDOR_SN_ID && cmd != VENDOR_IMEI_ID)
-                req->len = 6;
-        else
-                req->len = strlen((char *)num);
-        memcpy(req->data, num, req->len);
-
-        ret = ioctl(sys_fd, VENDOR_WRITE_IO, req);
-        if(ret){
-                printf("vendor write error\n");
-                return -1;
-        }
-
-        rknand_print_hex_data("vendor write:", req, req->len);
-        return 0;
-}
-static int vendor_storage_read_bt_addr(char *tbuf)
-{
-	uint8 raw_buf[100] = {0};
-	int raw_len = 0;
-    int i;
-
-	raw_len = vendor_storage_read(VENDOR_BT_MAC_ID, raw_buf, 100);
-	if (raw_len < 0)
-		return -1;
-    for (i = 0; i < 6; i++) {
-        sprintf(tbuf + i * 3, "%02x:", raw_buf[i]);
-	}
-	tbuf[17] = '\0';
-	return 17;
-}
-static int vendor_storage_write_bt_addr(uint8_t *tbuf)
-{
-	return vendor_storage_write(VENDOR_BT_MAC_ID, tbuf);
-}
-#endif
 
 /*
  * Write the random addr to the BT_ADDR_FILE.
@@ -888,7 +848,7 @@ static int vendor_storage_write_bt_addr(uint8_t *tbuf)
  * {
  * 	int fd;
  * 	fd = open(BT_ADDR_FILE, O_CREAT | O_RDWR | O_TRUNC);
- * 
+ *
  * 	if (fd > 0) {
  * 		chmod(BT_ADDR_FILE, 0666);
  * 		char addr[18] = { 0 };
@@ -913,10 +873,8 @@ uint8_t *rtb_read_config(const char *file, int *cfg_len, uint8_t chip_type)
 	ssize_t file_len;
 	int fd;
 	uint8_t *buf;
-#ifndef BT_ADDR_FROM_VENDOR_STORAGE
 	size_t size;
-#endif
-	size_t result;
+	ssize_t result;
 	struct list_head *pos, *next;
 	struct cfg_list_item *n;
 	uint16_t config_len;
@@ -937,65 +895,6 @@ uint8_t *rtb_read_config(const char *file, int *cfg_len, uint8_t chip_type)
 		n = list_entry(pos, struct cfg_list_item, list);
 		RS_INFO("extra cfg: ofs %04x, len %u", n->offset, n->len);
 	}
-	
-#ifdef BT_ADDR_FROM_VENDOR_STORAGE
-	int ret = 0;
-	uint8_t bdaddr[6];
-	uint16_t ofs;
-	char tbuf[BDADDR_STRING_LEN + 1];
-	char *str;
-	int i = 0;
-
-	ret = vendor_storage_read_bt_addr(tbuf);
-	if (ret >= 0 && bachk(tbuf) < 0) {
-		ret = -1;
-		RS_ERR("vendor_storage bt addr chechk failed");
-	}
-	if (ret < 0) {
-		RS_ERR("vendor storage read bt addr failed, generate one");
-
-		rknand_get_randeom_btaddr(bdaddr);
-		vendor_storage_write_bt_addr(bdaddr);
-	} else {
-		str = tbuf;
-		for (i = 5; i >= 0; i--) {
-			bdaddr[i] = (uint8_t)strtoul(str, NULL, 16);
-			str += 3;
-		}
-
-		/*reserve LAP addr from 0x9e8b00 to 0x9e8b3f, change to 0x008b** */
-		if (0x9e == bdaddr[3] && 0x8b == bdaddr[4]
-			&& (bdaddr[5] <= 0x3f)) {
-			bdaddr[3] = 0x00;
-		}
-
-		RS_DBG("BT MAC is %02x:%02x:%02x:%02x:%02x:%02x",
-			   bdaddr[5], bdaddr[4],
-			   bdaddr[3], bdaddr[2],
-			   bdaddr[1], bdaddr[0]);
-		ofs = get_mac_offset(chip_type);
-		n = malloc(sizeof(*n) + 6);
-		if (n) {
-			n->offset = ofs;
-			n->len = 6;
-			memcpy(n->data, bdaddr, 6);
-			list_add_tail(&n->list, &list_extracfgs);
-		} else {
-			RS_ERR("Couldn't alloc cfg item for bdaddr");
-		}
-	}
-#else
-	if (stat(BT_ADDR_FILE, &st) < 0) {
-		RS_INFO("Couldnt access customer BT MAC file %s",
-		        BT_ADDR_FILE);
-
-		goto read_cfg;
-	}
-
-	size = st.st_size;
-	/* Only read the first 17-byte if the file length is larger */
-	if (size > BDADDR_STRING_LEN)
-		size = BDADDR_STRING_LEN;
 
 	fd = open(BT_ADDR_FILE, O_RDONLY);
 	if (fd == -1) {
@@ -1007,6 +906,18 @@ uint8_t *rtb_read_config(const char *file, int *cfg_len, uint8_t chip_type)
 		int i = 0;
 		uint8_t bdaddr[6];
 		uint8_t tbuf[BDADDR_STRING_LEN + 1];
+
+		if (fstat(fd, &st) < 0) {
+			RS_INFO("Couldnt access customer BT MAC file %s",
+					BT_ADDR_FILE);
+			close(fd);
+			goto read_cfg;
+		}
+
+		size = st.st_size;
+		/* Only read the first 17-byte if the file length is larger */
+		if (size > BDADDR_STRING_LEN)
+			size = BDADDR_STRING_LEN;
 
 		memset(tbuf, 0, sizeof(tbuf));
 		result = read(fd, tbuf, size);
@@ -1049,8 +960,6 @@ uint8_t *rtb_read_config(const char *file, int *cfg_len, uint8_t chip_type)
 	}
 
 read_cfg:
-#endif
-
 	*cfg_len = 0;
 	file_name = malloc(PATH_MAX);
 	if (!file_name) {
@@ -1059,18 +968,19 @@ read_cfg:
 	}
 	memset(file_name, 0, PATH_MAX);
 	snprintf(file_name, PATH_MAX, "%s%s", BT_CONFIG_DIRECTORY, file);
-	if (stat(file_name, &st) < 0) {
-		RS_ERR("Can't access Config file: %s, %s",
-		       file_name, strerror(errno));
-		goto err_stat;
-	}
-
-	file_len = st.st_size;
 
 	if ((fd = open(file_name, O_RDONLY)) < 0) {
 		perror("Can't open Config file");
 		goto err_open;
 	}
+
+	if (fstat(fd, &st) < 0) {
+		RS_ERR("Can't access Config file: %s, %s",
+		       file_name, strerror(errno));
+		close(fd);
+		goto err_stat;
+	}
+	file_len = st.st_size;
 
 	buf = malloc(file_len);
 	if (!buf) {
@@ -1089,7 +999,6 @@ read_cfg:
 	result = rtb_parse_config(buf, file_len);
 	if (result < 0) {
 		RS_ERR("Invalid Config content");
-		close(fd);
 		free(buf);
 		config_lists_free();
 		exit(EXIT_FAILURE);
@@ -1236,18 +1145,19 @@ uint8_t *rtb_read_firmware(struct rtb_struct *btrtl, int *fw_len)
 	snprintf(filename, PATH_MAX, "%s%s", FIRMWARE_DIRECTORY,
 		 btrtl->patch_ent->patch_file);
 
-	if (stat(filename, &st) < 0) {
-		RS_ERR("Can't access firmware %s, %s", filename,
-		       strerror(errno));
-		goto err_stat;
-	}
-
-	fwsize = st.st_size;
-
 	if ((fd = open(filename, O_RDONLY)) < 0) {
 		RS_ERR("Can't open firmware, %s", strerror(errno));
 		goto err_open;
 	}
+
+	if (fstat(fd, &st) < 0) {
+		RS_ERR("Can't access firmware %s, %s", filename,
+		       strerror(errno));
+		close(fd);
+		goto err_stat;
+	}
+
+	fwsize = st.st_size;
 
 	fw_buf = malloc(fwsize);
 	if (!fw_buf) {
@@ -1303,6 +1213,181 @@ static uint8_t rtb_get_fw_project_id(uint8_t *p_buf)
 	} while (*p_buf != 0xFF);
 
 	return data;
+}
+
+struct rtb_ota_flag {
+	uint8_t eco;
+	uint8_t enable;
+	uint16_t reserve;
+} __attribute__ ((packed));
+
+struct patch_node {
+	uint8_t eco;
+	uint8_t pri;
+	uint8_t key_id;
+	uint8_t reserve;
+	uint32_t len;
+	uint8_t *payload;
+	struct list_head list;
+};
+
+/* Add a node to alist that is in ascending order. */
+void insert_queue_sort(struct list_head *head, struct patch_node *node)
+{
+	struct list_head *pos;
+	struct list_head *next;
+	struct patch_node *tmp;
+
+	if(!head || !node) {
+		return;
+	}
+	list_for_each_safe(pos, next, head) {
+		tmp = list_entry(pos, struct patch_node, list);
+		if(tmp->pri >= node->pri)
+			break;
+	}
+	__list_add(&node->list, pos->prev, pos);
+}
+
+static int insert_patch(struct patch_node *patch_node_hdr, uint8_t *section_pos,
+		uint32_t opcode, uint32_t *patch_len, uint8_t *sec_flag)
+{
+	struct rtb_struct *rtl = &rtb_cfg;
+	struct patch_node *tmp;
+	int i;
+	uint32_t numbers;
+	uint32_t section_len = 0;
+	uint8_t eco = 0;
+	uint8_t *pos = section_pos + 8;
+
+	numbers = get_unaligned_le16(pos);
+	RS_INFO("number 0x%04x", numbers);
+
+	pos += 4;
+	for (i = 0; i < numbers; i++) {
+		eco = (uint8_t)*(pos);
+		RS_INFO("eco 0x%02x, Eversion:%02x", eco, rtb_cfg.eversion);
+		if (eco == rtb_cfg.eversion + 1) {
+			tmp = (struct patch_node*)malloc(sizeof(struct patch_node));
+			if (!tmp) {
+				RS_ERR("Failed to allocate mem for tmp node");
+				return -1;
+			}
+			tmp->pri = (uint8_t)*(pos + 1);
+			if(opcode == PATCH_SECURITY_HEADER)
+				tmp->key_id = (uint8_t)*(pos + 1);
+
+			section_len = get_unaligned_le32(pos + 4);
+			tmp->len =  section_len;
+			*patch_len += section_len;
+			RS_INFO("Pri:%d, Patch length 0x%04x", tmp->pri, tmp->len);
+			tmp->payload = pos + 8;
+			if(opcode != PATCH_SECURITY_HEADER) {
+				insert_queue_sort(&(patch_node_hdr->list), tmp);
+			} else {
+				if((rtl->key_id == tmp->key_id) && (rtl->key_id > 0)) {
+					insert_queue_sort(&(patch_node_hdr->list), tmp);
+					*sec_flag = 1;
+				} else {
+					pos += (8 + section_len);
+					free(tmp);
+					continue;
+				}
+			}
+		} else {
+			section_len =  get_unaligned_le32(pos + 4);
+			RS_INFO("Patch length 0x%04x", section_len);
+		}
+		pos += (8 + section_len);
+	}
+	return 0;
+}
+
+static uint8_t *rtb_get_patch_header(int *len,
+		struct patch_node *patch_node_hdr, uint8_t * epatch_buf,
+		uint8_t key_id)
+{
+	uint16_t i, j;
+	struct rtb_new_patch_hdr *new_patch;
+	uint8_t sec_flag = 0;
+	uint32_t number_of_ota_flag;
+	uint32_t patch_len = 0;
+	uint8_t *section_pos;
+	uint8_t *ota_flag_pos;
+
+	struct rtb_section_hdr section_hdr;
+	struct rtb_ota_flag ota_flag;
+
+	new_patch = (struct rtb_new_patch_hdr *)epatch_buf;
+	new_patch->number_of_section = le16_to_cpu(new_patch->number_of_section);
+
+	RS_INFO("FW version 0x%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x",
+				*(epatch_buf + 8), *(epatch_buf + 9), *(epatch_buf + 10),
+				*(epatch_buf + 11),*(epatch_buf + 12), *(epatch_buf + 13),
+				*(epatch_buf + 14), *(epatch_buf + 15));
+
+	section_pos = epatch_buf + 20;
+
+	for (i = 0; i < new_patch->number_of_section; i++) {
+		section_hdr.opcode = get_unaligned_le32(section_pos);
+		section_hdr.section_len = get_unaligned_le32(section_pos + 4);
+		RS_INFO("opcode 0x%04x", section_hdr.opcode);
+
+		switch (section_hdr.opcode) {
+		case PATCH_SNIPPETS:
+			if(insert_patch(patch_node_hdr, section_pos, PATCH_SNIPPETS, &patch_len, 0))
+				goto alloc_fail;
+			break;
+		case PATCH_SECURITY_HEADER:
+			if(!key_id)
+				break;
+
+			sec_flag = 0;
+			if(insert_patch(patch_node_hdr, section_pos, PATCH_SECURITY_HEADER, &patch_len, &sec_flag))
+				goto alloc_fail;
+			if(sec_flag)
+				break;
+
+			for (i = 0; i < new_patch->number_of_section; i++) {
+				section_hdr.opcode = get_unaligned_le32(section_pos);
+				section_hdr.section_len = get_unaligned_le32(section_pos + 4);
+				if(section_hdr.opcode == PATCH_DUMMY_HEADER) {
+					if(insert_patch(patch_node_hdr, section_pos, PATCH_DUMMY_HEADER, &patch_len, 0))
+						goto alloc_fail;
+				}
+				section_pos += (SECTION_HEADER_SIZE + section_hdr.section_len);
+			}
+			break;
+		case PATCH_DUMMY_HEADER:
+			if(key_id) {
+				break;
+			}
+			if(insert_patch(patch_node_hdr, section_pos, PATCH_DUMMY_HEADER, &patch_len, 0))
+				goto alloc_fail;
+			break;
+		case PATCH_OTA_FLAG:
+			ota_flag_pos = section_pos + 4;
+			number_of_ota_flag = get_unaligned_le32(ota_flag_pos);
+			ota_flag.eco = (uint8_t)*(ota_flag_pos + 1);
+			if (ota_flag.eco == rtb_cfg.eversion + 1) {
+				for (j = 0; j < number_of_ota_flag; j++) {
+					if (ota_flag.eco == rtb_cfg.eversion + 1) {
+						ota_flag.enable = get_unaligned_le32(ota_flag_pos + 4);
+					}
+				}
+			}
+			break;
+		default:
+			RS_INFO("Unknown Opcode. Ignore");
+		}
+		section_pos += (SECTION_HEADER_SIZE + section_hdr.section_len);
+	}
+	*len = patch_len;
+
+	return 0;
+alloc_fail:
+	*len = 0;
+	return 0;
 }
 
 struct rtb_patch_entry *rtb_get_patch_entry(void)
@@ -1374,12 +1459,12 @@ uint8_t *rtb_get_final_patch(int fd, int proto, int *rlen)
 	struct rtb_patch_entry *entry = NULL;
 	struct rtb_patch_hdr *patch = (struct rtb_patch_hdr *)rtl->fw_buf;
 	uint32_t svn_ver, coex_ver, tmp;
-	const uint8_t rtb_patch_smagic[8] = {
-		0x52, 0x65, 0x61, 0x6C, 0x74, 0x65, 0x63, 0x68
-	};
-	const uint8_t rtb_patch_emagic[4] = { 0x51, 0x04, 0xFD, 0x77 };
 	uint8_t *buf;
 	int len;
+
+	struct list_head *pos, *next;
+	struct patch_node *tmp_node;
+	struct patch_node patch_node_hdr;
 
 	if (!rlen) {
 		RS_ERR("%s: Invalid parameter", __func__);
@@ -1388,7 +1473,7 @@ uint8_t *rtb_get_final_patch(int fd, int proto, int *rlen)
 
 	/* Use single patch for 3wire && 8723a */
 	if (proto == HCI_UART_3WIRE && rtl->lmp_subver == ROM_LMP_8723a) {
-		if (!memcmp(rtl->fw_buf, rtb_patch_smagic, 8)) {
+		if (!memcmp(rtl->fw_buf, RTK_EPATCH_SIGNATURE, 8)) {
 			RS_ERR("Unexpected signature");
 			goto err;
 		}
@@ -1424,12 +1509,12 @@ uint8_t *rtb_get_final_patch(int fd, int proto, int *rlen)
 		}
 	}
 
-	if (memcmp(rtl->fw_buf, rtb_patch_smagic, 8)) {
-		RS_ERR("Signature error");
-		goto err;
-	}
 
-	if (memcmp(rtl->fw_buf + rtl->fw_len - 4, rtb_patch_emagic, 4)) {
+	/* check Signature and Extension Section Field */
+	if (((memcmp(rtl->fw_buf, RTK_EPATCH_SIGNATURE, 8) != 0) &&
+		(memcmp(rtl->fw_buf, RTK_EPATCH_SIGNATURE_NEW, 8) != 0))||
+		memcmp(rtl->fw_buf + rtl->fw_len - 4,
+		Extension_Section_SIGNATURE, 4) != 0) {
 		RS_ERR("Extension section signature error");
 		goto err;
 	}
@@ -1440,38 +1525,53 @@ uint8_t *rtb_get_final_patch(int fd, int proto, int *rlen)
 	if (rtl->hci_ver == 0x4 && rtl->lmp_subver == ROM_LMP_8723b) {
 		RS_INFO("HCI version = 0x4, IC is 8703A.");
 	} else {
-		RS_ERR("error: lmp_version %x, hci_version %x, project_id %x",
-		       rtl->lmp_subver, rtl->hci_ver, project_id[proj_id]);
+
+		RS_ERR("error: lmp_version 04%x, hci_version %x, proj_id %02x",
+		       rtl->lmp_subver, rtl->hci_ver, proj_id);
 		goto err;
 	}
 #else
+	/* TODO: For 8703BS and 8723CS that have the same lmp subver, we don't
+	 * verify the project id
+	 */
 	if (rtl->lmp_subver != ROM_LMP_8703b) {
-		if (rtl->lmp_subver != project_id[proj_id]) {
-			RS_ERR("lmp_subver %04x, project id %04x, mismatch\n",
-			       rtl->lmp_subver, project_id[proj_id]);
-			goto err;
+		int i;
+
+		for (i = 0; i < ARRAY_SIZE(project_id_to_lmp_subver); i++) {
+			if (proj_id == project_id_to_lmp_subver[i].id &&
+			    rtl->lmp_subver == project_id_to_lmp_subver[i].lmp_subver) {
+				break;
+			}
 		}
-	} else {
-		if (rtb_cfg.patch_ent->proj_id != project_id[proj_id]) {
-			RS_ERR("proj_id %04x, version %04x from firmware "
-			       "project_id[%u], mismatch",
-			       rtb_cfg.patch_ent->proj_id,
-			       project_id[proj_id], proj_id);
+
+		if (i >= ARRAY_SIZE(project_id_to_lmp_subver)) {
+			RS_ERR("lmp_version %x, proj_id %x, not match",
+			       rtl->lmp_subver, proj_id);
 			goto err;
 		}
 	}
 #endif
-
+	INIT_LIST_HEAD(&patch_node_hdr.list);
 	/* Entry is allocated dynamically. It should be freed later in the
 	 * function.
 	 */
-	entry = rtb_get_patch_entry();
-
-	if (entry) {
-		len = entry->patch_len + rtl->config_len;
+	if(memcmp(rtl->fw_buf, RTK_EPATCH_SIGNATURE_NEW, 8) == 0) {
+		rtb_vendor_read(fd, READ_SEC_PROJ);
+		RS_INFO("%s: key id %d", __func__, rtl->key_id);
+		rtb_get_patch_header(&len, &patch_node_hdr, rtl->fw_buf, rtl->key_id);
+		if(len == 0)
+			goto alloc_fail;
+		RS_INFO("len = 0x%x", len);
+		len += rtl->config_len;
 	} else {
-		RS_ERR("Can't find the patch entry");
-		goto err;
+		entry = rtb_get_patch_entry();
+
+		if (entry) {
+			len = entry->patch_len + rtl->config_len;
+		} else {
+			RS_ERR("Can't find the patch entry");
+			goto err;
+		}
 	}
 
 	buf = malloc(len);
@@ -1481,12 +1581,33 @@ uint8_t *rtb_get_final_patch(int fd, int proto, int *rlen)
 		free(entry);
 		goto err;
 	} else {
-		memcpy(buf, rtl->fw_buf + entry->soffset, entry->patch_len);
-		memcpy(buf + entry->patch_len - 4, &patch->fw_version, 4);
+		if(memcmp(rtl->fw_buf, RTK_EPATCH_SIGNATURE_NEW, 8) == 0) {
+			int tmp_len = 0;
+			list_for_each_safe(pos, next, &patch_node_hdr.list)
+			{
+				tmp_node = list_entry(pos, struct patch_node, list);
+				RS_INFO("len = 0x%x", tmp_node->len);
+				memcpy(buf + tmp_len, tmp_node->payload, tmp_node->len);
+				tmp_len += tmp_node->len;
+				list_del_init(pos);
+				free(tmp_node);
+			}
+			if (rtl->config_len) {
+				memcpy(&buf[len - rtl->config_len],
+					rtl->config_buf,
+					rtl->config_len);
+			}
+		} else {
+			memcpy(buf, rtl->fw_buf + entry->soffset, entry->patch_len);
+			memcpy(buf + entry->patch_len - 4, &patch->fw_version, 4);	/*fw version */
 
-		if (rtl->config_len)
-			memcpy(buf + entry->patch_len, rtl->config_buf,
-			       rtl->config_len);
+			if (rtl->config_len) {
+				memcpy(&buf
+					[len - rtl->config_len],
+					rtl->config_buf,
+					rtl->config_len);
+			}
+		}
 		rtl->dl_fw_flag = 1;
 		*rlen = len;
 	}
@@ -1497,8 +1618,8 @@ uint8_t *rtb_get_final_patch(int fd, int proto, int *rlen)
 
 	free(entry);
 	return buf;
-
 err:
+alloc_fail:
 	rtl->dl_fw_flag = 0;
 	*rlen = 0;
 	return NULL;

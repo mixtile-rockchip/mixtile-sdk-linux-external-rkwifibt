@@ -72,6 +72,9 @@ struct bb_pkt_cnt_mu_info {
 	/*HE*/
 	u16		pkt_cnt_he[HE_RATE_NUM];
 	bool		he_pkt_not_zero;
+	/*EHT*/
+	u16		pkt_cnt_eht[EHT_RATE_NUM];
+	bool		eht_pkt_not_zero;
 };
 
 struct bb_pkt_cnt_su_store_info {
@@ -117,5 +120,6 @@ struct bb_pkt_cnt_su_info {
 struct bb_info;
 /*@--------------------------[Prptotype]-------------------------------------*/
 void halbb_get_rx_pkt_cnt_rpt_su(struct bb_info *bb, struct bb_pkt_cnt_su_info *pkt_cnt_rpt, enum phl_phy_idx phy_idx);
+void halbb_cmn_rpt_export_physts_avg_rpt(struct bb_info * bb, struct bb_physts_avg_info *info);
 
 #endif

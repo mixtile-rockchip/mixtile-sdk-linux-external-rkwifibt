@@ -20,6 +20,8 @@
 #include "../type.h"
 #include "../mac_ax.h"
 
+#if MAC_FEAT_HWAMSDU
+
 #define MAX_LENGTH_ENUM 7
 #define HW_AMSDU_MACID_ENABLE 0x1
 
@@ -168,4 +170,5 @@ u8 mac_hwamsdu_get_max_len(struct mac_ax_adapter *adapter, u8 macid);
  * @}
  */
 
+#endif
 #endif

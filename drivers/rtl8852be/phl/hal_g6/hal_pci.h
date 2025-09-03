@@ -18,6 +18,11 @@
 #ifdef CONFIG_PCI_HCI
 void hal_pci_set_io_ops(struct rtw_hal_com_t *hal, struct hal_io_ops *pops);
 
+#ifdef RTW_WKARD_DYNAMIC_PCIE_GEN
+void hal_pcie_gen_set(struct hal_info_t *hal_info, enum rtw_pcie_gen gen);
+enum rtw_pcie_gen hal_pcie_gen_get(struct hal_info_t *hal_info);
+#endif
+
 #ifdef CONFIG_RTL8851B
 #include "rtl8851b/rtl8851b.h"
 #endif
@@ -26,12 +31,16 @@ void hal_pci_set_io_ops(struct rtw_hal_com_t *hal, struct hal_io_ops *pops);
 #include "rtl8852a/rtl8852a.h"
 #endif
 
-#if defined(CONFIG_RTL8852B) || defined(CONFIG_RTL8852BP) || defined(CONFIG_RTL8852BT)
+#if defined(CONFIG_RTL8852B) || defined(CONFIG_RTL8852BP) || defined(CONFIG_RTL8852BT) || defined(CONFIG_RTL8852BPT)
 #include "rtl8852b/rtl8852b.h"
 #endif
 
 #ifdef CONFIG_RTL8852C
 #include "rtl8852c/rtl8852c.h"
+#endif
+
+#ifdef CONFIG_RTL8842A
+#include "rtl8842a/rtl8842a.h"
 #endif
 
 #ifdef CONFIG_RTL8852D
@@ -60,9 +69,10 @@ static inline void hal_set_ops_pci(struct rtw_phl_com_t *phl_com,
 	}
 #endif
 
-#if defined(CONFIG_RTL8852B) || defined(CONFIG_RTL8852BP) || defined(CONFIG_RTL8852BT)
+#if defined(CONFIG_RTL8852B) || defined(CONFIG_RTL8852BP) || defined(CONFIG_RTL8852BT) || defined(CONFIG_RTL8852BPT)
 	if (hal_get_chip_id(hal->hal_com) == CHIP_WIFI6_8852B ||
 	    hal_get_chip_id(hal->hal_com) == CHIP_WIFI6_8852BP ||
+	    hal_get_chip_id(hal->hal_com) == CHIP_WIFI6_8852BPT ||
 		hal_get_chip_id(hal->hal_com) == CHIP_WIFI6_8852BT) {
 		hal_set_ops_8852be(phl_com, hal);
 		hal_hook_trx_ops_8852be(phl_com, hal);
@@ -73,6 +83,13 @@ static inline void hal_set_ops_pci(struct rtw_phl_com_t *phl_com,
 	if (hal_get_chip_id(hal->hal_com) == CHIP_WIFI6_8852C) {
 		hal_set_ops_8852ce(phl_com, hal);
 		hal_hook_trx_ops_8852ce(phl_com, hal);
+	}
+#endif
+
+#ifdef CONFIG_RTL8842A
+	if (hal_get_chip_id(hal->hal_com) == CHIP_WIFI6_8842A) {
+		hal_set_ops_8842ae(phl_com, hal);
+		hal_hook_trx_ops_8842ae(phl_com, hal);
 	}
 #endif
 

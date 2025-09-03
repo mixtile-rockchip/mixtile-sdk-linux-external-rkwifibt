@@ -242,10 +242,8 @@ void rtw_ft_validate_akm_type(_adapter  *padapter,
 
 			rtw_ft_set_flags(padapter, RTW_FT_PEER_EN);
 
-			RTW_FT_INFO("%s : peer support FTOTA(0x%02x),"
-				" ft_roam_on_expired=0x%02x\n",
-				__func__, pft_roam->ft_flags,
-				pft_roam->ft_roam_on_expired);
+			RTW_FT_INFO("%s : peer support FTOTA(0x%02x)\n",
+				__func__, pft_roam->ft_flags);
 
 			if (rtw_ft_otd_roam_en(padapter)) {
 				rtw_ft_set_flags(padapter, RTW_FT_PEER_OTD_EN);
@@ -519,7 +517,7 @@ u8 rtw_ft_update_auth_rsp_ies(_adapter *padapter, u8 *pframe, u32 len)
 	return ret;
 }
 
-static void rtw_ft_start_clnt_action(_adapter *padapter, u8 *pTargetAddr)
+void rtw_ft_start_clnt_action(_adapter *padapter, u8 *pTargetAddr)
 {
 	struct mlme_ext_priv *pmlmeext = &padapter->mlmeextpriv;
 

@@ -687,7 +687,7 @@ u8 rtw_issue_twt_setup(_adapter *padapter, struct _ADAPTER_LINK *padapter_link,
 	if (da == NULL)
 		return _FAIL;
 
-	if (alink_is_tx_blocked_by_ch_waiting(padapter_link))
+	if (alink_regu_block_tx(padapter_link))
 		return _FAIL;
 
 	RTW_INFO("[TWT] %s: issue TWT Setup action frame to "MAC_FMT"\n",
@@ -830,7 +830,7 @@ u8 rtw_issue_twt_teardown(_adapter *padapter, struct _ADAPTER_LINK *padapter_lin
 	if (da == NULL)
 		return _FAIL;
 
-	if (alink_is_tx_blocked_by_ch_waiting(padapter_link))
+	if (alink_regu_block_tx(padapter_link))
 		return _FAIL;
 
 	RTW_INFO("[TWT] %s: issue TWT teardown frame to "MAC_FMT"\n",
@@ -910,7 +910,7 @@ u8 rtw_issue_twt_info(_adapter *padapter, struct _ADAPTER_LINK *padapter_link,
 	if (da == NULL)
 		return _FAIL;
 
-	if (alink_is_tx_blocked_by_ch_waiting(padapter_link))
+	if (alink_regu_block_tx(padapter_link))
 		return _FAIL;
 
 	RTW_INFO("[TWT] %s: issue TWT Info action frame to "MAC_FMT"\n",

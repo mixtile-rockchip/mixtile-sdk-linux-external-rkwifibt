@@ -15,6 +15,7 @@
 
 #include "sounding.h"
 
+#if MAC_FEAT_BFMEE
 static u32 _patch_snd_ple_modify(struct mac_ax_adapter *adapter, u8 band)
 {
 	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
@@ -67,167 +68,6 @@ static u32 _patch_csi_append_zero(struct mac_ax_adapter *adapter, u8 band)
 	return MACSUCCESS;
 }
 
-u32 mac_get_csi_buffer_index(struct mac_ax_adapter *adapter, u8 band,
-			     u8 csi_buffer_id)
-{
-	u32 val32, ret;
-	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
-
-	ret = check_mac_en(adapter, band, MAC_AX_CMAC_SEL);
-	if (ret != MACSUCCESS)
-		return ret;
-	if (csi_buffer_id > CSI_MAX_BUFFER_IDX)
-		return MACCSIBUFIDERR;
-
-	val32 = MAC_REG_R32((band ? R_AX_BFMER_CSI_BUFF_IDX0_C1 :
-			    R_AX_BFMER_CSI_BUFF_IDX0) + CSI_SH * csi_buffer_id);
-	return val32;
-}
-
-u32 mac_set_csi_buffer_index(struct mac_ax_adapter *adapter, u8 band,
-			     u8 macid, u16 csi_buffer_id, u16 buffer_idx)
-{
-	u32 val32, ret;
-	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
-
-#if MAC_AX_FW_REG_OFLD
-	u16 cr;
-
-	if (adapter->sm.fwdl == MAC_AX_FWDL_INIT_RDY) {
-		ret = check_mac_en(adapter, band, MAC_AX_CMAC_SEL);
-		if (ret != MACSUCCESS)
-			return ret;
-		if (csi_buffer_id > CSI_MAX_BUFFER_IDX)
-			return MACCSIBUFIDERR;
-
-		cr = (band ? R_AX_BFMER_CSI_BUFF_IDX0_C1 :
-			  R_AX_BFMER_CSI_BUFF_IDX0) + (CSI_SH * csi_buffer_id);
-		val32 = (buffer_idx & B_AX_MER_TXBF_CSI_BUFF_IDX0_MSK)
-			 << B_AX_MER_SND_CSI_BUFF_IDX0_SH |
-			 (macid & B_AX_MER_CSI_BUFF_MACID_IDX0_MSK);
-
-		ret = MAC_REG_W32_OFLD(cr, val32, 1);
-		if (ret) {
-			PLTFM_MSG_ERR("[ERR]%s FW_OFLD in %x\n", __func__, cr);
-			return ret;
-		}
-		return MACSUCCESS;
-	}
-#endif
-	ret = check_mac_en(adapter, band, MAC_AX_CMAC_SEL);
-	if (ret != MACSUCCESS)
-		return ret;
-	if (csi_buffer_id > CSI_MAX_BUFFER_IDX)
-		return MACCSIBUFIDERR;
-
-	val32 = (buffer_idx & B_AX_MER_TXBF_CSI_BUFF_IDX0_MSK)
-		 << B_AX_MER_SND_CSI_BUFF_IDX0_SH |
-		 (macid & B_AX_MER_CSI_BUFF_MACID_IDX0_MSK);
-
-	MAC_REG_W32((band ? R_AX_BFMER_CSI_BUFF_IDX0_C1 :
-		    R_AX_BFMER_CSI_BUFF_IDX0) + CSI_SH * csi_buffer_id, val32);
-
-	return MACSUCCESS;
-}
-
-u32 mac_get_snd_sts_index(struct mac_ax_adapter *adapter, u8 band, u8 index)
-{
-	u32 va32, ret;
-	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
-
-	ret = check_mac_en(adapter, band, MAC_AX_CMAC_SEL);
-	if (ret != MACSUCCESS)
-		return ret;
-
-	if (index > SOUNDING_STS_MAX_IDX)
-		return MACSNDSTSIDERR;
-
-	va32 = MAC_REG_R16((band ? R_AX_BFMER_ASSOCIATED_SU0_C1 :
-			   R_AX_BFMER_ASSOCIATED_SU0) + SND_SH * index);
-	return va32;
-}
-
-u32 mac_set_snd_sts_index(struct mac_ax_adapter *adapter,  u8 band, u8 macid,
-			  u8 index)
-{
-	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
-	u32 ret;
-
-#if MAC_AX_FW_REG_OFLD
-	u16 cr, val16;
-
-	if (adapter->sm.fwdl == MAC_AX_FWDL_INIT_RDY) {
-		ret = check_mac_en(adapter, band, MAC_AX_CMAC_SEL);
-		if (ret != MACSUCCESS)
-			return ret;
-
-		if (index > SOUNDING_STS_MAX_IDX)
-			return MACSNDSTSIDERR;
-
-		cr = (band ? R_AX_BFMER_ASSOCIATED_SU0_C1 :
-			   R_AX_BFMER_ASSOCIATED_SU0) + (SND_SH * index);
-		val16 = B_AX_MER_SU_BFMEE0_EN | macid;
-
-		ret = MAC_REG_W16_OFLD(cr, val16, 1);
-		if (ret) {
-			PLTFM_MSG_ERR("[ERR]%s FW_OFLD in %x\n", __func__, cr);
-			return ret;
-		}
-		return MACSUCCESS;
-	}
-#endif
-	ret = check_mac_en(adapter, band, MAC_AX_CMAC_SEL);
-	if (ret != MACSUCCESS)
-		return ret;
-
-	if (index > SOUNDING_STS_MAX_IDX)
-		return MACSNDSTSIDERR;
-
-	MAC_REG_W16((band ? R_AX_BFMER_ASSOCIATED_SU0_C1 :
-		   R_AX_BFMER_ASSOCIATED_SU0) + SND_SH * index,
-		   B_AX_MER_SU_BFMEE0_EN | macid);
-	return MACSUCCESS;
-}
-
-u32 mac_init_snd_mer(struct mac_ax_adapter *adapter, u8 band)
-{
-	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
-	u32 val32, ret;
-
-#if MAC_AX_FW_REG_OFLD
-	u16 cr;
-
-	if (adapter->sm.fwdl == MAC_AX_FWDL_INIT_RDY) {
-		ret = check_mac_en(adapter, band, MAC_AX_CMAC_SEL);
-		if (ret != MACSUCCESS)
-			return ret;
-
-		cr = band ? R_AX_BFMER_CTRL_0_C1 : R_AX_BFMER_CTRL_0;
-		val32 = B_AX_BFMER_NDP_BFEN;
-		val32 |= HT_PAYLOAD_OFFSET << B_AX_BFMER_HT_CSI_OFFSET_SH;
-		val32 |= VHT_PAYLOAD_OFFSET << B_AX_BFMER_VHT_CSI_OFFSET_SH;
-		val32 |= HE_PAYLOAD_OFFSET << B_AX_BFMER_HE_CSI_OFFSET_SH;
-
-		ret = MAC_REG_W32_OFLD(cr, val32, 1);
-		if (ret) {
-			PLTFM_MSG_ERR("[ERR]%s FW_OFLD in %x\n", __func__, cr);
-			return ret;
-		}
-		return MACSUCCESS;
-	}
-#endif
-	ret = check_mac_en(adapter, band, MAC_AX_CMAC_SEL);
-	if (ret != MACSUCCESS)
-		return ret;
-
-	val32 = B_AX_BFMER_NDP_BFEN;
-	val32 |= HT_PAYLOAD_OFFSET << B_AX_BFMER_HT_CSI_OFFSET_SH;
-	val32 |= VHT_PAYLOAD_OFFSET << B_AX_BFMER_VHT_CSI_OFFSET_SH;
-	val32 |= HE_PAYLOAD_OFFSET << B_AX_BFMER_HE_CSI_OFFSET_SH;
-	MAC_REG_W32(band ? R_AX_BFMER_CTRL_0_C1 : R_AX_BFMER_CTRL_0, val32);
-	return MACSUCCESS;
-}
-
 u32 mac_init_snd_mee(struct mac_ax_adapter *adapter, u8 band)
 {
 	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
@@ -259,7 +99,6 @@ u32 mac_init_snd_mee(struct mac_ax_adapter *adapter, u8 band)
 			val32 = (BFRP_RX_STANDBY_TIMER << B_AX_BFMEE_BFRP_RX_STANDBY_TIMER_SH);
 		} else if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852C) ||
 			   is_chip_id(adapter, MAC_AX_CHIP_ID_8192XB) ||
-			   is_chip_id(adapter, MAC_AX_CHIP_ID_8851E) ||
 			   is_chip_id(adapter, MAC_AX_CHIP_ID_8852D)) {
 			val32 = (BFRP_RX_STANDBY_TIMER_V1 << B_AX_BFMEE_BFRP_RX_STANDBY_TIMER_SH);
 		} else {
@@ -340,10 +179,9 @@ u32 mac_init_snd_mee(struct mac_ax_adapter *adapter, u8 band)
 	}
 #endif
 
-#if MAC_AX_8852C_SUPPORT || MAC_AX_8192XB_SUPPORT || MAC_AX_8851E_SUPPORT || MAC_AX_8852D_SUPPORT
+#if MAC_AX_8852C_SUPPORT || MAC_AX_8192XB_SUPPORT || MAC_AX_8852D_SUPPORT
 	if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852C) ||
 	    is_chip_id(adapter, MAC_AX_CHIP_ID_8192XB) ||
-	    is_chip_id(adapter, MAC_AX_CHIP_ID_8851E) ||
 	    is_chip_id(adapter, MAC_AX_CHIP_ID_8852D)) {
 		val32 = MAC_REG_R32(band ? R_AX_TRXPTCL_ERROR_INDICA_MASK_C1 :
 				    R_AX_TRXPTCL_ERROR_INDICA_MASK);
@@ -486,102 +324,6 @@ u32 mac_csi_rrsc(struct mac_ax_adapter *adapter, u8 band, u32 rrsc)
 	MAC_REG_W32(band ? R_AX_TRXPTCL_RESP_CSI_RRSC_C1 :
 		    R_AX_TRXPTCL_RESP_CSI_RRSC, rrsc);
 	return MACSUCCESS;
-}
-
-u32 mac_set_mu_table(struct mac_ax_adapter *adapter,
-		     struct mac_mu_table *mu_table)
-{
-	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
-	struct mac_ax_ops *mac_ops = adapter_to_mac_ops(adapter);
-#if MAC_AX_8852A_SUPPORT || MAC_AX_8852B_SUPPORT || MAC_AX_8851B_SUPPORT || MAC_AX_8852BT_SUPPORT
-	if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852A) ||
-	    is_chip_id(adapter, MAC_AX_CHIP_ID_8852B) ||
-	    is_chip_id(adapter, MAC_AX_CHIP_ID_8851B) ||
-	    is_chip_id(adapter, MAC_AX_CHIP_ID_8852BT)) {
-#if MAC_AX_FW_REG_OFLD
-		u32 val32, ret;
-		u16 cr;
-
-		if (adapter->sm.fwdl == MAC_AX_FWDL_INIT_RDY) {
-			cr = R_AX_SS_MU_CTRL;
-			val32 = mu_table->mu_score_tbl_ctrl;
-			ret = MAC_REG_W32_OFLD(cr, val32, 0);
-			if (ret) {
-				PLTFM_MSG_ERR("[ERR]%s FW_OFLD in %x\n", __func__, cr);
-				return ret;
-			}
-
-			cr = R_AX_SS_MU_TBL_0;
-			val32 = mu_table->mu_score_tbl_0;
-			ret = MAC_REG_W32_OFLD(cr, val32, 0);
-			if (ret) {
-				PLTFM_MSG_ERR("[ERR]%s FW_OFLD in %x\n", __func__, cr);
-				return ret;
-			}
-
-			cr = R_AX_SS_MU_TBL_1;
-			val32 = mu_table->mu_score_tbl_1;
-			ret = MAC_REG_W32_OFLD(cr, val32, 0);
-			if (ret) {
-				PLTFM_MSG_ERR("[ERR]%s FW_OFLD in %x\n", __func__, cr);
-				return ret;
-			}
-
-			cr = R_AX_SS_MU_TBL_2;
-			val32 = mu_table->mu_score_tbl_2;
-			ret = MAC_REG_W32_OFLD(cr, val32, 0);
-			if (ret) {
-				PLTFM_MSG_ERR("[ERR]%s FW_OFLD in %x\n", __func__, cr);
-				return ret;
-			}
-
-			cr = R_AX_SS_MU_TBL_3;
-			val32 = mu_table->mu_score_tbl_3;
-			ret = MAC_REG_W32_OFLD(cr, val32, 0);
-			if (ret) {
-				PLTFM_MSG_ERR("[ERR]%s FW_OFLD in %x\n", __func__, cr);
-				return ret;
-			}
-
-			cr = R_AX_SS_MU_TBL_4;
-			val32 = mu_table->mu_score_tbl_4;
-			ret = MAC_REG_W32_OFLD(cr, val32, 0);
-			if (ret) {
-				PLTFM_MSG_ERR("[ERR]%s FW_OFLD in %x\n", __func__, cr);
-				return ret;
-			}
-
-			cr = R_AX_SS_MU_TBL_5;
-			val32 = mu_table->mu_score_tbl_5;
-			ret = MAC_REG_W32_OFLD(cr, val32, 1);
-			if (ret) {
-				PLTFM_MSG_ERR("[ERR]%s FW_OFLD in %x\n", __func__, cr);
-				return ret;
-			}
-			return MACSUCCESS;
-		}
-#endif
-		MAC_REG_W32(R_AX_SS_MU_CTRL, mu_table->mu_score_tbl_ctrl);
-		MAC_REG_W32(R_AX_SS_MU_TBL_0, mu_table->mu_score_tbl_0);
-		MAC_REG_W32(R_AX_SS_MU_TBL_1, mu_table->mu_score_tbl_1);
-		MAC_REG_W32(R_AX_SS_MU_TBL_2, mu_table->mu_score_tbl_2);
-		MAC_REG_W32(R_AX_SS_MU_TBL_3, mu_table->mu_score_tbl_3);
-		MAC_REG_W32(R_AX_SS_MU_TBL_4, mu_table->mu_score_tbl_4);
-		MAC_REG_W32(R_AX_SS_MU_TBL_5, mu_table->mu_score_tbl_5);
-		return MACSUCCESS;
-	}
-#endif
-#if MAC_AX_8852C_SUPPORT || MAC_AX_8192XB_SUPPORT || MAC_AX_8851E_SUPPORT || MAC_AX_8852D_SUPPORT
-	//For 8852C and 8192XB,
-	//the MU Score Table CR are replaced by SS DL Group Table CR(same with RU)
-	if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852C) ||
-	    is_chip_id(adapter, MAC_AX_CHIP_ID_8192XB) ||
-	    is_chip_id(adapter, MAC_AX_CHIP_ID_8851E) ||
-	    is_chip_id(adapter, MAC_AX_CHIP_ID_8852D)) {
-		return mac_ops->ss_dl_grp_upd(adapter, mu_table->dlmu_grp_info);
-	}
-#endif
-	return MACNOTSUP;
 }
 
 u32 mac_set_csi_para_reg(struct mac_ax_adapter *adapter,
@@ -782,56 +524,6 @@ u32 mac_set_csi_para_cctl(struct mac_ax_adapter *adapter,
 	return MACSUCCESS;
 }
 
-u32 mac_hw_snd_pause_release(struct mac_ax_adapter *adapter, u8 band,
-			     u8 pr)
-{
-	struct mac_ax_ops *mac_ops = adapter_to_mac_ops(adapter);
-	struct mac_ax_sch_tx_en_cfg sch_cfg;
-	u32 ret;
-
-	sch_cfg.band = band;
-	if (!pr)
-		PLTFM_MEMSET(&sch_cfg.tx_en, 0, SCH_TX_EN_SIZE);
-	else
-		PLTFM_MEMSET(&sch_cfg.tx_en, 0xFF, SCH_TX_EN_SIZE);
-	PLTFM_MEMSET(&sch_cfg.tx_en_mask, 0xFF, SCH_TX_EN_SIZE);
-	ret = mac_ops->set_hw_value(adapter, MAC_AX_HW_SET_SCH_TXEN_CFG,
-				    (void *)&sch_cfg);
-	if (ret != MACSUCCESS) {
-		PLTFM_MSG_ERR("B%d pause%d sch txen cfg %d\n", band, pr, ret);
-		return ret;
-	}
-
-	return MACSUCCESS;
-}
-
-u32 mac_bypass_snd_sts(struct mac_ax_adapter *adapter)
-{
-	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
-	u8 val8;
-
-#if MAC_AX_FW_REG_OFLD
-	u32 mask, ret;
-	u16 cr;
-
-	if (adapter->sm.fwdl == MAC_AX_FWDL_INIT_RDY) {
-		cr = R_AX_AGG_BK_0;
-		mask = B_AX_DIS_SND_STS_CHECK;
-		ret = write_mac_reg_ofld(adapter, cr, mask, 1, 1);
-
-		if (ret) {
-			PLTFM_MSG_ERR("[ERR]%s FW_OFLD in %x\n", __func__, cr);
-			return ret;
-		}
-		return MACSUCCESS;
-	}
-#endif
-	val8 = MAC_REG_R8(R_AX_AGG_BK_0);
-	MAC_REG_W8(R_AX_AGG_BK_0, val8 | B_AX_DIS_SND_STS_CHECK);
-
-	return MACSUCCESS;
-}
-
 u32 mac_deinit_mee(struct mac_ax_adapter *adapter, u8 band)
 {
 	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
@@ -872,41 +564,24 @@ u32 mac_deinit_mee(struct mac_ax_adapter *adapter, u8 band)
 	return MACSUCCESS;
 }
 
-u32 mac_snd_sup(struct mac_ax_adapter *adapter, struct mac_bf_sup *bf_sup)
+u32 set_csi_release_cfg(struct mac_ax_adapter *adapter,
+			struct mac_ax_csi_release_cfg *cfg)
 {
-	if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852A)) {
-		bf_sup->bf_entry_num = 16;
-		bf_sup->su_buffer_num = 16;
-		bf_sup->mu_buffer_num = 6;
-	} else if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852B)) {
-		bf_sup->bf_entry_num = 16;
-		bf_sup->su_buffer_num = 16;
-		bf_sup->mu_buffer_num = 6;
-	} else if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852C)) {
-		bf_sup->bf_entry_num = 16;
-		bf_sup->su_buffer_num = 16;
-		bf_sup->mu_buffer_num = 6;
-	} else if (is_chip_id(adapter, MAC_AX_CHIP_ID_8851B)) {
-		bf_sup->bf_entry_num = 16;
-		bf_sup->su_buffer_num = 16;
-		bf_sup->mu_buffer_num = 6;
-	} else if (is_chip_id(adapter, MAC_AX_CHIP_ID_8851E)) {
-		bf_sup->bf_entry_num = 16;
-		bf_sup->su_buffer_num = 16;
-		bf_sup->mu_buffer_num = 6;
-	} else if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852D)) {
-		bf_sup->bf_entry_num = 16;
-		bf_sup->su_buffer_num = 16;
-		bf_sup->mu_buffer_num = 6;
-	} else if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852BT)) {
-		bf_sup->bf_entry_num = 16;
-		bf_sup->su_buffer_num = 16;
-		bf_sup->mu_buffer_num = 6;
-	} else {
-		return MACNOTSUP;
-	}
+	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
+	u32 val32;
+	u16 cr;
+
+	cr = cfg->band_sel ? R_AX_BFMEE_RESP_OPTION_C1 : R_AX_BFMEE_RESP_OPTION;
+	val32 = MAC_REG_R32(cr);
+	if (cfg->ctrl == MAC_AX_CSI_KEEP)
+		val32 = SET_CLR_WORD(val32, MAC_AX_CSI_KEEP, B_AX_BFMEE_BFRP_RX_STANDBY_TIMER);
+	else
+		val32 = SET_CLR_WORD(val32, MAC_AX_CSI_RELEASE, B_AX_BFMEE_BFRP_RX_STANDBY_TIMER);
+	MAC_REG_W32(cr, val32);
+
 	return MACSUCCESS;
 }
+#endif
 
 u32 mac_gidpos(struct mac_ax_adapter *adapter, struct mac_gid_pos *mu_gid)
 {
@@ -984,6 +659,331 @@ u32 mac_gidpos(struct mac_ax_adapter *adapter, struct mac_gid_pos *mu_gid)
 	return MACSUCCESS;
 }
 
+#if MAC_FEAT_BFMER
+u32 mac_get_csi_buffer_index(struct mac_ax_adapter *adapter, u8 band,
+			     u8 csi_buffer_id)
+{
+	u32 val32, ret;
+	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
+
+	ret = check_mac_en(adapter, band, MAC_AX_CMAC_SEL);
+	if (ret != MACSUCCESS)
+		return ret;
+	if (csi_buffer_id > CSI_MAX_BUFFER_IDX)
+		return MACCSIBUFIDERR;
+
+	val32 = MAC_REG_R32((band ? R_AX_BFMER_CSI_BUFF_IDX0_C1 :
+			    R_AX_BFMER_CSI_BUFF_IDX0) + CSI_SH * csi_buffer_id);
+	return val32;
+}
+
+u32 mac_set_csi_buffer_index(struct mac_ax_adapter *adapter, u8 band,
+			     u8 macid, u16 csi_buffer_id, u16 buffer_idx)
+{
+	u32 val32, ret;
+	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
+
+#if MAC_AX_FW_REG_OFLD
+	u16 cr;
+
+	if (adapter->sm.fwdl == MAC_AX_FWDL_INIT_RDY) {
+		ret = check_mac_en(adapter, band, MAC_AX_CMAC_SEL);
+		if (ret != MACSUCCESS)
+			return ret;
+		if (csi_buffer_id > CSI_MAX_BUFFER_IDX)
+			return MACCSIBUFIDERR;
+
+		cr = (band ? R_AX_BFMER_CSI_BUFF_IDX0_C1 :
+			  R_AX_BFMER_CSI_BUFF_IDX0) + (CSI_SH * csi_buffer_id);
+		val32 = (buffer_idx & B_AX_MER_TXBF_CSI_BUFF_IDX0_MSK)
+			 << B_AX_MER_SND_CSI_BUFF_IDX0_SH |
+			 (macid & B_AX_MER_CSI_BUFF_MACID_IDX0_MSK);
+
+		ret = MAC_REG_W32_OFLD(cr, val32, 1);
+		if (ret) {
+			PLTFM_MSG_ERR("[ERR]%s FW_OFLD in %x\n", __func__, cr);
+			return ret;
+		}
+		return MACSUCCESS;
+	}
+#endif
+	ret = check_mac_en(adapter, band, MAC_AX_CMAC_SEL);
+	if (ret != MACSUCCESS)
+		return ret;
+	if (csi_buffer_id > CSI_MAX_BUFFER_IDX)
+		return MACCSIBUFIDERR;
+
+	val32 = (buffer_idx & B_AX_MER_TXBF_CSI_BUFF_IDX0_MSK)
+		 << B_AX_MER_SND_CSI_BUFF_IDX0_SH |
+		 (macid & B_AX_MER_CSI_BUFF_MACID_IDX0_MSK);
+
+	MAC_REG_W32((band ? R_AX_BFMER_CSI_BUFF_IDX0_C1 :
+		    R_AX_BFMER_CSI_BUFF_IDX0) + CSI_SH * csi_buffer_id, val32);
+
+	return MACSUCCESS;
+}
+
+u32 mac_get_snd_sts_index(struct mac_ax_adapter *adapter, u8 band, u8 index)
+{
+	u32 va32, ret;
+	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
+
+	ret = check_mac_en(adapter, band, MAC_AX_CMAC_SEL);
+	if (ret != MACSUCCESS)
+		return ret;
+
+	if (index > SOUNDING_STS_MAX_IDX)
+		return MACSNDSTSIDERR;
+
+	va32 = MAC_REG_R16((band ? R_AX_BFMER_ASSOCIATED_SU0_C1 :
+			   R_AX_BFMER_ASSOCIATED_SU0) + SND_SH * index);
+	return va32;
+}
+
+u32 mac_set_snd_sts_index(struct mac_ax_adapter *adapter,  u8 band, u8 macid,
+			  u8 index)
+{
+	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
+	u32 ret;
+
+#if MAC_AX_FW_REG_OFLD
+	u16 cr, val16;
+
+	if (adapter->sm.fwdl == MAC_AX_FWDL_INIT_RDY) {
+		ret = check_mac_en(adapter, band, MAC_AX_CMAC_SEL);
+		if (ret != MACSUCCESS)
+			return ret;
+
+		if (index > SOUNDING_STS_MAX_IDX)
+			return MACSNDSTSIDERR;
+
+		cr = (band ? R_AX_BFMER_ASSOCIATED_SU0_C1 :
+			   R_AX_BFMER_ASSOCIATED_SU0) + (SND_SH * index);
+		val16 = B_AX_MER_SU_BFMEE0_EN | macid;
+
+		ret = MAC_REG_W16_OFLD(cr, val16, 1);
+		if (ret) {
+			PLTFM_MSG_ERR("[ERR]%s FW_OFLD in %x\n", __func__, cr);
+			return ret;
+		}
+		return MACSUCCESS;
+	}
+#endif
+	ret = check_mac_en(adapter, band, MAC_AX_CMAC_SEL);
+	if (ret != MACSUCCESS)
+		return ret;
+
+	if (index > SOUNDING_STS_MAX_IDX)
+		return MACSNDSTSIDERR;
+
+	MAC_REG_W16((band ? R_AX_BFMER_ASSOCIATED_SU0_C1 :
+		   R_AX_BFMER_ASSOCIATED_SU0) + SND_SH * index,
+		   B_AX_MER_SU_BFMEE0_EN | macid);
+	return MACSUCCESS;
+}
+
+u32 mac_init_snd_mer(struct mac_ax_adapter *adapter, u8 band)
+{
+	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
+	u32 val32, ret;
+
+#if MAC_AX_FW_REG_OFLD
+	u16 cr;
+
+	if (adapter->sm.fwdl == MAC_AX_FWDL_INIT_RDY) {
+		ret = check_mac_en(adapter, band, MAC_AX_CMAC_SEL);
+		if (ret != MACSUCCESS)
+			return ret;
+
+		cr = band ? R_AX_BFMER_CTRL_0_C1 : R_AX_BFMER_CTRL_0;
+		val32 = B_AX_BFMER_NDP_BFEN;
+		val32 |= HT_PAYLOAD_OFFSET << B_AX_BFMER_HT_CSI_OFFSET_SH;
+		val32 |= VHT_PAYLOAD_OFFSET << B_AX_BFMER_VHT_CSI_OFFSET_SH;
+		val32 |= HE_PAYLOAD_OFFSET << B_AX_BFMER_HE_CSI_OFFSET_SH;
+
+		ret = MAC_REG_W32_OFLD(cr, val32, 1);
+		if (ret) {
+			PLTFM_MSG_ERR("[ERR]%s FW_OFLD in %x\n", __func__, cr);
+			return ret;
+		}
+		return MACSUCCESS;
+	}
+#endif
+	ret = check_mac_en(adapter, band, MAC_AX_CMAC_SEL);
+	if (ret != MACSUCCESS)
+		return ret;
+
+	val32 = B_AX_BFMER_NDP_BFEN;
+	val32 |= HT_PAYLOAD_OFFSET << B_AX_BFMER_HT_CSI_OFFSET_SH;
+	val32 |= VHT_PAYLOAD_OFFSET << B_AX_BFMER_VHT_CSI_OFFSET_SH;
+	val32 |= HE_PAYLOAD_OFFSET << B_AX_BFMER_HE_CSI_OFFSET_SH;
+	MAC_REG_W32(band ? R_AX_BFMER_CTRL_0_C1 : R_AX_BFMER_CTRL_0, val32);
+	return MACSUCCESS;
+}
+#endif
+
+#if MAC_FEAT_MUMIMO
+u32 mac_set_mu_table(struct mac_ax_adapter *adapter,
+		     struct mac_mu_table *mu_table)
+{
+	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
+	struct mac_ax_ops *mac_ops = adapter_to_mac_ops(adapter);
+#if MAC_AX_8852A_SUPPORT || MAC_AX_8852B_SUPPORT || MAC_AX_8851B_SUPPORT || MAC_AX_8852BT_SUPPORT
+	if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852A) ||
+	    is_chip_id(adapter, MAC_AX_CHIP_ID_8852B) ||
+	    is_chip_id(adapter, MAC_AX_CHIP_ID_8851B) ||
+	    is_chip_id(adapter, MAC_AX_CHIP_ID_8852BT)) {
+#if MAC_AX_FW_REG_OFLD
+		u32 val32, ret;
+		u16 cr;
+
+		if (adapter->sm.fwdl == MAC_AX_FWDL_INIT_RDY) {
+			cr = R_AX_SS_MU_CTRL;
+			val32 = mu_table->mu_score_tbl_ctrl;
+			ret = MAC_REG_W32_OFLD(cr, val32, 0);
+			if (ret) {
+				PLTFM_MSG_ERR("[ERR]%s FW_OFLD in %x\n", __func__, cr);
+				return ret;
+			}
+
+			cr = R_AX_SS_MU_TBL_0;
+			val32 = mu_table->mu_score_tbl_0;
+			ret = MAC_REG_W32_OFLD(cr, val32, 0);
+			if (ret) {
+				PLTFM_MSG_ERR("[ERR]%s FW_OFLD in %x\n", __func__, cr);
+				return ret;
+			}
+
+			cr = R_AX_SS_MU_TBL_1;
+			val32 = mu_table->mu_score_tbl_1;
+			ret = MAC_REG_W32_OFLD(cr, val32, 0);
+			if (ret) {
+				PLTFM_MSG_ERR("[ERR]%s FW_OFLD in %x\n", __func__, cr);
+				return ret;
+			}
+
+			cr = R_AX_SS_MU_TBL_2;
+			val32 = mu_table->mu_score_tbl_2;
+			ret = MAC_REG_W32_OFLD(cr, val32, 0);
+			if (ret) {
+				PLTFM_MSG_ERR("[ERR]%s FW_OFLD in %x\n", __func__, cr);
+				return ret;
+			}
+
+			cr = R_AX_SS_MU_TBL_3;
+			val32 = mu_table->mu_score_tbl_3;
+			ret = MAC_REG_W32_OFLD(cr, val32, 0);
+			if (ret) {
+				PLTFM_MSG_ERR("[ERR]%s FW_OFLD in %x\n", __func__, cr);
+				return ret;
+			}
+
+			cr = R_AX_SS_MU_TBL_4;
+			val32 = mu_table->mu_score_tbl_4;
+			ret = MAC_REG_W32_OFLD(cr, val32, 0);
+			if (ret) {
+				PLTFM_MSG_ERR("[ERR]%s FW_OFLD in %x\n", __func__, cr);
+				return ret;
+			}
+
+			cr = R_AX_SS_MU_TBL_5;
+			val32 = mu_table->mu_score_tbl_5;
+			ret = MAC_REG_W32_OFLD(cr, val32, 1);
+			if (ret) {
+				PLTFM_MSG_ERR("[ERR]%s FW_OFLD in %x\n", __func__, cr);
+				return ret;
+			}
+			return MACSUCCESS;
+		}
+#endif
+		MAC_REG_W32(R_AX_SS_MU_CTRL, mu_table->mu_score_tbl_ctrl);
+		MAC_REG_W32(R_AX_SS_MU_TBL_0, mu_table->mu_score_tbl_0);
+		MAC_REG_W32(R_AX_SS_MU_TBL_1, mu_table->mu_score_tbl_1);
+		MAC_REG_W32(R_AX_SS_MU_TBL_2, mu_table->mu_score_tbl_2);
+		MAC_REG_W32(R_AX_SS_MU_TBL_3, mu_table->mu_score_tbl_3);
+		MAC_REG_W32(R_AX_SS_MU_TBL_4, mu_table->mu_score_tbl_4);
+		MAC_REG_W32(R_AX_SS_MU_TBL_5, mu_table->mu_score_tbl_5);
+		return MACSUCCESS;
+	}
+#endif
+#if MAC_AX_8852C_SUPPORT || MAC_AX_8192XB_SUPPORT || MAC_AX_8852D_SUPPORT
+	//For 8852C and 8192XB,
+	//the MU Score Table CR are replaced by SS DL Group Table CR(same with RU)
+	if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852C) ||
+	    is_chip_id(adapter, MAC_AX_CHIP_ID_8192XB) ||
+	    is_chip_id(adapter, MAC_AX_CHIP_ID_8852D)) {
+		return mac_ops->ss_dl_grp_upd(adapter, mu_table->dlmu_grp_info);
+	}
+#endif
+	return MACNOTSUP;
+}
+#endif
+
+#if MAC_FEAT_BFMER
+u32 mac_hw_snd_pause_release(struct mac_ax_adapter *adapter, u8 band,
+			     u8 pr)
+{
+	struct mac_ax_ops *mac_ops = adapter_to_mac_ops(adapter);
+	struct mac_ax_sch_tx_en_cfg sch_cfg;
+	u32 ret;
+
+	sch_cfg.band = band;
+	if (!pr)
+		PLTFM_MEMSET(&sch_cfg.tx_en, 0, SCH_TX_EN_SIZE);
+	else
+		PLTFM_MEMSET(&sch_cfg.tx_en, 0xFF, SCH_TX_EN_SIZE);
+	PLTFM_MEMSET(&sch_cfg.tx_en_mask, 0xFF, SCH_TX_EN_SIZE);
+	ret = mac_ops->set_hw_value(adapter, MAC_AX_HW_SET_SCH_TXEN_CFG,
+				    (void *)&sch_cfg);
+	if (ret != MACSUCCESS) {
+		PLTFM_MSG_ERR("B%d pause%d sch txen cfg %d\n", band, pr, ret);
+		return ret;
+	}
+
+	return MACSUCCESS;
+}
+
+u32 mac_bypass_snd_sts(struct mac_ax_adapter *adapter)
+{
+	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
+	u8 val8;
+
+#if MAC_AX_FW_REG_OFLD
+	u32 mask, ret;
+	u16 cr;
+
+	if (adapter->sm.fwdl == MAC_AX_FWDL_INIT_RDY) {
+		cr = R_AX_AGG_BK_0;
+		mask = B_AX_DIS_SND_STS_CHECK;
+		ret = write_mac_reg_ofld(adapter, cr, mask, 1, 1);
+
+		if (ret) {
+			PLTFM_MSG_ERR("[ERR]%s FW_OFLD in %x\n", __func__, cr);
+			return ret;
+		}
+		return MACSUCCESS;
+	}
+#endif
+	val8 = MAC_REG_R8(R_AX_AGG_BK_0);
+	MAC_REG_W8(R_AX_AGG_BK_0, val8 | B_AX_DIS_SND_STS_CHECK);
+
+	return MACSUCCESS;
+}
+#endif
+
+#if MAC_FEAT_BFMER
+u32 mac_snd_sup(struct mac_ax_adapter *adapter, struct mac_bf_sup *bf_sup)
+{
+	bf_sup->txbf_mu_switch_tx_en = 0;
+#if MAC_AX_8852D_SUPPORT
+	if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852D))
+		bf_sup->txbf_mu_switch_tx_en = 1;
+#endif
+	return MACSUCCESS;
+}
+#endif
+
+#if MAC_FEAT_BFMER_F2PSND
 #if MAC_AX_8852A_SUPPORT
 static u32 build_snd_h2c(struct mac_ax_adapter *adapter, struct mac_ax_fwcmd_snd *snd_info)
 {
@@ -1824,7 +1824,7 @@ static u32 build_snd_h2c(struct mac_ax_adapter *adapter, struct mac_ax_fwcmd_snd
 
 #endif
 
-#if MAC_AX_8852C_SUPPORT || MAC_AX_8192XB_SUPPORT || MAC_AX_8851E_SUPPORT || MAC_AX_8852D_SUPPORT
+#if MAC_AX_8852C_SUPPORT || MAC_AX_8192XB_SUPPORT || MAC_AX_8852D_SUPPORT
 static u32 build_snd_h2c_v1(struct mac_ax_adapter *adapter, struct mac_ax_fwcmd_snd *snd_info)
 {
 	u32 ret = 0;
@@ -2915,8 +2915,8 @@ static u32 build_snd_h2c_v1(struct mac_ax_adapter *adapter, struct mac_ax_fwcmd_
 	cpu_to_le32(SET_WORD(snd_info->sfp.f2p_updcnt,
 			     FWCMD_H2C_SET_SND_PARA_F2P_UPDCNT) |
 		    SET_WORD(snd_info->sfp.cr_idx,
-			     FWCMD_H2C_SET_SND_PARA_CR_IDX));
-
+			     FWCMD_H2C_SET_SND_PARA_CR_IDX) |
+		    (snd_info->sfp.sounding_en ? FWCMD_H2C_SET_SND_PARA_SOUNDING_EN : 0));
 	ret = mac_h2c_common(adapter, &h2c_info, (u32 *)h2c);
 
 	PLTFM_FREE(h2c, h2c_info.content_len);
@@ -2929,17 +2929,12 @@ static u32 build_snd_h2c_v1(struct mac_ax_adapter *adapter, struct mac_ax_fwcmd_
 u32 mac_set_snd_para(struct mac_ax_adapter *adapter,
 		     struct mac_ax_fwcmd_snd *snd_info)
 {
-	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
-	u32 ret, val32;
+	u32 ret;
 	u8 band = 0;
 
 	ret = check_mac_en(adapter, band, MAC_AX_CMAC_SEL);
 	if (ret != MACSUCCESS)
 		return ret;
-	//set wmm1 to sw mode tx for snd
-	val32 = MAC_REG_R32(R_AX_PTCL_COMMON_SETTING_0);
-	val32 = val32 & (~B_AX_CMAC_TX_MODE_1);
-	MAC_REG_W32(R_AX_PTCL_COMMON_SETTING_0, val32);
 
 	switch (snd_info->frexgtype) {
 	case FRAME_EXCHANGE_SND_N_SU:
@@ -3344,13 +3339,13 @@ u32 mac_set_snd_para(struct mac_ax_adapter *adapter,
 	if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852A))
 		return build_snd_h2c(adapter, snd_info);
 #endif
-#if MAC_AX_8852C_SUPPORT || MAC_AX_8192XB_SUPPORT || MAC_AX_8851E_SUPPORT || MAC_AX_8852D_SUPPORT
+#if MAC_AX_8852C_SUPPORT || MAC_AX_8192XB_SUPPORT || MAC_AX_8852D_SUPPORT
 	if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852C) ||
 	    is_chip_id(adapter, MAC_AX_CHIP_ID_8192XB) ||
-	    is_chip_id(adapter, MAC_AX_CHIP_ID_8851E) ||
 	    is_chip_id(adapter, MAC_AX_CHIP_ID_8852D))
 		return build_snd_h2c_v1(adapter, snd_info);
 #endif
 
 	return MACNOTSUP;
 }
+#endif

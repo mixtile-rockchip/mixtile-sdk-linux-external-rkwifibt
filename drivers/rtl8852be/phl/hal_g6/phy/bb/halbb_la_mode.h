@@ -125,6 +125,7 @@ enum la_buff_mode_t {
 	LA_BUFF_192K	= 2,
 	LA_BUFF_256K	= 3,
 	LA_BUFF_320K	= 4,
+	LA_BUFF_DEFAULT,
 	LA_BUF_DISABLE	= 0xff
 };
 

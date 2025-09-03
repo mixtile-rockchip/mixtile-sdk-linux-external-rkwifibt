@@ -88,7 +88,7 @@ u16 halbb_ccx_us_2_idx_cnt(struct bb_info *bb, u32 time_us)
 void halbb_ccx_top_setting_init(struct bb_info *bb)
 {
 	struct bb_env_mntr_info *env = &bb->bb_env_mntr_i;
-	struct bb_env_mntr_cr_info *cr = &env->bb_env_mntr_cr_i;
+	struct bb_env_mntr_cr_info *cr = &bb->bb_cmn_hooker->bb_env_mntr_cr_i;
 
 	env->ccx_manual_ctrl = false;
 	env->ccx_ongoing = false;
@@ -157,7 +157,7 @@ u8 halbb_ccx_racing_ctrl(struct bb_info *bb, enum halbb_racing_lv rac_lv)
 void halbb_ccx_trigger(struct bb_info *bb, u8 func_sel)
 {
 	struct bb_env_mntr_info *env = &bb->bb_env_mntr_i;
-	struct bb_env_mntr_cr_info *cr = &env->bb_env_mntr_cr_i;
+	struct bb_env_mntr_cr_info *cr = &bb->bb_cmn_hooker->bb_env_mntr_cr_i;
 
 	BB_DBG(bb, DBG_ENV_MNTR, "[%s]===>\n", __func__);
 
@@ -183,7 +183,7 @@ void halbb_ccx_trigger(struct bb_info *bb, u8 func_sel)
 void halbb_ccx_edcca_opt_set(struct bb_info *bb, enum ccx_edcca_opt_sc_idx sc)
 {
 	struct bb_env_mntr_info *env = &bb->bb_env_mntr_i;
-	struct bb_env_mntr_cr_info *cr = &env->bb_env_mntr_cr_i;
+	struct bb_env_mntr_cr_info *cr = &bb->bb_cmn_hooker->bb_env_mntr_cr_i;
 	u8 pri_ch = 0;
 	u8 central_ch = 0;
 	enum channel_width bw = 0;
@@ -400,7 +400,6 @@ void halbb_ccx_edcca_opt_set(struct bb_info *bb, enum ccx_edcca_opt_sc_idx sc)
 			default:
 				break;
 			}
-			edcca_opt += 4 * (pri_sb_idx % 4);
 		}
 	}
 
@@ -755,7 +754,7 @@ void halbb_nhm_get_fw_result_c2h(struct bb_info *bb_0, u8 *c2h)
 bool halbb_nhm_get_result(struct bb_info *bb)
 {
 	struct bb_env_mntr_info *env = &bb->bb_env_mntr_i;
-	struct bb_env_mntr_cr_info *cr = &env->bb_env_mntr_cr_i;
+	struct bb_env_mntr_cr_info *cr = &bb->bb_cmn_hooker->bb_env_mntr_cr_i;
 	u8 i = 0;
 	u32 result_sum_tmp = 0;
 
@@ -766,7 +765,7 @@ bool halbb_nhm_get_result(struct bb_info *bb)
 		return HALBB_SET_FAIL;
 	}
 
-	if (!(halbb_get_reg_curr_phy(bb, cr->nhm_rdy, cr->nhm_rdy_m))) {
+	if (!(halbb_get_reg_curr_phy(bb, cr->nhm_rdy, cr->nhm_rdy_m)) || env->ccx_period == 0) {
 		BB_DBG(bb, DBG_ENV_MNTR, "Get NHM report Fail\n");
 		return false;
 	}
@@ -829,7 +828,7 @@ bool halbb_nhm_get_result(struct bb_info *bb)
 void halbb_nhm_set_th_reg(struct bb_info *bb)
 {
 	struct bb_env_mntr_info *env = &bb->bb_env_mntr_i;
-	struct bb_env_mntr_cr_info *cr = &env->bb_env_mntr_cr_i;
+	struct bb_env_mntr_cr_info *cr = &bb->bb_cmn_hooker->bb_env_mntr_cr_i;
 
 	BB_DBG(bb, DBG_ENV_MNTR, "[%s]===>\n", __func__);
 
@@ -963,7 +962,7 @@ bool halbb_nhm_set(struct bb_info *bb, struct ccx_para_info *para)
 {
 	struct bb_env_mntr_info *env = &bb->bb_env_mntr_i;
 	struct bb_link_info *link = &bb->bb_link_i;
-	struct bb_env_mntr_cr_info *cr = &env->bb_env_mntr_cr_i;
+	struct bb_env_mntr_cr_info *cr = &bb->bb_cmn_hooker->bb_env_mntr_cr_i;
 	enum channel_width bw = bb->hal_com->band[bb->bb_phy_idx].cur_chandef.bw;
 	u8 nb_config = bb->phl_com->dev_cap.nb_config;
 	u16 mntr_time = 0;
@@ -1096,7 +1095,7 @@ bool halbb_nhm_set(struct bb_info *bb, struct ccx_para_info *para)
 void halbb_nhm_init(struct bb_info *bb)
 {
 	struct bb_env_mntr_info *env = &bb->bb_env_mntr_i;
-	struct bb_env_mntr_cr_info *cr = &env->bb_env_mntr_cr_i;
+	struct bb_env_mntr_cr_info *cr = &bb->bb_cmn_hooker->bb_env_mntr_cr_i;
 	u8 i = 0;
 	u8 nhm_th_11k[NHM_TH_NUM] = {18, 21, 24, 27, 30, 35, 40, 45, 50, 55,
 				     60}; /*Unit RSSI*/
@@ -1231,8 +1230,7 @@ void halbb_nhm_dbg(struct bb_info *bb, char input[][16], u32 *_used,
 				    "NHM is controlled by FW!\n");
 		}
 		for (i = 1; i < 9; i++) {
-			if (input[i + 1])
-				HALBB_SCAN(input[i + 1], DCMD_DECIMAL, &var[i]);
+			HALBB_SCAN(input[i + 1], DCMD_DECIMAL, &var[i]);
 		}
 
 		if (var[0] == 1) {
@@ -1326,9 +1324,9 @@ bool
 halbb_clm_get_result(struct bb_info *bb)
 {
 	struct bb_env_mntr_info *env = &bb->bb_env_mntr_i;
-	struct bb_env_mntr_cr_info *cr = &env->bb_env_mntr_cr_i;
+	struct bb_env_mntr_cr_info *cr = &bb->bb_cmn_hooker->bb_env_mntr_cr_i;
 
-	if (!(halbb_get_reg_curr_phy(bb, cr->clm_rdy, cr->clm_rdy_m))) {
+	if (!(halbb_get_reg_curr_phy(bb, cr->clm_rdy, cr->clm_rdy_m)) || env->ccx_period == 0) {
 		BB_DBG(bb, DBG_ENV_MNTR, "Get CLM report Fail\n");
 		return false;
 	}
@@ -1343,10 +1341,37 @@ halbb_clm_get_result(struct bb_info *bb)
 	return true;
 }
 
+void halbb_clm_input_option_sel(struct bb_info *bb, enum clm_opt_input option)
+{
+	struct bb_env_mntr_info *env = &bb->bb_env_mntr_i;
+	struct bb_env_mntr_cr_info *cr = &bb->bb_cmn_hooker->bb_env_mntr_cr_i;
+	u32 option_cvrt = (u32)option;
+
+	/*Set input option*/
+	if (option == env->clm_input_opt)
+		return;
+
+	env->clm_input_opt = option;
+	
+	BB_DBG(bb, DBG_ENV_MNTR, "Update CLM input opt ((%d)) -> ((%d))\n",
+	       env->clm_input_opt, option);
+
+	if (bb->ic_type & BB_IC_AX_SERIES) {
+		if (option == CLM_CCA_S160) {
+			BB_WARNING("[%s] option=%d", __func__, option);
+			option = CLM_CCA_S80;
+		} else if (option >= CLM_FROM_DBG) {
+			option_cvrt--;
+		}
+	}
+
+	halbb_set_reg_curr_phy(bb, cr->clm_opt, cr->clm_opt_m, option_cvrt);
+}
+
 bool halbb_clm_set(struct bb_info *bb, struct ccx_para_info *para)
 {
 	struct bb_env_mntr_info *env = &bb->bb_env_mntr_i;
-	struct bb_env_mntr_cr_info *cr = &env->bb_env_mntr_cr_i;
+	struct bb_env_mntr_cr_info *cr = &bb->bb_cmn_hooker->bb_env_mntr_cr_i;
 	enum channel_width bw = bb->hal_com->band[bb->bb_phy_idx].cur_chandef.bw;
 	u8 nb_config = bb->phl_com->dev_cap.nb_config;
 	u16 mntr_time = 0;
@@ -1396,6 +1421,7 @@ bool halbb_clm_set(struct bb_info *bb, struct ccx_para_info *para)
 		env->ccx_unit_idx = (u8)unit_idx;
 	}
 
+	#if 0
 	/*Set input option*/
 	if (para->clm_input_opt != env->clm_input_opt) {
 		halbb_set_reg_curr_phy(bb, cr->clm_opt, cr->clm_opt_m,
@@ -1407,6 +1433,9 @@ bool halbb_clm_set(struct bb_info *bb, struct ccx_para_info *para)
 
 		env->clm_input_opt = para->clm_input_opt;
 	}
+	#else
+	halbb_clm_input_option_sel(bb, para->clm_input_opt);
+	#endif
 
 	if ((bb->ic_type != BB_RTL8852A) && (bb->ic_type != BB_RTL8852B) &&
 	    (bb->ic_type != BB_RTL8851B)) {
@@ -1452,14 +1481,12 @@ bool halbb_clm_set(struct bb_info *bb, struct ccx_para_info *para)
 void halbb_clm_init(struct bb_info *bb)
 {
 	struct bb_env_mntr_info *env = &bb->bb_env_mntr_i;
-	struct bb_env_mntr_cr_info *cr = &env->bb_env_mntr_cr_i;
+	struct bb_env_mntr_cr_info *cr = &bb->bb_cmn_hooker->bb_env_mntr_cr_i;
 
 	BB_DBG(bb, DBG_ENV_MNTR, "[%s]===>\n", __func__);
+
 	env->clm_app = CLM_INIT;
-	if (bb->ic_type & BB_IC_AX_SERIES)
-		env->clm_input_opt = CLM_CCA_INIT;
-	else
-		env->clm_input_opt = BE_CLM_CCA_INIT;
+	env->clm_input_opt = CLM_CCA_INIT;
 
 	if ((bb->ic_type != BB_RTL8852A) && (bb->ic_type != BB_RTL8852B) &&
 	    (bb->ic_type != BB_RTL8851B)) {
@@ -1475,12 +1502,11 @@ void halbb_clm_init(struct bb_info *bb)
 void halbb_clm_set_dbg_sel(struct bb_info *bb, u8 dbg_sel)
 {
 	struct bb_env_mntr_info *env = &bb->bb_env_mntr_i;
-	struct bb_env_mntr_cr_info *cr = &env->bb_env_mntr_cr_i;
+	struct bb_env_mntr_cr_info *cr = &bb->bb_cmn_hooker->bb_env_mntr_cr_i;
 
 	/*r_clm_from_dbg_sel[5](0xa04[25]) is dummy*/
 	halbb_set_reg_curr_phy(bb, cr->clm_dbg_sel, cr->clm_dbg_sel_m, dbg_sel);
 }
-
 
 void halbb_clm_dbg(struct bb_info *bb, char input[][16], u32 *_used,
 		   char *output, u32 *_out_len)
@@ -1492,27 +1518,30 @@ void halbb_clm_dbg(struct bb_info *bb, char input[][16], u32 *_used,
 	u8 i = 0;
 
 	for (i = 0; i < 7; i++) {
-		if (input[i + 1])
-			HALBB_SCAN(input[i + 1], DCMD_DECIMAL, &var[i]);
+		HALBB_SCAN(input[i + 1], DCMD_DECIMAL, &var[i]);
 	}
 
 	if ((_os_strcmp(input[1], help) == 0)) {
 		BB_DBG_CNSL(*_out_len, *_used, output + *_used,
 			    *_out_len - *_used,
-			    "CLM Get Result: {100}\n");
+			    "===[CLM Basic-Trigger] ===\n");
 		BB_DBG_CNSL(*_out_len, *_used, output + *_used,
 			    *_out_len - *_used,
-			    "CLM Basic-Trigger(1900ms): {1}\n");
-		if ((bb->ic_type == BB_RTL8852A) ||
-		    (bb->ic_type == BB_RTL8852B) ||
-		    (bb->ic_type == BB_RTL8851B))
-			BB_DBG_CNSL(*_out_len, *_used, output + *_used,
-				    *_out_len - *_used,
-				    "CLM Adv-Trigger: {2} {0~2097ms} {input}\n");
+			    "   CLM Get Result: {100}\n");
+		BB_DBG_CNSL(*_out_len, *_used, output + *_used,
+			    *_out_len - *_used,
+			    "   CLM Trigger(1900ms): {1}\n");
+		
+		BB_DBG_CNSL(*_out_len, *_used, output + *_used,
+			    *_out_len - *_used,
+			    "===[CLM Adv-Trigger] ===\n");
+
+		if (bb->ic_type & (BB_RTL8852A | BB_RTL8852B | BB_RTL8851B))
+			BB_DBG_CNSL(*_out_len, *_used, output + *_used, *_out_len - *_used,
+				    "   CLM Adv-Trigger: {2} {0~2097ms} {input}\n");
 		else
-			BB_DBG_CNSL(*_out_len, *_used, output + *_used,
-				    *_out_len - *_used,
-				    "CLM Adv-Trigger: {2} {0~2097ms} {input} {nav_en} {rssi_th_en} {rssi_th}\n");
+			BB_DBG_CNSL(*_out_len, *_used, output + *_used, *_out_len - *_used,
+				    "   CLM Adv-Trigger: {2} {0~2097ms} {input} {nav_en} {rssi_th_en} {rssi_th}\n");
 
 		BB_DBG_CNSL(*_out_len, *_used, output + *_used,
 			    *_out_len - *_used,
@@ -1520,15 +1549,12 @@ void halbb_clm_dbg(struct bb_info *bb, char input[][16], u32 *_used,
 		BB_DBG_CNSL(*_out_len, *_used, output + *_used,
 			    *_out_len - *_used,
 			    "=============Notes=============>\n");
-		if (bb->ic_type & BB_IC_AX_SERIES)
-			BB_DBG_CNSL(*_out_len, *_used, output + *_used,
-				*_out_len - *_used,
-				"CLM input : 0(p20)/1(s20)/2(s40)/3(s80)/4(dbg)/5(txon_cca)/6(s20_s40_s80)/7(s20_s40_s80_p20)\n");
-		else
-			BB_DBG_CNSL(*_out_len, *_used, output + *_used,
-				*_out_len - *_used,
-				"CLM input : 0(p20)/1(s20)/2(s40)/3(s80)/4(s160)/5(dbg)/6(txon_cca)/7(s20_s40_s80_s160)/8(s20_s40_s80_s160_p20)\n");
-	} else if (var[0] == 100) { /*Get CLM results */
+		BB_DBG_CNSL(*_out_len, *_used, output + *_used, *_out_len - *_used,
+			    "CLM input : 0:p20, 1:s20, 2:s40, 3:s80, 4:s160, 5:dbg, 6:txon_cca, 7:s20_s40_s80_s160, 8:s20_s40_s80_s160_p20\n");
+		return;
+	} 
+
+	if (var[0] == 100) { /*Get CLM results */
 		BB_DBG_CNSL(*_out_len, *_used, output + *_used,
 			    *_out_len - *_used,
 			    "ccx_rpt_stamp=%d, ccx_period=%d\n",
@@ -1553,27 +1579,17 @@ void halbb_clm_dbg(struct bb_info *bb, char input[][16], u32 *_used,
 
 		if (var[0] == 1) {
 			para.mntr_time = 1900;
-			if (bb->ic_type & BB_IC_AX_SERIES)
-				para.clm_input_opt = CLM_CCA_S80_S40_S20;
-			else
-				para.clm_input_opt = BE_CLM_CCA_S160_S80_S40_S20;
+			para.clm_input_opt = CLM_CCA_S160_S80_S40_S20;
 
-			if ((bb->ic_type != BB_RTL8852A) &&
-			    (bb->ic_type != BB_RTL8852B) &&
-			    (bb->ic_type != BB_RTL8851B)) {
+			if (!(bb->ic_type & (BB_RTL8852A | BB_RTL8852B | BB_RTL8851B))) {
 				para.clm_nav_en = CLM_NAV_EN_DISABLED;
 				para.clm_rssi_th_en = CLM_RSSI_TH_EN_DISABLED;
 			}
 		} else if (var[0] == 2) {
 			para.mntr_time = (u16)var[1];
-			if (bb->ic_type & BB_IC_AX_SERIES)
-				para.clm_input_opt = (enum clm_opt_input)var[2];
-			else
-				para.clm_input_opt = (enum be_clm_opt_input)var[2];
+			para.clm_input_opt = (enum clm_opt_input)var[2];
 
-			if ((bb->ic_type != BB_RTL8852A) &&
-			    (bb->ic_type != BB_RTL8852B) &&
-			    (bb->ic_type != BB_RTL8851B)) {
+			if (!(bb->ic_type & (BB_RTL8852A | BB_RTL8852B | BB_RTL8851B))) {
 				para.clm_nav_en = (enum clm_opt_nav_en)var[3];
 				para.clm_rssi_th_en = (enum clm_opt_rssi_th_en)var[4];
 				para.clm_rssi_th = (u8)var[5];
@@ -1589,9 +1605,7 @@ void halbb_clm_dbg(struct bb_info *bb, char input[][16], u32 *_used,
 			    para.clm_app, para.rac_lv, para.mntr_time,
 			    para.clm_input_opt);
 
-		if ((bb->ic_type != BB_RTL8852A) &&
-		    (bb->ic_type != BB_RTL8852B) &&
-		    (bb->ic_type != BB_RTL8851B))
+		if (!(bb->ic_type & (BB_RTL8852A | BB_RTL8852B | BB_RTL8851B)))
 			BB_DBG_CNSL(*_out_len, *_used, output + *_used,
 				    *_out_len - *_used,
 				    "nav_en=%d, rssi_th_en=%d, rssi_th=%d\n",
@@ -1684,7 +1698,7 @@ bool
 halbb_ifs_clm_get_result(struct bb_info *bb)
 {
 	struct bb_env_mntr_info *env = &bb->bb_env_mntr_i;
-	struct bb_env_mntr_cr_info *cr = &env->bb_env_mntr_cr_i;
+	struct bb_env_mntr_cr_info *cr = &bb->bb_cmn_hooker->bb_env_mntr_cr_i;
 	u8 i = 0;
 	u8 ifs_clm_num = 0;
 
@@ -1695,7 +1709,7 @@ halbb_ifs_clm_get_result(struct bb_info *bb)
 
 	BB_DBG(bb, DBG_ENV_MNTR, "[%s]===>\n", __func__);
 
-	if (!(halbb_get_reg_curr_phy(bb, cr->ifs_clm_rdy, cr->ifs_clm_rdy_m))) {
+	if (!(halbb_get_reg_curr_phy(bb, cr->ifs_clm_rdy, cr->ifs_clm_rdy_m)) || env->ccx_period == 0) {
 		BB_DBG(bb, DBG_ENV_MNTR, "Get IFS_CLM report Fail\n");
 		return false;
 	}
@@ -1798,7 +1812,7 @@ halbb_ifs_clm_get_result(struct bb_info *bb)
 void halbb_ifs_clm_set_th_reg(struct bb_info *bb)
 {
 	struct bb_env_mntr_info *env = &bb->bb_env_mntr_i;
-	struct bb_env_mntr_cr_info *cr = &env->bb_env_mntr_cr_i;
+	struct bb_env_mntr_cr_info *cr = &bb->bb_cmn_hooker->bb_env_mntr_cr_i;
 	u8 i = 0;
 	u8 ifs_clm_num = 0;
 
@@ -1906,7 +1920,7 @@ CHK_IFS_UPDATE_FINISHED:
 bool halbb_ifs_clm_set(struct bb_info *bb, struct ccx_para_info *para)
 {
 	struct bb_env_mntr_info *env = &bb->bb_env_mntr_i;
-	struct bb_env_mntr_cr_info *cr = &env->bb_env_mntr_cr_i;
+	struct bb_env_mntr_cr_info *cr = &bb->bb_cmn_hooker->bb_env_mntr_cr_i;
 	enum channel_width bw = bb->hal_com->band[bb->bb_phy_idx].cur_chandef.bw;
 	u8 nb_config = bb->phl_com->dev_cap.nb_config;
 	u16 mntr_time = 0;
@@ -1977,7 +1991,7 @@ bool halbb_ifs_clm_set(struct bb_info *bb, struct ccx_para_info *para)
 void halbb_ifs_clm_init(struct bb_info *bb)
 {
 	struct bb_env_mntr_info *env = &bb->bb_env_mntr_i;
-	struct bb_env_mntr_cr_info *cr = &env->bb_env_mntr_cr_i;
+	struct bb_env_mntr_cr_info *cr = &bb->bb_cmn_hooker->bb_env_mntr_cr_i;
 
 	BB_DBG(bb, DBG_ENV_MNTR, "[%s]===>\n", __func__);
 
@@ -2018,8 +2032,7 @@ void halbb_ifs_clm_dbg(struct bb_info *bb, char input[][16], u32 *_used,
 		ifs_clm_num = BE_IFS_CLM_NUM;
 
 	for (i = 0; i < 5; i++) {
-		if (input[i + 1])
-			HALBB_SCAN(input[i + 1], DCMD_DECIMAL, &var[i]);
+		HALBB_SCAN(input[i + 1], DCMD_DECIMAL, &var[i]);
 	}
 
 	if ((_os_strcmp(input[1], help) == 0)) {
@@ -2217,7 +2230,7 @@ u8 halbb_fahm_racing_ctrl(struct bb_info *bb, enum halbb_racing_lv rac_lv)
 void halbb_fahm_hw_trigger(struct bb_info *bb)
 {
 	struct bb_env_mntr_info *env = &bb->bb_env_mntr_i;
-	struct bb_env_mntr_cr_info *cr = &env->bb_env_mntr_cr_i;
+	struct bb_env_mntr_cr_info *cr = &bb->bb_cmn_hooker->bb_env_mntr_cr_i;
 
 	BB_DBG(bb, DBG_ENV_MNTR, "[%s]===>\n", __func__);
 
@@ -2358,13 +2371,13 @@ void halbb_fahm_get_utility(struct bb_info *bb)
 bool halbb_fahm_get_result(struct bb_info *bb)
 {
 	struct bb_env_mntr_info *env = &bb->bb_env_mntr_i;
-	struct bb_env_mntr_cr_info *cr = &env->bb_env_mntr_cr_i;
+	struct bb_env_mntr_cr_info *cr = &bb->bb_cmn_hooker->bb_env_mntr_cr_i;
 	u8 i = 0;
 	u32 result_sum_tmp = 0;
 
 	BB_DBG(bb, DBG_ENV_MNTR, "[%s]===>\n", __func__);
 
-	if (!(halbb_get_reg_curr_phy(bb, cr->fahm_rdy, cr->fahm_rdy_m))) {
+	if (!(halbb_get_reg_curr_phy(bb, cr->fahm_rdy, cr->fahm_rdy_m)) || env->fahm_period== 0) {
 		BB_DBG(bb, DBG_ENV_MNTR, "Get FAHM report Fail\n");
 		return false;
 	}
@@ -2423,7 +2436,7 @@ bool halbb_fahm_get_result(struct bb_info *bb)
 void halbb_fahm_set_th_reg(struct bb_info *bb)
 {
 	struct bb_env_mntr_info *env = &bb->bb_env_mntr_i;
-	struct bb_env_mntr_cr_info *cr = &env->bb_env_mntr_cr_i;
+	struct bb_env_mntr_cr_info *cr = &bb->bb_cmn_hooker->bb_env_mntr_cr_i;
 
 	BB_DBG(bb, DBG_ENV_MNTR, "[%s]===>\n", __func__);
 
@@ -2569,7 +2582,7 @@ bool halbb_fahm_set(struct bb_info *bb, struct fahm_para_info *para)
 {
 	struct bb_env_mntr_info *env = &bb->bb_env_mntr_i;
 	struct bb_link_info *link = &bb->bb_link_i;
-	struct bb_env_mntr_cr_info *cr = &env->bb_env_mntr_cr_i;
+	struct bb_env_mntr_cr_info *cr = &bb->bb_cmn_hooker->bb_env_mntr_cr_i;
 	enum channel_width bw = bb->hal_com->band[bb->bb_phy_idx].cur_chandef.bw;
 	u8 nb_config = bb->phl_com->dev_cap.nb_config;
 	u16 mntr_time = 0;
@@ -2761,7 +2774,7 @@ bool halbb_fahm_result(struct bb_info *bb, struct fahm_report *rpt)
 void halbb_fahm_init(struct bb_info *bb)
 {
 	struct bb_env_mntr_info *env = &bb->bb_env_mntr_i;
-	struct bb_env_mntr_cr_info *cr = &env->bb_env_mntr_cr_i;
+	struct bb_env_mntr_cr_info *cr = &bb->bb_cmn_hooker->bb_env_mntr_cr_i;
 	u8 i = 0;
 	u8 fahm_th_11k[FAHM_TH_NUM] = {18, 21, 24, 27, 30, 35, 40, 45, 50, 55,
 				       60}; /*Unit RSSI*/
@@ -2883,8 +2896,7 @@ void halbb_fahm_dbg(struct bb_info *bb, char input[][16], u32 *_used,
 		env->fahm_manual_ctrl = true;
 
 		for (i = 1; i < 9; i++) {
-			if (input[i + 1])
-				HALBB_SCAN(input[i + 1], DCMD_DECIMAL, &var[i]);
+			HALBB_SCAN(input[i + 1], DCMD_DECIMAL, &var[i]);
 		}
 
 		if (var[0] == 1) {
@@ -2956,10 +2968,10 @@ bool
 halbb_edcca_clm_get_result(struct bb_info *bb)
 {
 	struct bb_env_mntr_info *env = &bb->bb_env_mntr_i;
-	struct bb_env_mntr_cr_info *cr = &env->bb_env_mntr_cr_i;
+	struct bb_env_mntr_cr_info *cr = &bb->bb_cmn_hooker->bb_env_mntr_cr_i;
 
 	if (!(halbb_get_reg_curr_phy(bb, cr->edcca_clm_rdy,
-				     cr->edcca_clm_rdy_m))) {
+				     cr->edcca_clm_rdy_m)) || env->ccx_period == 0) {
 		BB_DBG(bb, DBG_ENV_MNTR, "Get EDCCA_CLM report Fail\n");
 		return false;
 	}
@@ -2979,7 +2991,7 @@ halbb_edcca_clm_get_result(struct bb_info *bb)
 bool halbb_edcca_clm_set(struct bb_info *bb, struct ccx_para_info *para)
 {
 	struct bb_env_mntr_info *env = &bb->bb_env_mntr_i;
-	struct bb_env_mntr_cr_info *cr = &env->bb_env_mntr_cr_i;
+	struct bb_env_mntr_cr_info *cr = &bb->bb_cmn_hooker->bb_env_mntr_cr_i;
 	enum channel_width bw = bb->hal_com->band[bb->bb_phy_idx].cur_chandef.bw;
 	u8 nb_config = bb->phl_com->dev_cap.nb_config;
 	u16 mntr_time = 0;
@@ -3031,7 +3043,7 @@ bool halbb_edcca_clm_set(struct bb_info *bb, struct ccx_para_info *para)
 void halbb_edcca_clm_init(struct bb_info *bb)
 {
 	struct bb_env_mntr_info *env = &bb->bb_env_mntr_i;
-	struct bb_env_mntr_cr_info *cr = &env->bb_env_mntr_cr_i;
+	struct bb_env_mntr_cr_info *cr = &bb->bb_cmn_hooker->bb_env_mntr_cr_i;
 
 	BB_DBG(bb, DBG_ENV_MNTR, "[%s]===>\n", __func__);
 	env->edcca_clm_app = EDCCA_CLM_INIT;
@@ -3050,8 +3062,7 @@ void halbb_edcca_clm_dbg(struct bb_info *bb, char input[][16], u32 *_used,
 	u8 i = 0;
 
 	for (i = 0; i < 5; i++) {
-		if (input[i + 1])
-			HALBB_SCAN(input[i + 1], DCMD_DECIMAL, &var[i]);
+		HALBB_SCAN(input[i + 1], DCMD_DECIMAL, &var[i]);
 	}
 
 	if ((_os_strcmp(input[1], help) == 0)) {
@@ -3759,6 +3770,38 @@ void halbb_idle_time_pwr_physts(struct bb_info *bb, struct physts_rxd *desc,
 	       (env->idle_pwr_physts & 0x7) * 125);
 }
 
+void halbb_env_mntr_pause_val(struct bb_info *bb, u32 *val_buf, u8 val_len)
+{
+	struct bb_env_mntr_info *env = &bb->bb_env_mntr_i;
+	u32 tmp_val = 0;
+
+	if (val_len != 1) {
+		BB_DBG(bb, DBG_ENV_MNTR, "[Error][ENV_MNTR]Need val_len=1\n");
+		return;
+	}
+
+	tmp_val = val_buf[0]; /*Just prevent compile warning*/
+
+	BB_DBG(bb, DBG_ENV_MNTR, "[%s]\n", __func__);
+}
+
+bool halbb_env_mntr_abort(struct bb_info *bb)
+{
+	if (!(bb->support_ability & BB_ENVMNTR)) {
+		BB_DBG(bb, DBG_ENV_MNTR, "[%s] Env_mntr Not support\n",
+		       __func__);
+		return true;
+	}
+
+	if (bb->pause_ability & BB_ENVMNTR) {
+		BB_DBG(bb, DBG_ENV_MNTR, "[%s] Pause Env Mntr in LV=%d\n",
+		       __func__, bb->pause_lv_table.lv_env_mntr);
+		return true;
+	}
+
+	return false;
+}
+
 void halbb_env_mntr(struct bb_info *bb)
 {
 	struct bb_env_mntr_info *env = &bb->bb_env_mntr_i;
@@ -3771,12 +3814,14 @@ void halbb_env_mntr(struct bb_info *bb)
 	u8 chk_result = CCX_FAIL;
 	bool fahm_chk_result = false;
 
+	halbb_show_cr_cnt(bb, BB_WD_ENV_MNTR);
+
 	BB_DBG(bb, DBG_ENV_MNTR, "[%s]===>\n", __func__);
 
 	env->ccx_watchdog_result = CCX_FAIL;
 	env->fahm_watchdog_result = false;
 
-	if (!(bb->support_ability & BB_ENVMNTR))
+	if (halbb_env_mntr_abort(bb))
 		return;
 
 	if (env->ccx_manual_ctrl) {
@@ -3792,10 +3837,7 @@ void halbb_env_mntr(struct bb_info *bb)
 		para.ccx_edcca_opt_sc_idx = CCX_EDCCA_P0;
 
 		para.clm_app = CLM_BACKGROUND;
-		if (bb->ic_type & BB_IC_AX_SERIES)
-			para.clm_input_opt = CLM_CCA_S80_S40_S20;
-		else
-			para.clm_input_opt = BE_CLM_CCA_S160_S80_S40_S20;
+		para.clm_input_opt = CLM_CCA_S160_S80_S40_S20;
 
 		para.nhm_app = NHM_BACKGROUND;
 		para.nhm_incld_cca = NHM_EXCLUDE_CCA;
@@ -4195,10 +4237,7 @@ void halbb_env_mntr_dbg_trigger(struct bb_info *bb, u32 *_used, char *output,
 
 	/*clm para*/
 	para.clm_app = CLM_DBG;
-	if (bb->ic_type & BB_IC_AX_SERIES)
-		para.clm_input_opt = CLM_CCA_S80_S40_S20;
-	else
-		para.clm_input_opt = BE_CLM_CCA_S160_S80_S40_S20;
+	para.clm_input_opt = CLM_CCA_S160_S80_S40_S20;
 
 	/*nhm para*/
 	para.nhm_app = NHM_DBG_11K;
@@ -4294,8 +4333,7 @@ void halbb_env_mntr_dbg(struct bb_info *bb, char input[][16], u32 *_used,
 	u8 func_sel = 0;
 
 	for (i = 0; i < 3; i++) {
-		if (input[i + 1])
-			HALBB_SCAN(input[i + 1], DCMD_DECIMAL, &var[i]);
+		HALBB_SCAN(input[i + 1], DCMD_DECIMAL, &var[i]);
 	}
 
 	if ((_os_strcmp(input[1], help) == 0)) {
@@ -4384,7 +4422,7 @@ u8 halbb_env_mntr_get_802_11_k_rsni(struct bb_info *bb, s8 rcpi, s8 anpi)
 void halbb_cr_cfg_env_mntr_init(struct bb_info *bb)
 {
 	struct bb_env_mntr_info *env = &bb->bb_env_mntr_i;
-	struct bb_env_mntr_cr_info *cr = &env->bb_env_mntr_cr_i;
+	struct bb_env_mntr_cr_info *cr = &bb->bb_cmn_hooker->bb_env_mntr_cr_i;
 
 	switch (bb->cr_type) {
 

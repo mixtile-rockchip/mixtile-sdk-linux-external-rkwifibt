@@ -29,7 +29,7 @@ bool flag_prv_wa_en = 0;
 void halbb_ul_tb_reset(struct bb_info *bb)
 {
 	struct bb_ul_tb_info *bb_ul_tb = &bb->bb_ul_tb_i;
-	struct bb_ul_tb_cr_info *cr = &bb->bb_ul_tb_i.bb_ul_tb_cr_i;
+	struct bb_ul_tb_cr_info *cr = &bb->bb_cmn_hooker->bb_ul_tb_cr_i;
 	struct rtw_tpu_info *tpu = &bb->hal_com->band[bb->bb_phy_idx].rtw_tpu_i;
 	struct bb_api_info *bb_api = &bb->bb_api_i;
 	bool is_ofdm = true;
@@ -43,7 +43,7 @@ void halbb_ul_tb_reset(struct bb_info *bb)
 void halbb_ul_tb_chk(struct bb_info *bb)
 {
 	struct bb_ul_tb_info *bb_ul_tb = &bb->bb_ul_tb_i;
-	struct bb_ul_tb_cr_info *cr = &bb->bb_ul_tb_i.bb_ul_tb_cr_i;
+	struct bb_ul_tb_cr_info *cr = &bb->bb_cmn_hooker->bb_ul_tb_cr_i;
 	struct bb_api_info *bb_api = &bb->bb_api_i;
 	struct rtw_tpu_info *tpu = &bb->hal_com->band[bb->bb_phy_idx].rtw_tpu_i;
 
@@ -53,7 +53,9 @@ void halbb_ul_tb_chk(struct bb_info *bb)
 	bb_ul_tb->def_tri_idx = tpu->tx_ptrn_shap_idx;
 
 	BB_DBG(bb, DBG_UL_TB_CTRL, "band = %d, bw = %d\n", bb_api->band, 20 << bb_api->bw);
-	if (bb_api->band >= BAND_ON_5G && bb_api->bw >= CHANNEL_WIDTH_40) {
+	if (bb_api->band == BAND_ON_24G && bb_api->bw == CHANNEL_WIDTH_40) {
+		bb_ul_tb->dyn_tb_bedge_en = false;
+	} else {
 		if (bb->ic_type == BB_RTL8852A ||
 		    (bb->ic_type == BB_RTL8852B && bb->hal_com->cv <= CBV) ||
 		    (bb->ic_type == BB_RTL8852C && bb->hal_com->cv == CAV)
@@ -62,8 +64,6 @@ void halbb_ul_tb_chk(struct bb_info *bb)
 		else
 			bb_ul_tb->dyn_tb_bedge_en = false;
 	}
-	else
-		bb_ul_tb->dyn_tb_bedge_en = false;
 
 	BB_DBG(bb, DBG_UL_TB_CTRL, "def_if_bandedge = %d, def_tri_idx = %d\n", bb_ul_tb->def_if_bandedge, bb_ul_tb->def_tri_idx);
 	BB_DBG(bb, DBG_UL_TB_CTRL, "dyn_tb_bedge_en = %d, dyn_tb_tri_en = %d\n", bb_ul_tb->dyn_tb_bedge_en, bb_ul_tb->dyn_tb_tri_en);
@@ -76,7 +76,7 @@ void halbb_ul_tb_ctrl(struct bb_info *bb)
 	struct rtw_phl_com_t *phl = bb->phl_com;
 	struct dev_cap_t *dev = &phl->dev_cap;
 	struct rtw_phl_stainfo_t *sta = NULL;
-	struct bb_ul_tb_cr_info *cr = &bb->bb_ul_tb_i.bb_ul_tb_cr_i;
+	struct bb_ul_tb_cr_info *cr = &bb->bb_cmn_hooker->bb_ul_tb_cr_i;
 	struct bb_api_info *bb_api = &bb->bb_api_i;
 	struct rtw_tpu_info *tpu = &bb->hal_com->band[bb->bb_phy_idx].rtw_tpu_i;
 	bool is_ofdm = true;
@@ -84,6 +84,8 @@ void halbb_ul_tb_ctrl(struct bb_info *bb)
 	u8 num_low_tf_client = 0;
 	u8 num_active_client = 0;
 	u16 i = 0;
+
+	halbb_show_cr_cnt(bb, BB_WD_UL_TB_CTRL);
 
 	BB_DBG(bb, DBG_UL_TB_CTRL, "[%s]\n", __func__);
 
@@ -235,7 +237,7 @@ void halbb_ul_tb_ctrl_init(struct bb_info *bb)
 
 void halbb_cr_cfg_ul_tb_init(struct bb_info *bb)
 {
-	struct bb_ul_tb_cr_info *cr = &bb->bb_ul_tb_i.bb_ul_tb_cr_i;
+	struct bb_ul_tb_cr_info *cr = &bb->bb_cmn_hooker->bb_ul_tb_cr_i;
 
 	switch (bb->cr_type) {
 

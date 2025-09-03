@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- * Copyright(c) 2019 Realtek Corporation.
+ * Copyright(c) 2019 Realtek Corporation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of version 2 of the GNU General Public License as
@@ -11,10 +11,19 @@
  * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
  * more details.
  *
- *****************************************************************************/
-#ifndef _RTL8852BE_H_
-#define _RTL8852BE_H_
+ ******************************************************************************/
 
-/*provide IC-BUS's function declaration or definition to IC*/
+#ifndef _MAC_AX_DBG_CMD_8852B_H_
+#define _MAC_AX_DBG_CMD_8852B_H_
 
-#endif /* _RTL8852BE_H_ */
+#include "../../type.h"
+
+#if MAC_AX_FEATURE_DBGPKG
+#if MAC_AX_8852B_SUPPORT
+
+u32 get_check_reg_8852b(u32 *reg_num, struct check_reg_info **check_reg);
+
+#endif
+
+#endif
+#endif // #define _MAC_AX_DBG_CMD_8852B_H_

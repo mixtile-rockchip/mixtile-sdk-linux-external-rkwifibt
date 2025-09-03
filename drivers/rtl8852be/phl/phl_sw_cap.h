@@ -19,7 +19,7 @@ enum rtw_phl_status
 phl_sw_cap_init(struct rtw_phl_com_t* phl_com);
 
 enum rtw_phl_status
-phl_sw_cap_deinit(struct rtw_phl_com_t* phl_com);
+phl_sw_cap_deinit(struct rtw_phl_com_t* phl_com, bool full_deinit);
 
 enum rtw_phl_status
 phl_init_protocol_cap(struct phl_info_t *phl_info,

@@ -47,6 +47,7 @@ u32 _patch_ck_buf_level(struct mac_ax_adapter *adapter)
 	return MACSUCCESS;
 }
 
+#if MAC_AX_SDIO_SUPPORT
 u32 mac_pwr_on_sdio_8852b(struct mac_ax_adapter *adapter)
 {
 	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
@@ -353,10 +354,19 @@ u32 mac_pwr_on_sdio_8852b(struct mac_ax_adapter *adapter)
 	adapter->sm.plat = MAC_AX_PLAT_ON;
 	adapter->sm.io_st = MAC_AX_IO_ST_NORM;
 
+	ret = get_hidden_valid(adapter);
+	if (ret)
+		PLTFM_MSG_ERR("[ERR]get_hidden_valid error\n");
+
 	/* get fv & cv */
 	ret = get_fv_info(adapter);
 	if (ret)
 		PLTFM_MSG_ERR("[ERR]get_fv_info error\n");
+
+	/* get aid */
+	ret = get_aid_info(adapter);
+	if (ret)
+		PLTFM_MSG_ERR("[ERR]get_aid_info error\n");
 
 	/*enable dmac , 0x8400*/
 	val32 = MAC_REG_R32(R_AX_DMAC_FUNC_EN);
@@ -404,7 +414,8 @@ u32 mac_pwr_on_sdio_8852b(struct mac_ax_adapter *adapter)
 
 	return MACSUCCESS;
 }
-
+#endif
+#if MAC_AX_USB_SUPPORT
 u32 mac_pwr_on_usb_8852b(struct mac_ax_adapter *adapter)
 {
 	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
@@ -701,10 +712,19 @@ u32 mac_pwr_on_usb_8852b(struct mac_ax_adapter *adapter)
 	adapter->sm.plat = MAC_AX_PLAT_ON;
 	adapter->sm.io_st = MAC_AX_IO_ST_NORM;
 
+	ret = get_hidden_valid(adapter);
+	if (ret)
+		PLTFM_MSG_ERR("[ERR]get_hidden_valid error\n");
+
 	/* get fv & cv */
 	ret = get_fv_info(adapter);
 	if (ret)
 		PLTFM_MSG_ERR("[ERR]get_fv_info error\n");
+
+	/* get aid */
+	ret = get_aid_info(adapter);
+	if (ret)
+		PLTFM_MSG_ERR("[ERR]get_aid_info error\n");
 
 	/*enable dmac , 0x8400*/
 	val32 = MAC_REG_R32(R_AX_DMAC_FUNC_EN);
@@ -752,7 +772,8 @@ u32 mac_pwr_on_usb_8852b(struct mac_ax_adapter *adapter)
 
 	return MACSUCCESS;
 }
-
+#endif
+#if MAC_AX_PCIE_SUPPORT
 u32 mac_pwr_on_pcie_8852b(struct mac_ax_adapter *adapter)
 {
 	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
@@ -1060,10 +1081,19 @@ u32 mac_pwr_on_pcie_8852b(struct mac_ax_adapter *adapter)
 	adapter->sm.plat = MAC_AX_PLAT_ON;
 	adapter->sm.io_st = MAC_AX_IO_ST_NORM;
 
+	ret = get_hidden_valid(adapter);
+	if (ret)
+		PLTFM_MSG_ERR("[ERR]get_hidden_valid error\n");
+
 	/* get fv & cv */
 	ret = get_fv_info(adapter);
 	if (ret)
 		PLTFM_MSG_ERR("[ERR]get_fv_info error\n");
+
+	/* get aid */
+	ret = get_aid_info(adapter);
+	if (ret)
+		PLTFM_MSG_ERR("[ERR]get_aid_info error\n");
 
 	/*enable dmac , 0x8400*/
 	val32 = MAC_REG_R32(R_AX_DMAC_FUNC_EN);
@@ -1111,7 +1141,8 @@ u32 mac_pwr_on_pcie_8852b(struct mac_ax_adapter *adapter)
 
 	return MACSUCCESS;
 }
-
+#endif
+#if MAC_AX_SDIO_SUPPORT
 u32 mac_pwr_off_sdio_8852b(struct mac_ax_adapter *adapter)
 {
 	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
@@ -1318,7 +1349,8 @@ u32 mac_pwr_off_sdio_8852b(struct mac_ax_adapter *adapter)
 
 	return MACSUCCESS;
 }
-
+#endif
+#if MAC_AX_USB_SUPPORT
 u32 mac_pwr_off_usb_8852b(struct mac_ax_adapter *adapter)
 {
 	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
@@ -1513,7 +1545,8 @@ u32 mac_pwr_off_usb_8852b(struct mac_ax_adapter *adapter)
 
 	return MACSUCCESS;
 }
-
+#endif
+#if MAC_AX_PCIE_SUPPORT
 u32 mac_pwr_off_pcie_8852b(struct mac_ax_adapter *adapter)
 {
 	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
@@ -1710,7 +1743,7 @@ u32 mac_pwr_off_pcie_8852b(struct mac_ax_adapter *adapter)
 
 	return MACSUCCESS;
 }
-
+#endif
 #if MAC_AX_FEATURE_HV
 u32 mac_enter_lps_sdio_8852b(struct mac_ax_adapter *adapter)
 {

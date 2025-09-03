@@ -31,8 +31,8 @@ halbtc-y += $(path_halbtc_8852a)/btc_8852a.o
 
 endif
 
-# 8852B/8852BP/8852BT Support
-ifneq ($(filter y,$(CONFIG_RTL8852B) $(CONFIG_RTL8852BP) $(CONFIG_RTL8851B) $(CONFIG_RTL8852BT)),)
+# 8852B/8852BP/8852BT/8852BPT Support
+ifneq ($(filter y,$(CONFIG_RTL8852B) $(CONFIG_RTL8852BP) $(CONFIG_RTL8851B) $(CONFIG_RTL8852BT) $(CONFIG_RTL8852BPT)),)
 ic := 8852b
 # Level 2 directory
 path_halbtc_8852b := $(path_halbtc_d1)/btc_$(ic)
@@ -40,7 +40,8 @@ path_halbtc_8852b := $(path_halbtc_d1)/btc_$(ic)
 halbtc-y += $(path_halbtc_8852b)/btc_8852b.o
 endif
 
-ifeq ($(CONFIG_RTL8852C), y)
+# 8852C/8842A Support
+ifneq ($(filter y,$(CONFIG_RTL8852C) $(CONFIG_RTL8842A)),)
 ic := 8852c
 # Level 2 directory
 path_halbtc_8852c := $(path_halbtc_d1)/btc_$(ic)

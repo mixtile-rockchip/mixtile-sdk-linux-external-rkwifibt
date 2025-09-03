@@ -63,9 +63,9 @@ sint rtw_endofpktfile(struct pkt_file *pfile)
 	return _FALSE;
 }
 
+#ifdef CONFIG_TCP_CSUM_OFFLOAD_TX
 void rtw_set_tx_chksum_offload(struct sk_buff *pkt, struct pkt_attrib *pattrib)
 {
-#ifdef CONFIG_TCP_CSUM_OFFLOAD_TX
 	struct sk_buff *skb = (struct sk_buff *)pkt;
 	struct iphdr *iph = NULL;
 	struct ipv6hdr *i6ph = NULL;
@@ -108,9 +108,9 @@ void rtw_set_tx_chksum_offload(struct sk_buff *pkt, struct pkt_attrib *pattrib)
 	default:
 		break;
 	}
+}
 #endif
 
-}
 #if 0 /*CONFIG_CORE_XMITBUF*/
 int rtw_os_xmit_resource_alloc(_adapter *padapter, struct xmit_buf *pxmitbuf, u32 alloc_sz, u8 flag)
 {
@@ -258,12 +258,6 @@ static inline bool rtw_os_need_wake_queue(_adapter *padapter, u16 os_qid)
 	if (padapter->registrypriv.wifi_spec) {
 		if (pxmitpriv->hwxmits[os_qid].accnt < WMM_XMIT_THRESHOLD)
 			return _TRUE;
-#ifdef DBG_CONFIG_ERROR_DETECT
-#ifdef DBG_CONFIG_ERROR_RESET
-	} else if (rtw_hal_sreset_inprogress(padapter) == _TRUE) {
-		return _FALSE;
-#endif/* #ifdef DBG_CONFIG_ERROR_RESET */
-#endif/* #ifdef DBG_CONFIG_ERROR_DETECT */
 	} else {
 		return _TRUE;
 	}

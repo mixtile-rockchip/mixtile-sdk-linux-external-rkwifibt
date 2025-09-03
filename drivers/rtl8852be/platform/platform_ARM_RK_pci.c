@@ -20,7 +20,7 @@ extern int rockchip_wifi_set_carddetect(int val);
 
 void platform_wifi_get_oob_irq(int *oob_irq)
 {
-
+	//*oob_irq = rockchip_wifi_get_oob_irq();
 }
 
 void platform_wifi_mac_addr(u8 *mac_addr)
@@ -29,6 +29,7 @@ void platform_wifi_mac_addr(u8 *mac_addr)
 		RTW_ERR("Get mac address from flash:"MAC_FMT"\n", MAC_ARG(mac_addr));
 }
 
+extern unsigned int oob_irq;
 int platform_wifi_power_on(void)
 {
 	int ret = 0;
@@ -39,6 +40,7 @@ int platform_wifi_power_on(void)
 	RTW_PRINT("=======================================================\n");
 	RTW_PRINT("Realtek %s WiFi driver (Powered by Rockchip,Ver %s) init.\n", DRV_NAME, DRIVERVERSION);
 	rockchip_wifi_power(1);
+	oob_irq = rockchip_wifi_get_oob_irq();
 	return ret;
 }
 

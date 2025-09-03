@@ -28,11 +28,51 @@
 #define VAR_LENGTH 0xff
 #define TRANS_2_RSSI(X) (X >> 1)
 #define PHYSTS_HDR_LEN	8
+#define RXD_BUFFER_LEN	9
 #define TB_USER_MAX	4
 #define MU_USER_MAX	4
 #define PSTS_USR(x,y)	psts_##x_usr_##y
 
 #define IE11_PKT_INFO_LEN 10
+
+#define BB_SEL_BIT_OFST 30
+#define BB_MACID_BIT_OFST 0
+#define BB_MACID_DW_OFST 2
+#define BB_FRM_TYPE_BIT_OFST 10
+#define BB_FRM_TYPE_DW_OFST 2
+#define BB_CRC32_BIT_OFST 6
+#define BB_CRC32_DW_OFST 3
+#define BB_PPDU_CNT_BIT_OFST 8
+#define BB_PPDU_CNT_DW_OFST 4
+#define BB_BW_BIT_OFST 12
+#define BB_BW_DW_OFST 4
+#define BB_GI_LTF_BIT_OFST 16
+#define BB_GI_LTF_DW_OFST 4
+#define BB_DATA_RATE_BIT_OFST 20
+#define BB_DATA_RATE_DW_OFST 4
+
+#define BB_PKT_LEN_L_BYTE_OFST	0
+#define BB_PKT_LEN_L_BIT_MASK	0xff
+#define BB_PKT_LEN_M_BYTE_OFST	1
+#define BB_PKT_LEN_M_BIT_MASK	0x3f
+#define BB_SEL_BYTE_OFST	3
+#define BB_SEL_BIT_MASK		0x40
+#define BB_MACID_BYTE_OFST	8
+#define BB_MACID_BIT_MASK	0xff
+#define BB_FRM_TYPE_BYTE_OFST	9
+#define BB_FRM_TYPE_BIT_MASK	0xc
+#define BB_CRC32_BYTE_OFST	12
+#define BB_CRC32_BIT_MASK	0x40
+#define BB_PPDU_CNT_BYTE_OFST	17
+#define BB_PPDU_CNT_BIT_MASK	0x7
+#define BB_BW_BYTE_OFST		17
+#define BB_BW_BIT_MASK		0x70
+#define BB_GI_LTF_BYTE_OFST	18
+#define BB_GI_LTF_BIT_MASK	0x7
+#define BB_DATA_RATE_L_BYTE_OFST 18
+#define BB_DATA_RATE_L_BIT_MASK	0xf0
+#define BB_DATA_RATE_M_BYTE_OFST 19
+#define BB_DATA_RATE_M_BIT_MASK	0xff
 
 enum bb_physts_bw_info{
 	PSTS_BW5 	= 0,
@@ -83,7 +123,7 @@ enum bb_physts_ie_t {
 
 struct bb_info;
 
-static const char bb_physts_bitmap_type_t[][9] = {
+static const char bb_physts_bitmap_type_t[][10] = {
 	"SRH_FAIL",
 	"BRK_BY_TX",
 	"CCA_SPF",
@@ -103,6 +143,25 @@ static const char bb_physts_bitmap_type_t[][9] = {
 	"EHT",
 };
 
+struct bb_rxd_rslt_info {
+	bool bb_sel;
+	bool crc_err;
+	u8 mac_id;
+	u8 frm_type;
+	u8 ppdu_cnt;
+	u8 bw;
+	u8 rx_gi_ltf;
+	u16 rx_data_rate;
+	u16 pkt_length;
+};
+
+struct bb_rxd_info {
+	u8 rxd_dump_mode; /*0: disable, 1:raw data, 2: msg mode, 3:raw data + msg mode, 4:crc log*/
+	u16 show_rxd_cnt;
+	u16 show_rxd_max_cnt;
+	u8 ppdu_cnt_pre;
+	struct bb_rxd_rslt_info bb_rxd_rslt_i;
+};
 struct bb_physts_rslt_hdr_info {
 	u8 ppdu_idx;
 	u8 rssi[4];
@@ -724,7 +783,6 @@ struct bb_physts_info {
 	bool bypass_bt_tx_during_cca;
 	struct bb_rate_info		bb_rate_i;
 	struct bb_rate_info		bb_rate_mu_i;
-	struct bb_physts_cr_info	bb_physts_cr_i;
 	struct bb_physts_cnt_info	bb_physts_cnt_i;
 	struct bb_physts_rslt_hdr_info	bb_physts_rslt_hdr_i;
 	struct bb_physts_rslt_0_info	bb_physts_rslt_0_i;
@@ -773,8 +831,8 @@ void halbb_physts_rpt_gen(struct bb_info *bb, u32 physts_bitmap,
 			  struct physts_result *rpt,
 			  bool physts_rpt_valid, struct physts_rxd *desc,
 			  bool is_cck_rate, bool is_ie8_valid);
-void halbb_physts_ie_bitmap_set(struct bb_info *bb, u32 ie_page, u32 bitmap);
-u32 halbb_physts_ie_bitmap_get(struct bb_info *bb, u32 ie_page);
+void halbb_physts_ie_bitmap_set(struct bb_info *bb, enum bb_physts_bitmap_t ie_page, u32 bitmap);
+u32 halbb_physts_ie_bitmap_get(struct bb_info *bb, enum bb_physts_bitmap_t ie_page);
 void halbb_physts_ie_bitmap_en(struct bb_info *bb, enum bb_physts_bitmap_t type,
 			       enum bb_physts_ie_t ie, bool en);
 void halbb_phy_sts_manual_trig(struct bb_info *bb, enum bb_mode_type mode, u8 ss);
@@ -784,7 +842,8 @@ void halbb_physts_parsing_init_io_en(struct bb_info *bb);
 void halbb_physts_parsing_init(struct bb_info *bb);
 
 void halbb_physts_brk_fail_rpt_en(struct bb_info* bb, bool enable, enum phl_phy_idx phy_idx);
-
+void halbb_rxd_dbg(struct bb_info *bb, char input[][16], u32 *_used,
+		  char *output, u32 *_out_len);
 void halbb_physts_dbg(struct bb_info *bb, char input[][16], u32 *_used,
 		  char *output, u32 *_out_len);
 void halbb_cr_cfg_physts_init(struct bb_info *bb);

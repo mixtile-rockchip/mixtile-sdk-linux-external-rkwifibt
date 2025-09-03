@@ -15,6 +15,7 @@
 
 #include "hal_headers.h"
 
+#ifdef CONFIG_PHL_BEAMFORM
 /**
  * rtw_hal_bf_dbg_dump_entry
  * @entry: hal_bf_entry for dump content
@@ -492,24 +493,28 @@ void hal_bf_deinit(struct hal_info_t *hal_info)
 	struct rtw_hal_com_t *hal_com = hal_info->hal_com;
 	struct hal_bf_obj *bf_obj = (struct hal_bf_obj *)hal_com->bf_obj;
 	void *drv_priv = hal_to_drvpriv(hal_info);
-	struct hal_bf_entry *bf_entry = bf_obj->bf_entry;
-	struct hal_sumu_entry *mu_entry = bf_obj->mu_entry;
-	struct hal_sumu_entry *su_entry = bf_obj->su_entry;
+	struct hal_bf_entry *bf_entry = NULL;
+	struct hal_sumu_entry *mu_entry = NULL;
+	struct hal_sumu_entry *su_entry = NULL;
 
 	if (bf_obj != NULL) {
+		bf_entry = bf_obj->bf_entry;
+		mu_entry = bf_obj->mu_entry;
+		su_entry = bf_obj->su_entry;
+
 		if (bf_entry != NULL) {
-			_os_mem_free(hal_to_drvpriv(hal_info), bf_entry,
+			_os_mem_free(drv_priv, bf_entry,
 				sizeof(*bf_entry) * bf_obj->max_bf_entry_nr);
 			bf_obj->bf_entry = NULL;
 		}
 		if (su_entry != NULL) {
-			_os_mem_free(hal_to_drvpriv(hal_info), su_entry,
+			_os_mem_free(drv_priv, su_entry,
 				sizeof(*su_entry) * bf_obj->max_su_bfee_nr);
 			bf_obj->su_entry = NULL;
 		}
 
 		if (mu_entry != NULL) {
-			_os_mem_free(hal_to_drvpriv(hal_info), mu_entry,
+			_os_mem_free(drv_priv, mu_entry,
 				sizeof(*mu_entry) * bf_obj->max_mu_bfee_nr);
 			bf_obj->mu_entry = NULL;
 		}
@@ -517,8 +522,7 @@ void hal_bf_deinit(struct hal_info_t *hal_info)
 		_os_spinlock_free(drv_priv, &bf_obj->bf_lock);
 
 		/* bf obj need free as last */
-		_os_mem_free(hal_to_drvpriv(hal_info), bf_obj,
-					sizeof(struct hal_bf_obj));
+		_os_mem_free(drv_priv, bf_obj, sizeof(struct hal_bf_obj));
 		hal_com->bf_obj = NULL;
 	}
 }
@@ -933,19 +937,19 @@ enum rtw_hal_status hal_bf_set_bfee_csi_para(struct hal_info_t *hal_info,
 			rrsc |= (BIT(HAL_BF_RRSC_HT_MSC0) |
 				 BIT(HAL_BF_RRSC_HT_MSC3) |
 				 BIT(HAL_BF_RRSC_HT_MSC5));
-			sta->hal_sta->ra_info.csi_rate.mode = HAL_HT_MODE;
+			sta->hal_sta->ra_info.csi_rate.mode = RTW_HT_MODE;
 		}
 		if (sta->wmode & WLAN_MD_11AC) {
 			rrsc |= (BIT(HAL_BF_RRSC_VHT_MSC0) |
 				 BIT(HAL_BF_RRSC_VHT_MSC3) |
 				 BIT(HAL_BF_RRSC_VHT_MSC5));
-			sta->hal_sta->ra_info.csi_rate.mode = HAL_VHT_MODE;
+			sta->hal_sta->ra_info.csi_rate.mode = RTW_VHT_MODE;
 		}
 		if (sta->wmode & WLAN_MD_11AX) {
 			rrsc |= (BIT(HAL_BF_RRSC_HE_MSC0) |
 				 BIT(HAL_BF_RRSC_HE_MSC3) |
 				 BIT(HAL_BF_RRSC_HE_MSC5));
-			sta->hal_sta->ra_info.csi_rate.mode = HAL_HE_MODE;
+			sta->hal_sta->ra_info.csi_rate.mode = RTW_HE_MODE;
 		}
 		/* Initialize mac rrsc function */
 		rtw_hal_mac_ax_bfee_set_csi_rrsc(hal_info->mac,
@@ -1188,3 +1192,4 @@ enum rtw_hal_status rtw_hal_beamform_set_aid(void *hal, struct rtw_phl_stainfo_t
 
 	return status;
 }
+#endif

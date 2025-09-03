@@ -119,12 +119,11 @@ void halbb_find_apep(u32 *apep, bool *can_find, u32 *n_mpdu, u32 *mpdu_length, u
 	else
 		*n_mpdu = halbb_ceil(*apep, (1 << 14) - 1 + 4);
 
-	/*========[ return BSOD ]========*/
-//	if (*n_mpdu == 0)
-//		return;
+	if (*n_mpdu == 0)
+		BB_WARNING("Invalid case n_mpdu = 0 !!\n");
 
 
-	*mpdu_length = *apep / *n_mpdu - 4; //?????????????
+	*mpdu_length = HALBB_DIV(*apep, *n_mpdu) - 4; //?????????????
 	*mpdu_length = *apep - (4 + 4 * halbb_ceil(*mpdu_length, 4)) * (*n_mpdu - 1) - 4;
 	apep_tmp = (*n_mpdu - 1)*(4 + 4 * halbb_ceil(*mpdu_length, 4)) + (4 + *mpdu_length);
 	is_match = (apep_tmp == *apep);
@@ -137,7 +136,7 @@ void halbb_find_apep(u32 *apep, bool *can_find, u32 *n_mpdu, u32 *mpdu_length, u
 //		if (*n_mpdu == 0)
 //			return;
 
-		*mpdu_length = *apep / *n_mpdu - 4;
+		*mpdu_length = HALBB_DIV(*apep, *n_mpdu) - 4;
 		*mpdu_length = *apep - (4 + 4 * halbb_ceil(*mpdu_length , 4)) * (*n_mpdu - 1) - 4;
 		apep_tmp = (*n_mpdu - 1)*(4 + 4 * halbb_ceil(*mpdu_length , 4)) + (4 + *mpdu_length);
 		is_match = apep_tmp == *apep;
@@ -469,7 +468,7 @@ enum plcp_sts halbb_mcs_table(struct bb_info *bb, const struct plcp_mcs_table_in
 			break;
 		case SPEC_EHT:
 			if (!halbb_eht_mcs_table(bb, in, out))
-				return HE_INVALID;
+				return EHT_INVALID;
 			break;
 		default:
 			out->valid = false;
@@ -869,7 +868,7 @@ void halbb_refine_input(struct bb_info *bb, const struct plcp_tx_pre_fec_padding
 				else
 					par->com.pre_fec_padding_factor_init = 4;
 			}
-			else if (remain_time_0p4us >= 0) {
+			else {
 				par->com.pre_fec_padding_factor_init = 1;
 			}
 		}
@@ -893,7 +892,7 @@ void halbb_refine_input(struct bb_info *bb, const struct plcp_tx_pre_fec_padding
 					par->com.pre_fec_padding_factor_init = 3;
 				else
 					par->com.pre_fec_padding_factor_init = 4;
-			} else if (remain_time_0p4us >= 0) {
+			} else {
 				if (in->nominal_t_pe == 2)
 					par->com.pre_fec_padding_factor_init = 1;
 				else if (in->nominal_t_pe == 1)
@@ -912,11 +911,11 @@ void halbb_refine_input(struct bb_info *bb, const struct plcp_tx_pre_fec_padding
 					par->com.n_sym_init = par->com.n_sym_init - 1;
 					par->com.pre_fec_padding_factor_init = 4;
 				} else {
-					par->com.n_sym_init = par->com.n_sym_init;
+					//par->com.n_sym_init = par->com.n_sym_init;
 					par->com.pre_fec_padding_factor_init = (u16)in->tb_pre_fec_padding_factor - 1;
 				}
 			} else {
-				par->com.n_sym_init = par->com.n_sym_init;
+				//par->com.n_sym_init = par->com.n_sym_init;
 				par->com.pre_fec_padding_factor_init = in->tb_pre_fec_padding_factor == 0 ? 4 : (u16)in->tb_pre_fec_padding_factor;
 			}
 		}
@@ -959,7 +958,7 @@ void halbb_refine_input(struct bb_info *bb, const struct plcp_tx_pre_fec_padding
 enum plcp_sts halbb_tx_plcp_cal(struct bb_info *bb, const struct plcp_tx_pre_fec_padding_setting_in_t *in, struct plcp_tx_pre_fec_padding_setting_out_t *out)
 {
 	bool mcs_out_valid = false;
-	struct plcp_tx_pre_fec_padding_setting_par_t par;
+	struct plcp_tx_pre_fec_padding_setting_par_t par = {0};
 
 	BB_DBG(bb, DBG_PHY_CONFIG, "<====== %s ======>\n", __func__);
 

@@ -51,6 +51,13 @@ enum rua_cfg_sel {
 	PWR_TBL_init = 0x6
 };
 
+enum BBCMD_VER_NUM{
+	BBCMD_VER_0 = 0,
+	BBCMD_VER_1,
+	BBCMD_VER_2,
+	BBCMD_VER_3,
+	MAX_BBCMD_VER
+};
 
 /*@--------------------------[Structure]-------------------------------------*/
 

@@ -179,7 +179,7 @@ int rtw_android_set_country(struct net_device *net, char *command, int total_len
 	char *country_code = command + strlen(android_wifi_cmd_str[ANDROID_WIFI_CMD_COUNTRY]) + 1;
 	int ret = _FAIL;
 
-	ret = rtw_set_country(adapter, country_code, RTW_REGD_SET_BY_USER);
+	ret = rtw_set_country(adapter, country_code, RTW_ENV_NUM, RTW_REGD_SET_BY_USER);
 
 	return (ret == _SUCCESS) ? 0 : -1;
 }

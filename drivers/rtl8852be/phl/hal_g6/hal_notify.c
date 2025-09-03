@@ -51,7 +51,7 @@ void rtw_hal_notification_ex(void *hal, enum phl_msg_evt_id event,
 			rtw_hal_mac_notification(hal_info, event, hw_idx);
 
 		if (true == to_rf)
-			rtw_hal_rf_notification(hal_info, event, idx);
+			rtw_hal_rf_notification(hal_info, event, hw_idx);
 	}
 }
 
@@ -77,7 +77,7 @@ void rtw_hal_notification(void *hal, enum phl_msg_evt_id event, u8 hw_idx)
 	} else {
 		rtw_hal_bb_notification(hal_info, event, hw_idx);
 		rtw_hal_mac_notification(hal_info, event, hw_idx);
-		rtw_hal_rf_notification(hal_info, event, idx);
+		rtw_hal_rf_notification(hal_info, event, hw_idx);
 	}
 }
 

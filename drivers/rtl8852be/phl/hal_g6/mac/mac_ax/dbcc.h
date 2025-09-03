@@ -36,6 +36,8 @@
 #define DBCC_CHK_NTFY_CNT 20000
 #define DBCC_CHK_NTFY_DLY 50
 
+#if MAC_FEAT_DBCC
+
 /*--------------------Define MACRO--------------------------------------*/
 /*--------------------Define Enum---------------------------------------*/
 /*--------------------Define Struct-------------------------------------*/
@@ -145,4 +147,15 @@ u32 mac_dbcc_cfg(struct mac_ax_adapter *adapter, struct mac_dbcc_cfg_info *info)
 u32 mac_dbcc_move_wmm(struct mac_ax_adapter *adapter,
 		      struct mac_ax_role_info *info);
 
+/**
+ * @brief mac_notify_fw_dbcc
+ *
+ * @param *adapter
+ * @param *en
+ * @return Please Place Description here.
+ * @retval u32
+ */
+u32 mac_notify_fw_dbcc(struct mac_ax_adapter *adapter, u8 en);
+
+#endif /* MAC_FEAT_DBCC */
 #endif

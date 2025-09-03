@@ -129,7 +129,6 @@ phl_dbcc_test(struct verify_context *ctx, struct dbcc_config_arg *arg)
 exit:
 	return psts;
 }
-#endif /* CONFIG_DBCC_SUPPORT */
 
 static enum rtw_phl_status
 dbcc_config(struct verify_context *ctx, struct dbcc_config_arg *arg)
@@ -186,9 +185,5 @@ enum rtw_phl_status rtw_test_dbcc_cmd_process(void *priv)
 
 	return phl_status;
 }
-#else
-enum rtw_phl_status rtw_test_dbcc_cmd_process(void *priv)
-{
-	return RTW_PHL_STATUS_SUCCESS;
-}
+#endif /* CONFIG_DBCC_SUPPORT */
 #endif /* CONFIG_PHL_TEST_VERIFY */

@@ -33,7 +33,9 @@ rtw_hal_ser_get_error_status(void *hal, u32 *err)
 
 	rtw_hal_mac_ser_get_error_status(hal_info, err);
 
-	if ((*err == MAC_AX_ERR_L1_ERR_DMAC) || (*err == MAC_AX_ERR_L0_PROMOTE_TO_L1)) {
+	if (*err == MAC_AX_ERR_L1_PREERR_DMAC) {
+		notify = RTW_PHL_SER_PREPARE_DMAC;
+	} else if ((*err == MAC_AX_ERR_L1_ERR_DMAC) || (*err == MAC_AX_ERR_L0_PROMOTE_TO_L1)) {
 		notify = RTW_PHL_SER_PAUSE_TRX;
 	} else if (*err == MAC_AX_ERR_L1_RESET_DISABLE_DMAC_DONE) {
 		notify = RTW_PHL_SER_DO_RECOVERY;

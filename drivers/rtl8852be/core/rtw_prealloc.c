@@ -41,6 +41,10 @@
 #define pr_fmt(fmt) "RTKM: " fmt
 #endif /* CONFIG_RTKM */
 
+#ifndef MAX_ORDER
+#define MAX_ORDER MAX_PAGE_ORDER
+#endif
+
 struct phy_mem_list {
 	_lock lock;
 	_list list;

@@ -62,8 +62,8 @@ u32 mac_fast_ch_sw(struct mac_ax_adapter *adapter, struct mac_ax_fast_ch_sw_para
 	h2c_info.h2c_cat = FWCMD_H2C_CAT_MAC;
 	h2c_info.h2c_class = FWCMD_H2C_CL_FCS;
 	h2c_info.h2c_func = FWCMD_H2C_FUNC_FCS;
-	h2c_info.rec_ack = 1;
-	h2c_info.done_ack = 1;
+	h2c_info.rec_ack = 0;
+	h2c_info.done_ack = 0;
 
 	ret = mac_h2c_common(adapter, &h2c_info, (u32 *)buf);
 	PLTFM_FREE(buf, sizeof(struct fwcmd_fcs));

@@ -269,6 +269,7 @@ rtw_phl_start_rx_ba_session(void *phl, struct rtw_phl_stainfo_t *sta,
 	if (sta->tid_rx[tid])
 		phl_tid_ampdu_rx_free(sta->tid_rx[tid]);
 	sta->tid_rx[tid] = r;
+	sta->reorder_timeout = HT_RX_REORDER_BUF_TIMEOUT_MS;
 	_os_spinunlock(drv_priv, &sta->tid_rx_lock, _bh, NULL);
 
 	return RTW_PHL_STATUS_SUCCESS;

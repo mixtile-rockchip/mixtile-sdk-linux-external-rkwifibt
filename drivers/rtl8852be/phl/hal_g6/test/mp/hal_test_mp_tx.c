@@ -135,7 +135,7 @@ _mp_get_plcp_common_info(struct mp_context *mp,
 	plcp_tx_struct->usr[0].aid = (u16)mp->usr[0].aid;
 	plcp_tx_struct->usr[0].scrambler_seed = (u8)mp->usr[0].scrambler_seed;
 	plcp_tx_struct->usr[0].random_init_seed = (u8)mp->usr[0].random_init_seed;
-	plcp_tx_struct->usr[0].apep = (u8)mp->usr[0].apep;
+	plcp_tx_struct->usr[0].apep = mp->usr[0].apep;
 	plcp_tx_struct->usr[0].ru_alloc = (u8)mp->usr[0].ru_alloc;
 	plcp_tx_struct->usr[0].nss = (u8)mp->usr[0].nss;
 	plcp_tx_struct->usr[0].txbf = (u8)mp->usr[0].txbf;
@@ -178,7 +178,7 @@ _mp_get_plcp_user_info(struct mp_context *mp,
 		plcp_user_struct[i].aid = (u16)mp->usr[i].aid;
 		plcp_user_struct[i].scrambler_seed = (u8)mp->usr[i].scrambler_seed;
 		plcp_user_struct[i].random_init_seed = (u8)mp->usr[i].random_init_seed;
-		plcp_user_struct[i].apep = (u8)mp->usr[i].apep;
+		plcp_user_struct[i].apep = mp->usr[i].apep;
 		plcp_user_struct[i].ru_alloc = (u8)mp->usr[i].ru_alloc;
 		plcp_user_struct[i].nss = (u8)mp->usr[i].nss;
 		plcp_user_struct[i].txbf = (u8)mp->usr[i].txbf;
@@ -317,6 +317,8 @@ enum rtw_hal_status rtw_hal_mp_tx_carrier_suppression(
 					(hal_info->hal_com,
 					arg->start_tx,
 					arg->is_cck,
+					arg->tx_cnt,
+					arg->period,
 					mp->cur_phy);
 	PHL_INFO("%s: status = %d\n", __FUNCTION__, hal_status);
 

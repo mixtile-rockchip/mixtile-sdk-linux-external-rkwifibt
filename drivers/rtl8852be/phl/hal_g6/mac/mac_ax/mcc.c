@@ -15,6 +15,8 @@
 
 #include "mcc.h"
 
+#if MAC_FEAT_MCC
+
 u32 mac_reset_mcc_group(struct mac_ax_adapter *adapter, u8 group)
 {
 	struct fwcmd_reset_mcc_group *content = NULL;
@@ -594,3 +596,4 @@ u32 mac_check_mcc_set_duration_done(struct mac_ax_adapter *adapter, u8 group)
 		return MACPROCBUSY;
 }
 
+#endif /* MAC_FEAT_MCC */

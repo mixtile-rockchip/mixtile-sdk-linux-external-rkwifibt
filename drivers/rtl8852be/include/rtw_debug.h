@@ -408,12 +408,6 @@ struct dvobj_priv;
 void dump_tx_rate_bmp(void *sel, struct dvobj_priv *dvobj);
 void dump_adapters_status(void *sel, struct dvobj_priv *dvobj);
 
-struct sec_cam_ent;
-void dump_sec_cam_ent(void *sel, struct sec_cam_ent *ent, int id);
-void dump_sec_cam_ent_title(void *sel, u8 has_id);
-void dump_sec_cam(void *sel, _adapter *adapter);
-void dump_sec_cam_cache(void *sel, _adapter *adapter);
-
 bool rtw_del_rx_ampdu_test_trigger_no_tx_fail(void);
 u32 rtw_get_wait_hiq_empty_ms(void);
 void rtw_sta_linking_test_set_start(void);
@@ -571,6 +565,8 @@ ssize_t proc_set_tx_amsdu(struct file *file, const char __user *buffer, size_t c
 int proc_get_tx_amsdu_rate(struct seq_file *m, void *v);
 ssize_t proc_set_tx_amsdu_rate(struct file *file, const char __user *buffer, size_t count, loff_t *pos, void *data);
 #endif
+int proc_get_tx_max_agg_time(struct seq_file *m, void *v);
+ssize_t proc_set_tx_max_agg_time(struct file *file, const char __user *buffer, size_t count, loff_t *pos, void *data);
 #endif /* CONFIG_80211N_HT */
 
 #ifdef CONFIG_80211AC_VHT
@@ -587,11 +583,6 @@ int proc_get_two_path_rssi(struct seq_file *m, void *v);
 int proc_get_rssi_disp(struct seq_file *m, void *v);
 ssize_t proc_set_rssi_disp(struct file *file, const char __user *buffer, size_t count, loff_t *pos, void *data);
 #endif
-
-#if defined(DBG_CONFIG_ERROR_DETECT)
-int proc_get_sreset(struct seq_file *m, void *v);
-ssize_t proc_set_sreset(struct file *file, const char __user *buffer, size_t count, loff_t *pos, void *data);
-#endif /* DBG_CONFIG_ERROR_DETECT */
 
 #ifdef CONFIG_DBG_COUNTER
 int proc_get_rx_logs(struct seq_file *m, void *v);
@@ -636,6 +627,11 @@ ssize_t proc_set_wow_gpio_duration(struct file *file, const char __user *buffer,
 		size_t count, loff_t *pos, void *data);
 int proc_get_wow_gpio_duration(struct seq_file *m, void *v);
 #endif /*CONFIG_GPIO_WAKEUP*/
+#ifdef CONFIG_WOW_PERIODIC_WAKE
+int proc_get_wow_pw_info(struct seq_file *m, void *v);
+ssize_t proc_set_wow_pw_info(struct file *file, const char __user *buffer,
+			     size_t count, loff_t *pos, void *data);
+#endif
 #endif /* CONFIG_WOWLAN */
 
 #ifdef CONFIG_P2P_WOWLAN
@@ -645,6 +641,10 @@ int proc_get_p2p_wowlan_info(struct seq_file *m, void *v);
 #ifdef CONFIG_POWER_SAVE
 int proc_get_ps_info(struct seq_file *m, void *v);
 ssize_t proc_set_ps_info(struct file *file, const char __user *buffer, size_t count, loff_t *pos, void *data);
+#if defined(CONFIG_RTW_LPS) || defined(CONFIG_RTW_LPS_WOW)
+ssize_t proc_set_ps_dtim(struct file *file, const char __user *buffer,
+			 size_t count, loff_t *pos, void *data);
+#endif /* defined(CONFIG_RTW_LPS) || defined(CONFIG_RTW_LPS_WOW) */
 #endif /* CONFIG_POWER_SAVE */
 
 int proc_get_new_bcn_max(struct seq_file *m, void *v);

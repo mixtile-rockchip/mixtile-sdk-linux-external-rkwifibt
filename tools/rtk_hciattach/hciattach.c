@@ -239,7 +239,7 @@ static int init_uart(char *dev, struct uart_t *u, int send_break, int raw)
 	if (tcgetattr(fd, &ti) < 0) {
 		RS_ERR("Can't get port settings, %d, %s", errno,
 		       strerror(errno));
-		return -1;
+		goto fail;
 	}
 
 	cfmakeraw(&ti);
@@ -253,14 +253,14 @@ static int init_uart(char *dev, struct uart_t *u, int send_break, int raw)
 	if (tcsetattr(fd, TCSANOW, &ti) < 0) {
 		RS_ERR("Can't set port settings, %d, %s", errno,
 		       strerror(errno));
-		return -1;
+		goto fail;
 	}
 
 	/* Set initial baudrate */
 	if (set_speed(fd, &ti, u->init_speed) < 0) {
 		RS_ERR("Can't set initial baud rate, %d, %s", errno,
 		       strerror(errno));
-		return -1;
+		goto fail;
 	}
 
 	tcflush(fd, TCIOFLUSH);
@@ -271,7 +271,7 @@ static int init_uart(char *dev, struct uart_t *u, int send_break, int raw)
 	}
 
 	if (u->init && u->init(fd, u, &ti) < 0)
-		return -1;
+		goto fail;
 
 	tcflush(fd, TCIOFLUSH);
 
@@ -280,7 +280,7 @@ static int init_uart(char *dev, struct uart_t *u, int send_break, int raw)
 	 * */
 	/* if (set_speed(fd, &ti, u->speed) < 0) {
 	 * 	perror("Can't set baud rate");
-	 * 	return -1;
+	 * 	goto fail;
 	 * }
 	 */
 
@@ -289,23 +289,27 @@ static int init_uart(char *dev, struct uart_t *u, int send_break, int raw)
 	if (ioctl(fd, TIOCSETD, &i) < 0) {
 		RS_ERR("Can't set line discipline %d, %s", errno,
 		       strerror(errno));
-		return -1;
+		goto fail;
 	}
 
 	if (flags && ioctl(fd, HCIUARTSETFLAGS, flags) < 0) {
 		RS_ERR("Can't set UART flags %d, %s", errno, strerror(errno));
-		return -1;
+		goto fail;
 	}
 
 	if (ioctl(fd, HCIUARTSETPROTO, u->proto) < 0) {
 		RS_ERR("Can't set device %d, %s", errno, strerror(errno));
-		return -1;
+		goto fail;
 	}
 
 	if (u->post && u->post(fd, u, &ti) < 0)
-		return -1;
+		goto fail;
 
 	return fd;
+
+fail:
+	close(fd);
+	return -1;
 }
 
 static int reset_bluetooth(void)
@@ -433,7 +437,13 @@ int main(int argc, char *argv[])
 			dev[0] = 0;
 			if (!strchr(opt, '/'))
 				strcpy(dev, "/dev/");
-			strcat(dev, opt);
+
+			if (strlen(opt) > PATH_MAX - (strlen(dev) + 1)) {
+				fprintf(stderr, "Invalid serial device\n");
+				exit(1);
+			}
+
+			strncat(dev, opt, PATH_MAX - (strlen(dev) + 1));
 			break;
 
 		case 1:

@@ -116,8 +116,9 @@ phl_mr_offch_hdl(struct phl_info_t *phl_info,
                  struct rtw_wifi_role_link_t *rlink,
                  bool off_ch,
                  void *obj_priv,
-                 bool (*issue_null_data)(void *priv, u8 ridx, u8 lidx, bool ps)
-);
+                 u8 module_id,
+                 bool (*issue_null_data)(void *priv, u8 ridx, u8 lidx, bool ps,
+                                         u8 module_id));
 
 enum rtw_phl_status phl_mr_watchdog(struct phl_info_t *phl_info);
 

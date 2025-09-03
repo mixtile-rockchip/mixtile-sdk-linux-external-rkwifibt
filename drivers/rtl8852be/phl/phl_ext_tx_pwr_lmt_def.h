@@ -53,4 +53,7 @@ struct rtw_phl_cmd_epl_para { /* phl cmd external power limit parameters */
 enum rtw_phl_status
 phl_cmd_updt_ext_txpwr_lmt(void *phl, u8 *param);
 
+enum rtw_phl_status
+phl_cmd_set_tas_en(void *phl, u8 *param);
+
 #endif /*_PHL_EXT_TX_PWR_LMT_DEF_H_*/

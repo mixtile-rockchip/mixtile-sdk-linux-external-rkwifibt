@@ -39,6 +39,18 @@
 
 #define BTCOEX
 
+/* In Ubuntu Linux distribution, the commit of
+ * "Bluetooth: HCI: Remove HCI_AMP support"
+ * is applied since v6.8.0-40 but v6.9.3 in the repository of linux-stable.
+ * Enable the compilier flag on the above Ubuntu condition */
+/* #define UBUNTU_LINUX_KERNEL_6_8_0_40_LATER */
+
+#ifdef UBUNTU_LINUX_KERNEL_6_8_0_40_LATER
+#define HCI_AMP_REMOVED_VERSION KERNEL_VERSION(6, 8, 0)
+#else
+#define HCI_AMP_REMOVED_VERSION KERNEL_VERSION(6, 9, 3)
+#endif
+
 /* Send host sleep notification to Controller */
 #define WOBT_NOTIFY		0	/* 1  enable; 0  disable */
 
@@ -75,7 +87,9 @@
 
 #define HCI_UART_RAW_DEVICE	0
 #define HCI_UART_RESET_ON_INIT	1
+#if HCI_VERSION_CODE < HCI_AMP_REMOVED_VERSION
 #define HCI_UART_CREATE_AMP	2
+#endif
 #define HCI_UART_INIT_PENDING	3
 #define HCI_UART_EXT_CONFIG	4
 #define HCI_UART_VND_DETECT	5

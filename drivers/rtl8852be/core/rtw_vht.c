@@ -518,7 +518,7 @@ void rtw_vht_get_dft_setting(_adapter *padapter,
 }
 
 /* Initialized vhtpriv by adapter real setting */
-void rtw_vht_get_real_setting(_adapter *padapter, struct _ADAPTER_LINK *padapter_link, bool log)
+void rtw_vht_get_real_setting(_adapter *padapter, struct _ADAPTER_LINK *padapter_link)
 {
 #ifdef CONFIG_BEAMFORMING
 	BOOLEAN bHwSupportBeamformer = _FALSE, bHwSupportBeamformee = _FALSE;
@@ -551,8 +551,7 @@ void rtw_vht_get_real_setting(_adapter *padapter, struct _ADAPTER_LINK *padapter
 		SET_FLAG(pvhtpriv->ldpc_cap, LDPC_VHT_ENABLE_TX);
 
 	if (pvhtpriv->ldpc_cap)
-		if (log)
-			RTW_INFO("[VHT] Support LDPC = 0x%02X\n", pvhtpriv->ldpc_cap);
+		RTW_DBG("[VHT] Support LDPC = 0x%02X\n", pvhtpriv->ldpc_cap);
 
 	/* STBC */
 	if (proto_cap->stbc_vht_tx)
@@ -564,20 +563,17 @@ void rtw_vht_get_real_setting(_adapter *padapter, struct _ADAPTER_LINK *padapter
 	}
 
 	if (pvhtpriv->stbc_cap)
-		if (log)
-			RTW_INFO("[VHT] Support STBC = 0x%02X\n", pvhtpriv->stbc_cap);
+		RTW_DBG("[VHT] Support STBC = 0x%02X\n", pvhtpriv->stbc_cap);
 
 	/* Beamforming setting */
 	CLEAR_FLAGS(pvhtpriv->beamform_cap);
 #ifdef CONFIG_BEAMFORMING
 	if (proto_cap->vht_su_bfmr) {
 		SET_FLAG(pvhtpriv->beamform_cap, BEAMFORMING_VHT_BEAMFORMER_ENABLE);
-		if (log)
-			RTW_INFO("[VHT] HAL Support Beamformer\n");
+		RTW_DBG("[VHT] HAL Support Beamformer\n");
 		if (proto_cap->vht_mu_bfmr) {
 			SET_FLAG(pvhtpriv->beamform_cap, BEAMFORMING_VHT_MU_MIMO_AP_ENABLE);
-			if (log)
-				RTW_INFO("[VHT] Support MU-MIMO AP\n");
+			RTW_DBG("[VHT] Support MU-MIMO AP\n");
 		}
 	}
 
@@ -587,12 +583,10 @@ void rtw_vht_get_real_setting(_adapter *padapter, struct _ADAPTER_LINK *padapter
 		rtw_hal_get_def_var(padapter, padapter_link, HAL_DEF_BEAMFORMEE_CAP, (u8 *)&bfme_sts);
 		pvhtpriv->bfme_sts = bfme_sts;
 		SET_FLAG(pvhtpriv->beamform_cap, BEAMFORMING_VHT_BEAMFORMEE_ENABLE);
-		if (log)
-			RTW_INFO("[VHT] HAL Support Beamformee\n");
+		RTW_DBG("[VHT] HAL Support Beamformee\n");
 		if (proto_cap->vht_mu_bfme) {
 			SET_FLAG(pvhtpriv->beamform_cap, BEAMFORMING_VHT_MU_MIMO_STA_ENABLE);
-			if (log)
-				RTW_INFO("[VHT] Support MU-MIMO STA\n");
+			RTW_DBG("[VHT] Support MU-MIMO STA\n");
 		}
 	}
 #endif
@@ -1099,15 +1093,8 @@ void rtw_process_vht_op_mode_notify(_adapter *padapter, u8 *pframe, void *sta)
 		update_sta_ra_info(padapter, psta);
 	}
 
-	if (update_ra) {
-		rtw_phl_cmd_change_stainfo(adapter_to_dvobj(padapter)->phl,
-					   psta->phl_sta,
-					   STA_CHG_RAMASK,
-					   NULL,
-					   0,
-					   PHL_CMD_NO_WAIT,
-					   0);
-	}
+	if (update_ra)
+		rtw_sta_hal_ra_mask_update_cmd(padapter, psta, 0);
 }
 
 u32	rtw_build_vht_operation_ie(_adapter *padapter, struct _ADAPTER_LINK *padapter_link,
@@ -1189,7 +1176,7 @@ u32	rtw_build_vht_op_mode_notify_ie(_adapter *padapter, struct _ADAPTER_LINK *pa
 	return len;
 }
 
-u32	rtw_build_vht_cap_ie(_adapter *padapter, struct _ADAPTER_LINK *padapter_link, u8 *pbuf, bool log)
+u32	rtw_build_vht_cap_ie(_adapter *padapter, struct _ADAPTER_LINK *padapter_link, u8 *pbuf)
 {
 	u8 bw;
 	u16 HighestRate;
@@ -1412,7 +1399,7 @@ u32 rtw_restructure_vht_ie(_adapter *padapter, struct _ADAPTER_LINK *padapter_li
 	struct link_mlme_priv	*pmlmepriv = &padapter_link->mlmepriv;
 	struct vht_priv	*pvhtpriv = &pmlmepriv->vhtpriv;
 
-	rtw_vht_get_real_setting(padapter, padapter_link, _TRUE);
+	rtw_vht_get_real_setting(padapter, padapter_link);
 
 	ht_op_ie = rtw_get_ie(in_ie + 12, WLAN_EID_HT_OPERATION, &ielen, in_len - 12);
 	if (!ht_op_ie || ielen != HT_OP_IE_LEN)
@@ -1425,7 +1412,7 @@ u32 rtw_restructure_vht_ie(_adapter *padapter, struct _ADAPTER_LINK *padapter_li
 		goto exit;
 
 	/* VHT Capabilities element */
-	*pout_len += rtw_build_vht_cap_ie(padapter, padapter_link, out_ie + *pout_len, _TRUE);
+	*pout_len += rtw_build_vht_cap_ie(padapter, padapter_link, out_ie + *pout_len);
 
 
 	/* VHT Operation element */
@@ -1545,7 +1532,7 @@ void rtw_vht_ies_attach(_adapter *padapter, struct _ADAPTER_LINK *padapter_link,
 	if (p && ie_len > 0)
 		return;
 
-	rtw_vht_get_real_setting(padapter, padapter_link, _TRUE);
+	rtw_vht_get_real_setting(padapter, padapter_link);
 
 	/* VHT Operation mode notifiy bit in Extended IE (127) */
 	rtw_add_ext_cap_info(pmlmepriv->ext_capab_ie_data, &(pmlmepriv->ext_capab_ie_len), OP_MODE_NOTIFICATION);
@@ -1553,7 +1540,7 @@ void rtw_vht_ies_attach(_adapter *padapter, struct _ADAPTER_LINK *padapter_link,
 		, &(pnetwork->IELength), _BEACON_IE_OFFSET_);
 
 	/* VHT Capabilities element */
-	cap_len = rtw_build_vht_cap_ie(padapter, padapter_link, pnetwork->IEs + pnetwork->IELength, _TRUE);
+	cap_len = rtw_build_vht_cap_ie(padapter, padapter_link, pnetwork->IEs + pnetwork->IELength);
 	pnetwork->IELength += cap_len;
 
 	/* VHT Operation element */
@@ -1610,10 +1597,10 @@ void rtw_update_drv_vht_cap(_adapter *padapter, struct _ADAPTER_LINK *padapter_l
 			u8 *vht_cap_ie)
 {
 	/* Initialize VHT capability element */
-	rtw_vht_get_real_setting(padapter, padapter_link, _TRUE);
+	rtw_vht_get_real_setting(padapter, padapter_link);
 
 	RTW_INFO("Don't setting VHT capability IE from hostap, builded by driver temporarily\n");
-	rtw_build_vht_cap_ie(padapter, padapter_link, vht_cap_ie, _TRUE);
+	rtw_build_vht_cap_ie(padapter, padapter_link, vht_cap_ie);
 }
 
 void rtw_check_vht_ies(_adapter *padapter, struct _ADAPTER_LINK *padapter_link,
@@ -1655,8 +1642,8 @@ void rtw_update_probe_rsp_vht_cap(struct _ADAPTER *a, u8 *ies, sint ies_len)
 
 	vht_cap_ie = rtw_get_ie(ies, WLAN_EID_VHT_CAPABILITY, &ie_len, ies_len);
 	if (vht_cap_ie) {
-		rtw_vht_get_real_setting(a, a_link, _FALSE);
-		rtw_build_vht_cap_ie(a, a_link, vht_cap_ie, _TRUE);
+		rtw_vht_get_real_setting(a, a_link);
+		rtw_build_vht_cap_ie(a, a_link, vht_cap_ie);
 	}
 }
 
@@ -1700,7 +1687,7 @@ u8 _issue_op_mode_notify_frame(_adapter *a, struct _ADAPTER_LINK *a_link,
 	u8 opmode = 0, op_bw, op_80_80_bw;
 	u32 ie_len;
 
-	if (alink_is_tx_blocked_by_ch_waiting(a_link)) {
+	if (alink_regu_block_tx(a_link)) {
 		ret = _FALSE;
 		goto exit;
 	}
@@ -1798,7 +1785,7 @@ u8 rtw_issue_op_mode_notify_frame(_adapter *a, struct _ADAPTER_LINK *a_link,
 	int i = 0;
 	systime start = rtw_get_current_time();
 
-	if (alink_is_tx_blocked_by_ch_waiting(a_link))
+	if (alink_regu_block_tx(a_link))
 		goto exit;
 
 	do {
@@ -1847,14 +1834,7 @@ void rtw_vht_op_mode_ctrl_rx_nss(_adapter *adapter, struct _ADAPTER_LINK *a_link
 	rtw_issue_op_mode_notify_frame(adapter, a_link, get_my_bssid(&(a_mlmeinfo->network)),
 		                                          final_rx_nss, a_ch_def->bw, 3, 10);
 	if (need_update_ra)
-		rtw_phl_cmd_change_stainfo(adapter_to_dvobj(adapter)->phl,
-					   sta->phl_sta,
-					   STA_CHG_RAMASK,
-					   NULL,
-					   0,
-					   PHL_CMD_DIRECTLY,
-					   0);
-
+		rtw_sta_hal_ra_mask_update_cmd(adapter, sta, RTW_CMDF_DIRECTLY);
 }
 
 #endif /* CONFIG_80211AC_VHT */

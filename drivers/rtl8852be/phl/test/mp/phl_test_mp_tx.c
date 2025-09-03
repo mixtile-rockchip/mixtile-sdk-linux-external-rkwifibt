@@ -177,6 +177,17 @@ static enum rtw_phl_status phl_mp_tx_packet(
 	if (arg->tx_method == MP_PMACT_TX) {
 		PHL_INFO("%s: CMD = MP_PMACT_TX\n", __func__);
 		hal_status = rtw_hal_mp_tx_pmac_packet(mp, arg);
+
+		if (!mp->is_phl_wdog_start) {
+			if (arg->start_tx) {
+				/* start phl watchdog timer */
+				rtw_phl_watchdog_start(mp->phl);
+			} else {
+				/* stop phl watchdog timer */
+				rtw_phl_watchdog_stop(mp->phl);
+			}
+		}
+
 		phl_status = RTW_PHL_STATUS_SUCCESS;
 	} else if (arg->tx_method == MP_TMACT_TX) {
 		PHL_INFO("%s: CMD = MP_TMACT_TX\n", __func__);
@@ -417,7 +428,7 @@ static enum rtw_phl_status phl_mp_sw_tx_start(
 	struct rtw_trx_test_param *test_param = &trx_test->test_param;
 
 	if (!arg->start_tx) {
-		_os_mem_set(phl_to_drvpriv(phl_info), test_param, 0, sizeof(test_param));
+		_os_mem_set(phl_to_drvpriv(phl_info), test_param, 0, sizeof(*test_param));
 		test_param->mode = TEST_MODE_PHL_TX_AMPDU_TEST;
 		test_param->ap_mode = 0;
 		test_param->pkt_type = TEST_PKT_TYPE_UNI;

@@ -210,7 +210,7 @@ struct bb_h2c_sig_info {
 #else
 
 struct halbb_ehtsig_rpt_info {
-	u8 symbolnum;
+	u8 ehtsig_sym_num;
 	u8 ru2su_flag;
 	u8 c2h_done;
 	u8 rsvd1;

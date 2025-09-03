@@ -122,6 +122,4 @@ struct rtw_wd_page_ring {
 /* }; */
 
 enum rtw_phl_status phl_hook_trx_ops_pci(struct phl_info_t *phl_info);
-
-enum rtw_phl_status phl_cmd_set_l2_leave(struct phl_info_t *phl_info);
 #endif	/* _PHL_TRX_PCIE_H_ */

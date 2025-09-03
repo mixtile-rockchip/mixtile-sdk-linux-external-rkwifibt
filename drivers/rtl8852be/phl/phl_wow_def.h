@@ -23,6 +23,39 @@ enum rtw_wow_op_mode {
 	RTW_WOW_OP_MAX = 0xF
 };
 
+enum rtw_wow_cfg_step {
+	/* suspend */
+	WOW_INIT_PRECONFIG = BIT0,
+	WOW_INIT = BIT1,
+	WOW_FUNC_EN = BIT2,
+	WOW_FUNC_START = BIT3,
+	WOW_INIT_POSTCONFIG = BIT4,
+	/* resume */
+	WOW_PHL_START = BIT5,
+	WOW_GET_PWR_STATE = BIT6,
+	WOW_HANDLE_WAKE_RSN = BIT7,
+	WOW_MODULE_START = BIT8,
+	WOW_HANDLE_AOAC_RPT_PHASE0 = BIT9,
+	WOW_HANDLE_AOAC_RPT_PHASE1 = BIT10,
+	WOW_FUNC_DIS = BIT11,
+	WOW_FUNC_STOP = BIT12,
+	WOW_DEINIT = BIT13,
+	/* both */
+	WOW_PS_PWR_CFG = BIT14,
+	WOW_SER_CTRL = BIT15,
+	WOW_SET_WOWLAN = BIT16,
+	WOW_CFG_WOW_SLEEP = BIT17,
+	WOW_PS_PROTO_CFG = BIT18,
+	WOW_PPDU_STS_CFG = BIT19,
+	WOW_DBG_DUMP = BIT20
+};
+
+#define SET_WOW_INIT_ERR(_wow_info, _flags) \
+	(_wow_info)->err.init |= (_flags)
+
+#define SET_WOW_DEINIT_ERR(_wow_info, _flags) \
+	(_wow_info)->err.deinit |= (_flags)
+
 struct rtw_keep_alive_info {
 	/* core */
 	u8 keep_alive_en;
@@ -53,6 +86,7 @@ struct rtw_nlo_info {
 	u8 ssid[MAX_NLO_NUM][MAX_SSID_LEN];
 	u8 ssidlen[MAX_NLO_NUM];
 	u8 chipertype[MAX_NLO_NUM];
+	u8 compare_cipher_type;
 	u8 probe_req_id;
 	struct scan_ofld_ch_info channel_list[MAX_NLO_CHANNEL];
 	u8 channel_num;
@@ -262,6 +296,7 @@ const char *rtw_phl_get_wow_rsn_str(void *phl, u8 wake_rsn);
 enum rtw_phl_status rtw_phl_cfg_wow_set_sw_gpio_mode(void *phl, struct rtw_wow_gpio_info *info);
 enum rtw_phl_status rtw_phl_cfg_wow_sw_gpio_ctrl(void *phl, struct rtw_wow_gpio_info *info);
 void rtw_phl_wow_set_no_link_mode(void *phl, u8 no_link_mode);
+u32 rtw_phl_get_wow_fail_stat(void *phl);
 #endif /* CONFIG_WOWLAN */
 
 #endif /* _PHL_WOW_DEF_H_ */

@@ -252,6 +252,7 @@ rtw_hal_nvm_apply_dev_cap(void *hal, struct rtw_phl_com_t *phl_com)
 	hal_com->dev_hw_cap.rfe_type = phl_com->dev_sw_cap.rfe_type;
 	hal_com->dev_hw_cap.xcap = phl_com->dev_sw_cap.xcap;
 	hal_com->dev_hw_cap.domain = phl_com->dev_sw_cap.domain;
+	hal_com->dev_hw_cap.domain_6g = phl_com->dev_sw_cap.domain_6g;
 
 	hal_sts = rtw_hal_mac_set_xcap(hal_com, 0, hal_com->dev_hw_cap.xcap);
 
@@ -635,8 +636,38 @@ void rtw_hal_get_6g_regulatory_info(void *hal, u8 domain,
 			dm_code, regulation, ch_idx);
 }
 
-enum rtw_hal_status
-rtw_hal_set_bcn_early_rpt(void *hal, u8 band, u8 port, u8 en)
+bool rtw_hal_get_regu_func_cert_info(void *hal, char *country,
+	struct rtw_regu_func_cert_info *rg_cert)
+{
+	struct hal_info_t *hal_info = NULL;
+	struct hal_ops_t *hal_ops = NULL;
+	struct hal_regu_ops *regu_ops = NULL;
+
+	if (!rg_cert)
+		return false;
+
+	/* Init rg_cert->valid as false */
+	rg_cert->valid = false;
+
+	if (!hal || !country)
+		return false;
+
+	hal_info = (struct hal_info_t *)hal;
+	hal_ops = hal_get_ops(hal_info);
+	if (!hal_ops)
+		return false;
+
+	regu_ops = hal_get_regu_ops(hal_ops);
+	if (regu_ops && regu_ops->hal_get_regu_func_cert_info) {
+		regu_ops->hal_get_regu_func_cert_info(country, rg_cert);
+		return rg_cert->valid;
+	} else {
+		return false;
+	}
+}
+
+#ifdef CONFIG_PHL_BCN_ERLY_RPT
+enum rtw_hal_status rtw_hal_set_bcn_early_rpt(void *hal, u8 band, u8 port, u8 en)
 {
 	enum rtw_hal_status hstatus = RTW_HAL_STATUS_FAILURE;
 
@@ -644,6 +675,39 @@ rtw_hal_set_bcn_early_rpt(void *hal, u8 band, u8 port, u8 en)
 
 	return hstatus;
 }
+#endif
+
+#ifdef CONFIG_PHL_DIAGNOSE
+enum rtw_hal_status rtw_hal_get_pmac_info(void *hal, u8 hw_band,
+		u8 *dbg_info, u32 len)
+{
+	struct hal_info_t *hal_info = (struct hal_info_t *)hal;
+	enum phl_phy_idx p_idx = HW_PHY_0;
+	enum rtw_hal_status hstatus = RTW_HAL_STATUS_SUCCESS;
+
+	p_idx = rtw_hal_hw_band_to_phy_idx(hw_band);
+	hstatus = rtw_hal_bb_query_pmac_info(hal_info, p_idx, dbg_info, len);
+	PHL_INFO(
+	    "%s\n, hstatus(%d)\n", __func__, hstatus);
+
+	return hstatus;
+}
+
+enum rtw_hal_status rtw_hal_get_utility_info(void *hal, u8 hw_band,
+			u8 *dbg_info, u32 len)
+{
+	struct hal_info_t *hal_info = (struct hal_info_t *)hal;
+	enum phl_phy_idx p_idx = HW_PHY_0;
+	enum rtw_hal_status hstatus = RTW_HAL_STATUS_SUCCESS;
+
+	p_idx = rtw_hal_hw_band_to_phy_idx(hw_band);
+	hstatus = rtw_hal_bb_query_utility_info(hal_info, p_idx, dbg_info, len);
+	PHL_INFO(
+	    "%s\n, hstatus(%d)\n", __func__, hstatus);
+
+	return hstatus;
+}
+#endif
 
 #ifdef CONFIG_PHL_CSUM_OFFLOAD_RX
 enum rtw_hal_status rtw_hal_chk_rx_tcpip_chksum_ofd(void *h,

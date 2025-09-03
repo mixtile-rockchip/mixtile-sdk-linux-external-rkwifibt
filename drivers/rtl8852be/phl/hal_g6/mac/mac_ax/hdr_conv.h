@@ -19,6 +19,8 @@
 
 #include "../type.h"
 
+#if MAC_FEAT_HDR_CONV
+
 #define HW_HDR_CONV_HTC_ORDER_ENABLE 0x1
 #define HW_HDR_CONV_VLANTAG_VALID_ENABLE 0x1
 #define HW_HDR_CONV_QOS_FIELD_ENABLE 0x1
@@ -296,4 +298,5 @@ u8 mac_hdr_conv_tx_get_target_wlan_hdr_len(struct mac_ax_adapter *adapter, u8 ma
  * @}
  * @}
  */
+#endif
 #endif

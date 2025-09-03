@@ -98,7 +98,7 @@ enum rtw_phl_status phl_disp_eng_notify_dev_io_status(struct phl_info_t *phl,
                                                       u8 band_idx,
                                                       enum phl_module_id mdl_id,
                                                       bool allow_io);
-void phl_disp_eng_notify_shall_stop(struct phl_info_t *phl);
+void phl_disp_eng_notify_shall_stop(struct phl_info_t *phl, bool surprise);
 
 enum rtw_phl_status phl_disp_eng_set_msg_disp_seq(struct phl_info_t *phl,
 							struct phl_msg_attribute *attr,
@@ -152,7 +152,7 @@ void dispr_clearance_release(void *dispr);
 void dispr_exclusive_ready(void *dispr, bool renew_req);
 
 enum rtw_phl_status dispr_notify_dev_io_status(void *dispr, enum phl_module_id mdl_id, bool allow_io);
-void dispr_notify_shall_stop(void *dispr);
+void dispr_notify_shall_stop(void *dispr, bool surprise);
 u8 dispr_is_fg_empty(void *dispr);
 
 #if !defined(CONFIG_CMD_DISP_SOLO_MODE)

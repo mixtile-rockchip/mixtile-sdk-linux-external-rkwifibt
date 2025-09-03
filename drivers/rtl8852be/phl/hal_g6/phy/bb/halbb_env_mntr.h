@@ -76,6 +76,18 @@ enum env_mntr_sel {
 	CCX_SEL			= 0x1f
 };
 
+enum env_mode_detection_sel {
+	ENV_RVR_CLEAN	= 0,		/*clean,	AWGN,			| Shielding BOX & Conductive link*/
+	ENV_SMALL_AREA_CLEAN,		/*without-intf,	low delay spread	| Single House*/
+	ENV_SMALL_AREA_NOISY_LV1,	/*L-intf,	low delay spread	| Townhouse*/
+	ENV_SMALL_AREA_NOISY_LV2,	/*M-intf,	low delay spread	| Condo, Cofee shop*/
+	ENV_SMALL_AREA_NOISY_LV3,	/*H-intf,	low delay spread	| Small Office*/
+	ENV_LARGE_AREA_CLEAN,		/*without-intf,	large delay spread	| Outdoor*/
+	ENV_LARGE_AREA_NOISY_LV1,	/*L-intf,	large delay spread	| School*/
+	ENV_LARGE_AREA_NOISY_LV2,	/*M-intf,	large delay spread	| Shopping mall*/
+	ENV_LARGE_AREA_NOISY_LV3,	/*H-intf,	large delay spread	| Large Office*/
+};
+
 /*--------------------------[Structure]-------------------------------------*/
 
 struct bb_env_mntr_cr_info {
@@ -372,7 +384,6 @@ struct fahm_report {
 };
 
 struct bb_env_mntr_info {
-	struct bb_env_mntr_cr_info	bb_env_mntr_cr_i;
 	/*sw ctrl*/
 	u32				ccx_trigger_time;
 	u8				ccx_rpt_stamp;
@@ -476,6 +487,9 @@ struct bb_env_mntr_info {
 	struct fahm_report	fahm_report_bg;
 	struct fahm_para_info	fahm_para_info_bg;
 	u16			idle_pwr_physts; /*RSSI u(16,3) Idle time pwr from physts*/
+	u32			tmp_val; /*dummy for pause function*/
+	u32			rvrt_val; /*dummy for pause function*/
+	enum env_mode_detection_sel	env_mode;
 };
 
 struct bb_c2h_nhm_info {
@@ -519,6 +533,7 @@ u32 halbb_env_mntr_get_fw_result_c2h(struct bb_info *bb, u8 *c2h);
 void halbb_env_mntr_log(struct bb_info *bb, u32 dbg_comp);
 void halbb_idle_time_pwr_physts(struct bb_info *bb, struct physts_rxd *desc,
 				bool is_cck_rate);
+void halbb_env_mntr_pause_val(struct bb_info *bb, u32 *val_buf, u8 val_len);
 void halbb_env_mntr(struct bb_info *bb);
 void halbb_env_mntr_init(struct bb_info *bb);
 void halbb_env_mntr_dbg(struct bb_info *bb, char input[][16], u32 *_used,

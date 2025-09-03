@@ -56,6 +56,10 @@
 #define HCI_UART_LL	4
 #define HCI_UART_RAW_DEVICE	0
 
+#define MAX_HCI_EVENT_SIZE	(1 + 2 + 255)
+#define MAX_HCI_COMMAND_SIZE	(1 + 3 + 255)
+#define HCI_COMMAND_PKT         0x01
+
 extern uint8_t DBG_ON;
 
 /* #define SYSLOG */
@@ -151,6 +155,7 @@ typedef struct rtb_struct {
 	uint8_t eversion;
 	uint8_t chip_type;
 	uint8_t chip_ver;
+	uint8_t key_id;
 
 	uint32_t vendor_baud;
 	uint8_t dl_fw_flag;
@@ -168,10 +173,13 @@ typedef struct rtb_struct {
 	uint8_t *fw_buf;	/* fw patch file buf */
 	uint8_t *config_buf;	/* config patch file buf */
 	uint8_t *total_buf;	/* fw & config extracted buf */
+	uint8_t *upg_buf;
+	int upg_len;
 #define CMD_STATE_UNKNOWN	0x00
 #define CMD_STATE_SUCCESS	0x01
 	struct __cmd_state {
 		uint16_t opcode;
+		uint16_t subopcode;
 		uint16_t state;
 	} cmd_state;
 
@@ -182,6 +190,20 @@ typedef struct rtb_struct {
 	int epollfd;
 } rtb_struct_t;
 extern struct rtb_struct rtb_cfg;
+
+struct hci_cmd_hdr {
+	uint8_t  opcode[2];
+	uint8_t  plen;
+} __attribute__((packed));
+
+struct hci_cc_common {
+	uint8_t evt_code;
+	uint8_t plen;
+	uint8_t ncmd;
+	uint8_t opcode[2];
+	uint8_t status;
+} __attribute__((packed));
+
 int timeout_set(int fd, unsigned int msec);
 int set_speed(int fd, struct termios *ti, int speed);
 int rtb_init(int fd, int proto, int speed, struct termios *ti);

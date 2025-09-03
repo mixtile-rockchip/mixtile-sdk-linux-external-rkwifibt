@@ -224,6 +224,7 @@ u16 halbb_mp_get_rpl(struct bb_info *bb, enum rf_path path, enum phl_phy_idx phy
 u32 halbb_mp_get_dc_lvl(struct bb_info *bb, enum rf_path path, bool i_ch, enum phl_phy_idx phy_idx);
 u16 halbb_mp_get_pwdbm(struct bb_info *bb, enum rf_path path, enum phl_phy_idx phy_idx);
 u16 halbb_mp_get_cfo(struct bb_info *bb, enum phl_phy_idx phy_idx);
+void halbb_mp_plcp_hdr_init(struct bb_info *bb);
 void halbb_mp_dbg(struct bb_info *bb, char input[][16], u32 *_used,
 		  char *output, u32 *_out_len);
 void halbb_cr_cfg_mp_init(struct bb_info *bb);

@@ -77,9 +77,9 @@ u32 mac_chk_sec_rec(struct mac_ax_adapter *adapter, u8 *sec_mode)
 		*sec_mode = MAC_NON_SEC;
 
 	if (*sec_mode == MAC_SEC)
-		adapter->hw_info->is_sec_ic = 1;
+		adapter->fw_info.is_sec_ic = 1;
 	else
-		adapter->hw_info->is_sec_ic = 0;
+		adapter->fw_info.is_sec_ic = 0;
 
 	return MACSUCCESS;
 }

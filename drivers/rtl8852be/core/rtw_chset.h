@@ -87,6 +87,7 @@ struct rtw_chset {
 	RT_CHANNEL_INFO *chs_of_band[BAND_MAX];
 	u8 chs_len_of_band[BAND_MAX];
 	u8 enable_ch_num;
+	u8 enable_ch_num_of_band[BAND_MAX];
 };
 
 int rtw_chset_init(struct rtw_chset *chset, u8 band_bmp);
@@ -102,6 +103,12 @@ u8 rtw_chset_is_bchbw_valid(const struct rtw_chset *chset, enum band_type band, 
 	, bool allow_primary_passive, bool allow_passive);
 void rtw_chset_sync_bchbw(const struct rtw_chset *chset, enum band_type *req_band, u8 *req_ch, u8 *req_bw, u8 *req_offset
 	, enum band_type *g_band, u8 *g_ch, u8 *g_bw, u8 *g_offset, bool allow_primary_passive, bool allow_passive);
+
+#if CONFIG_IEEE80211_BAND_6GHZ
+#define rtw_chset_has_6g_enabled(chset) (!!(chset)->enable_ch_num_of_band[BAND_ON_6G])
+#else
+#define rtw_chset_has_6g_enabled(chset) false
+#endif
 
 u8 *rtw_chset_set_spt_chs_ie(struct rtw_chset *chset, u8 *buf_pos, uint *buf_len);
 

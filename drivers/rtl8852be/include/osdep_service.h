@@ -350,6 +350,33 @@ bool _rtw_time_after_eq(systime a, systime b);
 #define rtw_time_before_eq(a, b) _rtw_time_after_eq(b, a)
 #endif
 
+#ifndef CONFIG_OSDEP_SPTIME_API
+sysptime rtw_sptime_get(void);
+sysptime rtw_sptime_get_raw(void);
+sysptime rtw_sptime_set(s64 secs, const u32 nsecs);
+sysptime rtw_sptime_zero(void);
+
+int rtw_sptime_cmp(const sysptime cmp1, const sysptime cmp2);
+bool rtw_sptime_eql(const sysptime cmp1, const sysptime cmp2);
+bool rtw_sptime_is_zero(const sysptime sptime);
+sysptime rtw_sptime_sub(const sysptime lhs, const sysptime rhs);
+sysptime rtw_sptime_add(const sysptime lhs, const sysptime rhs);
+
+s64 rtw_sptime_to_ms(const sysptime sptime);
+sysptime rtw_ms_to_sptime(u64 ms);
+s64 rtw_sptime_to_us(const sysptime sptime);
+sysptime rtw_us_to_sptime(u64 us);
+s64 rtw_sptime_to_ns(const sysptime sptime);
+sysptime rtw_ns_to_sptime(u64 ns);
+
+s64 rtw_sptime_diff_ms(const sysptime start, const sysptime end);
+s64 rtw_sptime_pass_ms(const sysptime start);
+s64 rtw_sptime_diff_us(const sysptime start, const sysptime end);
+s64 rtw_sptime_pass_us(const sysptime start);
+s64 rtw_sptime_diff_ns(const sysptime start, const sysptime end);
+s64 rtw_sptime_pass_ns(const sysptime start);
+#endif /* !CONFIG_OSDEP_SPTIME_API */
+
 void rtw_sleep_schedulable(int ms);
 
 void rtw_msleep_os(int ms);
@@ -522,11 +549,28 @@ static inline int largest_bit_64(u64 bitmask)
 		} \
 	} while (0)
 
+#define MAC_FMT_LEN 18
+#ifdef CONFIG_RTW_HIDDEN_MAC_ADDR
+#ifndef MAC_FMT
+#define MAC_FMT "%02x:%02x:%02x:xx:xx:xx"
+#endif
+#ifndef MAC_ARG
+#define MAC_ARG(x) ((u8 *)(x))[0], ((u8 *)(x))[1], ((u8 *)(x))[2]
+#endif
+#else /* CONFIG_RTW_HIDDEN_MAC_ADDR */
 #ifndef MAC_FMT
 #define MAC_FMT "%02x:%02x:%02x:%02x:%02x:%02x"
 #endif
 #ifndef MAC_ARG
 #define MAC_ARG(x) ((u8 *)(x))[0], ((u8 *)(x))[1], ((u8 *)(x))[2], ((u8 *)(x))[3], ((u8 *)(x))[4], ((u8 *)(x))[5]
+#endif
+#endif /* CONFIG_RTW_HIDDEN_MAC_ADDR */
+
+#ifndef MAC_FMT_SEL
+#define MAC_FMT_SEL "%02x:%02x:%02x:%02x:%02x:%02x"
+#endif
+#ifndef MAC_ARG_SEL
+#define MAC_ARG_SEL(x) ((u8 *)(x))[0], ((u8 *)(x))[1], ((u8 *)(x))[2], ((u8 *)(x))[3], ((u8 *)(x))[4], ((u8 *)(x))[5]
 #endif
 
 bool rtw_macaddr_is_larger(const u8 *a, const u8 *b);

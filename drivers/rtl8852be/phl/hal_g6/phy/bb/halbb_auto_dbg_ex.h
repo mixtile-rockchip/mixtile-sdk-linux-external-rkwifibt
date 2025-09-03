@@ -32,10 +32,10 @@
 
 /*@--------------------------[Enum]------------------------------------------*/
 enum bb_auto_dbg_t {
-	AUTO_DBG_CHECK_HANG	= BIT(0),
-	AUTO_DBG_CHECK_TX	= BIT(1),
-	AUTO_DBG_STORE_PMAC	= BIT(2),
-	AUTO_DBG_PHY_UTILITY	= BIT(3)
+	AUTO_DBG_CHECK_HANG	= 0,
+	AUTO_DBG_CHECK_TX	= 1,
+	AUTO_DBG_STORE_PMAC	= 2,
+	AUTO_DBG_PHY_UTILITY	= 3
 };
 
 /*@--------------------------[Structure]-------------------------------------*/
@@ -58,9 +58,10 @@ struct bb_bkp_pmac_info {
 
 struct bb_info;
 /*@--------------------------[Prptotype]-------------------------------------*/
-void halbb_query_hang_info(struct bb_info *bb, struct bb_stat_hang_info *rpt);
-void halbb_query_pmac_info(struct bb_info *bb, struct bb_bkp_pmac_info *rpt);
-void halbb_query_phy_utility_info(struct bb_info *bb, struct bb_bkp_phy_utility_info *rpt);
+void halbb_query_hang_info(struct bb_info *bb, struct bb_stat_hang_info *rpt, enum phl_phy_idx phy_idx);
+void halbb_query_pmac_info(struct bb_info *bb, struct bb_bkp_pmac_info *rpt, enum phl_phy_idx phy_idx);
+void halbb_direct_query_pmac_cr_info(struct bb_info *bb_0, struct bb_bkp_pmac_info *rpt, enum phl_phy_idx phy_idx);
+void halbb_query_phy_utility_info(struct bb_info *bb, struct bb_bkp_phy_utility_info *rpt, enum phl_phy_idx phy_idx);
 void halbb_auto_debug_en(struct bb_info *bb, enum bb_auto_dbg_t dbg_type, bool en);
 #endif
 #endif

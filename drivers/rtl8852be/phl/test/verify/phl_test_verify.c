@@ -22,7 +22,9 @@
 
 static struct s_handler test_handlers[VERIFY_FEATURES_MAX] = {
 	{ func_null }, /* VERIFY_FEATURES_NULL = 0 */
+#ifdef CONFIG_DBCC_SUPPORT
 	{ rtw_test_dbcc_cmd_process }, /* VERIFY_FEATURES_DBCC */
+#endif /* CONFIG_DBCC_SUPPORT */
 };
 
 void verify_cmd_done_notification_complete(void *ctx, struct phl_msg *msg)

@@ -39,7 +39,6 @@ enum phl_band_idx;
 #define CH_IS_NON_OCP(rt_ch_info) (!CH_IS_NON_OCP_STOPPED(rt_ch_info) && rtw_time_after((rt_ch_info)->non_ocp_end_time, rtw_get_current_time()))
 
 bool rtw_rfctl_overlap_radar_detect_ch(struct rf_ctl_t *rfctl, enum band_type band, u8 ch, u8 bw, u8 offset);
-bool rtw_rfctl_hwband_is_tx_blocked_by_ch_waiting(struct rf_ctl_t *rfctl, enum phl_band_idx hwband);
 bool adapter_is_tx_blocked_by_ch_waiting(_adapter *adapter);
 bool alink_is_tx_blocked_by_ch_waiting(struct _ADAPTER_LINK *alink);
 
@@ -66,7 +65,6 @@ void rtw_indicate_cac_state_on_bss_stop(_adapter *adapter);
 
 #else
 #define CH_IS_NON_OCP(rt_ch_info) 0
-#define rtw_rfctl_hwband_is_tx_blocked_by_ch_waiting(rfctl, hwband) false
 #define adapter_is_tx_blocked_by_ch_waiting(adapter) false
 #define alink_is_tx_blocked_by_ch_waiting(alink) false
 

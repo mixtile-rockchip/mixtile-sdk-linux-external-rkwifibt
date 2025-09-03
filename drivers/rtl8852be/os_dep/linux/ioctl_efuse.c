@@ -28,19 +28,24 @@ static u8 rtw_efuse_cmd(_adapter *padapter,
 
 	rtw_mp_set_phl_cmd(padapter, (void*)pefuse_arg, sizeof(struct rtw_efuse_phl_arg));
 
-	while (i <= 50) {
+	while (i <= 500) {
 		rtw_msleep_os(10);
 		rtw_mp_get_phl_cmd(padapter, (void*)pefuse_arg, sizeof(struct rtw_efuse_phl_arg));
 		if (pefuse_arg->cmd_ok && pefuse_arg->status == RTW_PHL_STATUS_SUCCESS) {
 			RTW_INFO("%s,eFuse GET CMD OK !!!\n", __func__);
 			ret = _SUCCESS;
 			break;
+		} else if (pefuse_arg->cmd_ok && pefuse_arg->status == RTW_PHL_STATUS_FAILURE) { 
+			RTW_INFO("%s,eFuse GET CMD FAIL !!!\n", __func__);
+			ret = _FAIL;
+			break;
 		} else {
 			rtw_msleep_os(10);
 			if (i > 50) {
-				RTW_INFO("%s, eFuse GET CMD FAIL !!!\n", __func__);
+				RTW_INFO("%s, timeout eFuse GET CMD FAIL !!!\n", __func__);
 				break;
 			}
+			RTW_INFO("%s, wait for eFuse GET CMD !!!\n", __func__);
 			i++;
 		}
 	}
@@ -137,6 +142,9 @@ u8 rtw_efuse_read_map2shadow(_adapter *padapter, u8 efuse_type)
 		    rtw_efuse_cmd(padapter, efuse_arg, RTW_EFUSE_CMD_WIFI_UPDATE_MAP);
 		else if (efuse_type == RTW_EFUSE_BT)
 			rtw_efuse_cmd(padapter, efuse_arg, RTW_EFUSE_CMD_BT_UPDATE_MAP);
+		else
+			RTW_INFO("%s,efuse_type unknow :%d!!!\n", __func__, efuse_type);
+
 		if (efuse_arg->cmd_ok && efuse_arg->status == RTW_PHL_STATUS_SUCCESS)
 				res = _SUCCESS;
 		else
@@ -1313,7 +1321,7 @@ int rtw_ioctl_efuse_set(struct net_device *dev,
 
 		err = 0;
 		goto exit;
-	} else if (strcmp(tmp[0], "update") == 0) {
+	} else if (strncmp(tmp[0], "update", 6) == 0) {
 		if (rtw_efuse_renew_update(padapter, RTW_EFUSE_WIFI) == _FAIL) {
 			RTW_INFO("%s: rtw_efuse_renew_update error!!\n", __FUNCTION__);
 			sprintf(extra, "WIFI update FAIL\n");

@@ -51,6 +51,12 @@ struct phl_dbg_cmd_info {
 enum rtw_phl_status
 rtw_phl_dbg_core_cmd(struct phl_info_t *phl_info, struct rtw_proc_cmd *incmd, char *output, u32 out_len);
 
+void convert_tx_rate(enum rtw_rate_mode mode,
+                     u8 mcs_ss_idx,
+                     char *str,
+                     u32 str_len);
+void convert_rx_rate(u32 rx_rate, char *str, u32 str_len);
+
 #ifdef CONFIG_PHL_TEST_SUITE
 
 enum PHL_DBG_CMD_ID {
@@ -90,11 +96,15 @@ enum PHL_DBG_CMD_ID {
 	PHL_DBG_CHAN_INFO,
 #endif
 	PHL_DBG_SET_LEVEL,
+	PHL_DBG_SET_DUMP_CFG,
 #ifdef CONFIG_PHL_SNIFFER_SUPPORT
 	PHL_DBG_SNIFFER,
 #endif
 #ifdef CONFIG_USB_HCI
 	PHL_DBG_USB_SPEED,
+#endif
+#ifdef DBG_MONITOR_TIME
+	PHL_DBG_FUNC_LATENCY,
 #endif
 	PHL_DBG_MAX
 };
@@ -136,11 +146,16 @@ static const struct phl_dbg_cmd_info phl_dbg_cmd_i[] = {
 	{"set_chan_info", PHL_DBG_CHAN_INFO},
 #endif
 	{"dbglevel", PHL_DBG_SET_LEVEL},
+	{"dump_cfg", PHL_DBG_SET_DUMP_CFG},
 #ifdef CONFIG_PHL_SNIFFER_SUPPORT
 	{"sniffer", PHL_DBG_SNIFFER},
 #endif
 #ifdef CONFIG_USB_HCI
 	{"usb_speed", PHL_DBG_USB_SPEED},
+#endif
+
+#ifdef DBG_MONITOR_TIME
+	{"fun_latency", PHL_DBG_FUNC_LATENCY}
 #endif
 
 };

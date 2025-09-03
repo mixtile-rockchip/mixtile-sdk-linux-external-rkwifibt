@@ -112,8 +112,12 @@ static enum phl_mdl_ret_code _btc_cmd_start(void *dispr, void *priv)
 static enum phl_mdl_ret_code _btc_cmd_stop(void *dispr, void *priv)
 {
 	enum phl_mdl_ret_code ret = MDL_RET_SUCCESS;
+	struct phl_info_t *phl_info = (struct phl_info_t *)priv;
+	struct rtw_hal_com_t *hal_com = rtw_hal_get_halcom(phl_info->hal);
+	struct btc_fw_msg *fw_msg = &hal_com->btc_msg;
 
 	PHL_INFO("[BTCCMD], %s(): \n", __func__);
+	fw_msg->fev_cnt = 0;
 
 	return ret;
 }
@@ -619,6 +623,34 @@ _exit:
 #endif /* CONFIG_DBCC_SUPPORT */
 
 static enum phl_mdl_ret_code
+_btc_post_handle_cntry_code(struct phl_info_t *phl, struct phl_msg *msg)
+{
+	enum phl_mdl_ret_code ret = MDL_RET_FAIL;
+	struct rtw_cntry_code_hdl *param = NULL;
+	u8 *cmd = NULL;
+	u32 cmd_len;
+
+	if (MSG_MDL_ID_FIELD(msg->msg_id) != PHL_MDL_GENERAL) {
+		ret = MDL_RET_IGNORE;
+		goto _exit;
+	}
+	if (RTW_PHL_STATUS_SUCCESS != phl_cmd_get_cur_cmdinfo(phl,
+				msg->band_idx, msg, &cmd, &cmd_len)) {
+		PHL_TRACE(COMP_PHL_BTC, _PHL_ERR_, "%s: Fail to get cmd info \n",
+			__FUNCTION__);
+		goto _exit;
+	}
+	param = (struct rtw_cntry_code_hdl *)cmd;
+	PHL_TRACE(COMP_PHL_BTC, _PHL_INFO_, "%s: country code = \"%c%c\"\n",
+		__FUNCTION__, param->char2[0], param->char2[1]);
+	rtw_hal_btc_customerize_ntfy(phl->hal, PHL_BTC_CNTFY_COUNTRY_CODE,
+				     2, (u8 *)param);
+	ret = MDL_RET_SUCCESS;
+_exit:
+	return ret;
+}
+
+static enum phl_mdl_ret_code
 _btc_post_handle_client_ps_annc(struct phl_info_t *phl,
 			struct phl_msg *msg)
 {
@@ -722,6 +754,9 @@ _btc_external_post_msg_hdlr(struct phl_info_t *phl_info,
 	enum phl_phy_idx phy_idx = HW_PHY_0;
 
 	switch(evt_id) {
+	case MSG_EVT_REGU_SET_CNTRY_CODE:
+		ret = _btc_post_handle_cntry_code(phl_info, msg);
+		break;
 	case MSG_EVT_SCAN_END:
 		if (MSG_MDL_ID_FIELD(msg->msg_id) != PHL_FG_MDL_SCAN)
 			break;

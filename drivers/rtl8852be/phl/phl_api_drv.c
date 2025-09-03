@@ -100,12 +100,14 @@ void rtw_phl_get_fw_ver(void *phl, char *ver_str, u16 len)
 	rtw_hal_get_fw_ver(phl_info->hal, ver_str, len);
 }
 
+#ifndef CONFIG_CORE_DBG_NONE
 enum rtw_fw_status rtw_phl_get_fw_status(void *phl)
 {
 	struct phl_info_t *phl_info = (struct phl_info_t *)phl;
 
 	return rtw_hal_get_fw_status(phl_info->hal);
 }
+#endif
 
 enum rf_path rtw_phl_get_path_from_ant_num(void *phl, u8 antnum)
 {
@@ -181,12 +183,14 @@ void rtw_phl_test_txtb_cfg(struct rtw_phl_com_t* phl_com,
 	}
 }
 
+#ifdef CONFIG_PHL_PKTOFLD
 void rtw_phl_pkt_ofld_del_all_entry_req(struct rtw_phl_com_t* phl_com)
 {
 	struct phl_info_t *phl_info = (struct phl_info_t *)phl_com->phl_priv;
 
 	phl_pkt_ofld_del_all_entry_req(phl_info);
 }
+#endif
 
 void rtw_phl_dbg_dump_rx(void *phl, struct rtw_wifi_role_t *wrole)
 {

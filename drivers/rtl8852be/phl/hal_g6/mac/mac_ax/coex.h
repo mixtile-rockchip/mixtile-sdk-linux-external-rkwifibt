@@ -22,6 +22,13 @@
 #define MAC_AX_NOTIFY_TP_MAJOR 0x81
 #define MAC_AX_NOTIFY_PWR_MAJOR 0x80
 
+#define MAC_AX_PLT_LTE_RX BIT(0)
+#define MAC_AX_PLT_GNT_BT_TX BIT(1)
+#define MAC_AX_PLT_GNT_BT_RX BIT(2)
+#define MAC_AX_PLT_GNT_WL BIT(3)
+
+#if MAC_FEAT_COEX
+
 /**
  * @addtogroup Common
  * @{
@@ -124,4 +131,5 @@ u32 mac_write_coex_mask(struct mac_ax_adapter *adapter,
  * @}
  */
 
+#endif /* MAC_FEAT_DBCC */
 #endif

@@ -39,6 +39,7 @@ bool halbb_spur_location(struct bb_info *bb, u8 central_ch,
 
 	#ifdef BB_8852B_SUPPORT
 	case BB_RTL8852B:
+		rpt = halbb_spur_location_8852b(bb, central_ch, bw, band, intf);
 		break;
 	#endif
 
@@ -101,11 +102,12 @@ void halbb_csi_tone_idx(struct bb_info *bb, u8 central_ch,
 {
 	/* CSI tone index:  [-1024] --- [0] --- [1023] */
 	struct bb_spur_cr_info *cr = &bb->bb_cmn_hooker->bb_spur_i.bb_spur_cr_i;
-	u32 fc, intf, intf_csi ; //Central freq. (MHz) & Spur freq. (MHz)
-	s32 f_diff, csi_idx;
-	bool spur_chk;
+	u32 fc = 0, intf = 0, intf_csi = 0 ; //Central freq. (MHz) & Spur freq. (MHz)
+	s32 f_diff = 0, csi_idx = 0;
+	bool spur_chk = false;
 
-	if ((bb->ic_type == BB_RTL8852A) || (bb->ic_type == BB_RTL8852B)) {
+	if ((bb->ic_type == BB_RTL8852A) ||
+	    ((bb->ic_type == BB_RTL8852B) && (bb->ic_sub_type != BB_IC_SUB_TYPE_8852B_8852BT))) {
 		BB_DBG(bb, DBG_DBG_API, "[Spur] IC not support!\n");
 		return;
 	}
@@ -155,8 +157,8 @@ void halbb_nbi_tone_idx(struct bb_info *bb, u8 central_ch, u8 pri_ch,
 	*/
 	struct bb_spur_cr_info *cr = &bb->bb_cmn_hooker->bb_spur_i.bb_spur_cr_i;
 	u16 tone_para = 0;
-	u32 fc, intf; //Central freq. (MHz) & Spur freq. (MHz)
-	s32 f_diff, nbi_idx, nbi_idx_tmp = 0, nbi_frac_idx, nbi_frac_tmp = 0;
+	u32 fc = 0, intf = 0; //Central freq. (MHz) & Spur freq. (MHz)
+	s32 f_diff = 0, nbi_idx = 0, nbi_idx_tmp = 0, nbi_frac_idx = 0, nbi_frac_tmp = 0;
 	// CR
 	u32 notch1_nbi_idx[2] = {cr->path0_notch_nbi_idx, cr->path1_notch_nbi_idx};
 	u32 notch1_nbi_idx_m[2] = {cr->path0_notch_nbi_idx_m, cr->path1_notch_nbi_idx_m};
@@ -259,11 +261,13 @@ void halbb_fwofld_csi_tone_idx(struct bb_info *bb, u8 central_ch,
 {
 	/* CSI tone index:  [-1024] --- [0] --- [1023] */
 	struct bb_spur_cr_info *cr = &bb->bb_cmn_hooker->bb_spur_i.bb_spur_cr_i;
-	u32 fc, intf; //Central freq. (MHz) & Spur freq. (MHz)
-	s32 f_diff, csi_idx;
-	bool spur_chk;
+	u32 fc = 0, intf = 0; //Central freq. (MHz) & Spur freq. (MHz)
+	s32 f_diff = 0, csi_idx = 0;
+	bool spur_chk = false;
 
-	if ((bb->ic_type == BB_RTL8852A) || (bb->ic_type == BB_RTL8852B)) {
+
+	if ((bb->ic_type == BB_RTL8852A) ||
+	    ((bb->ic_type == BB_RTL8852B) && (bb->ic_sub_type != BB_IC_SUB_TYPE_8852B_8852BT))) {
 		BB_DBG(bb, DBG_DBG_API, "[Spur] IC not support!\n");
 		return;
 	}
@@ -308,8 +312,8 @@ void halbb_fwofld_nbi_tone_idx(struct bb_info *bb, u8 central_ch, u8 pri_ch,
 	*/
 	struct bb_spur_cr_info *cr = &bb->bb_cmn_hooker->bb_spur_i.bb_spur_cr_i;
 	u16 tone_para = 0;
-	u32 fc, intf; //Central freq. (MHz) & Spur freq. (MHz)
-	s32 f_diff, nbi_idx, nbi_idx_tmp = 0, nbi_frac_idx, nbi_frac_tmp = 0;
+	u32 fc = 0, intf = 0; //Central freq. (MHz) & Spur freq. (MHz)
+	s32 f_diff = 0, nbi_idx = 0, nbi_idx_tmp = 0, nbi_frac_idx = 0, nbi_frac_tmp = 0;
 	// CR
 	u32 notch1_nbi_idx[2] = {cr->path0_notch_nbi_idx, cr->path1_notch_nbi_idx};
 	u32 notch1_nbi_idx_m[2] = {cr->path0_notch_nbi_idx_m, cr->path1_notch_nbi_idx_m};
@@ -518,7 +522,7 @@ void halbb_cr_cfg_spur_init(struct bb_info *bb)
 	#endif
 	#ifdef HALBB_COMPILE_BE1_SERIES
 	case BB_BE1:
-		
+
 		cr->seg0_set1_csi_tone_idx = RXINT_R_SEG0_SET1_CSI_WGT_TONE_IDX_BE1;
 		cr->seg0_set1_csi_tone_idx_m = RXINT_R_SEG0_SET1_CSI_WGT_TONE_IDX_BE1_M;
 		cr->seg0_set1_csi_en = RXINT_R_SEG0_SET1_CSI_WGT_EN_BE1;

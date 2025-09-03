@@ -81,13 +81,20 @@ u8 halbb_stop_ic_trx(struct bb_info *bb, u8 set_type);
 void halbb_ic_api_dbg(struct bb_info *bb, char input[][16], u32 *_used,
 			char *output, u32 *_out_len);
 u16 halbb_fc_mapping(struct bb_info *bb, enum band_type band, u8 central_ch);
+u8 halbb_gain_band_determine(struct bb_info *bb, u8 central_ch,
+			     enum band_type band_type);
 void halbb_ic_hw_setting_non_io(struct bb_info *bb);
 void halbb_ic_hw_setting_low_io(struct bb_info *bb);
 void halbb_ic_hw_setting_dbcc(struct bb_info *bb);
 void halbb_ic_hw_setting(struct bb_info *bb);
 void halbb_ic_hw_setting_dbg(struct bb_info *bb, char input[][16], 
 			     u32 *_used, char *output, u32 *_out_len);
+#ifdef HALBB_PATH_DIV_SUPPORT
 void halbb_ctrl_tx_path_div(struct bb_info * bb, enum bb_path tx_path_1ss);
+void halbb_ctrl_path_div_6g(struct bb_info *bb, bool is_disable_6g);
+#endif
 void halbb_pwr_diff_wa_enable(struct bb_info *bb, enum phl_phy_idx phy_idx);
 void halbb_pwr_diff_wa_disable(struct bb_info *bb, enum phl_phy_idx phy_idx);
+void halbb_per_macid_tx_path_init(struct bb_info *bb, u16 macid);
+void halbb_set_cctrl_tbl(struct bb_info *bb, u16 macid, u16 cfg);
 #endif

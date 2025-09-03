@@ -36,7 +36,7 @@ void _phl_mp_timer_cb(void *context)
 	if (mp_ctx->status != MP_STATUS_RUN_CMD) {
 		arg->mp_class = MP_CLASS_CAL;
 		arg->cmd = MP_CAL_CMD_TRIGGER_WATCHDOG_CAL;
-		phl_test_mp_cmd_process(mp_ctx, arg, sizeof(arg), TEST_SUB_MODULE_MP);
+		phl_test_mp_cmd_process(mp_ctx, arg, sizeof(*arg), TEST_SUB_MODULE_MP);
 	}
 
 	if (mp_ctx->is_mp_wdog_start) {

@@ -249,9 +249,9 @@ static int update_nd_link_layer_addr(unsigned char *data, int len, unsigned char
 		if (len >= 8) {
 			mac = scan_tlv(&data[8], len - 8, 1, 1);
 			if (mac) {
-				RTW_INFO("Router Solicitation, replace MAC From: %02x:%02x:%02x:%02x:%02x:%02x, To: %02x:%02x:%02x:%02x:%02x:%02x\n",
-					mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],
-					replace_mac[0], replace_mac[1], replace_mac[2], replace_mac[3], replace_mac[4], replace_mac[5]);
+				RTW_INFO("Router Solicitation, replace MAC From: "MAC_FMT", To: "MAC_FMT"\n",
+					MAC_ARG(mac),
+					MAC_ARG(replace_mac));
 				_rtw_memcpy(mac, replace_mac, 6);
 				return 1;
 			}
@@ -260,9 +260,9 @@ static int update_nd_link_layer_addr(unsigned char *data, int len, unsigned char
 		if (len >= 16) {
 			mac = scan_tlv(&data[16], len - 16, 1, 1);
 			if (mac) {
-				RTW_INFO("Router Advertisement, replace MAC From: %02x:%02x:%02x:%02x:%02x:%02x, To: %02x:%02x:%02x:%02x:%02x:%02x\n",
-					mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],
-					replace_mac[0], replace_mac[1], replace_mac[2], replace_mac[3], replace_mac[4], replace_mac[5]);
+				RTW_INFO("Router Advertisement, replace MAC From: "MAC_FMT", To: "MAC_FMT"\n",
+					MAC_ARG(mac),
+					MAC_ARG(replace_mac));
 				_rtw_memcpy(mac, replace_mac, 6);
 				return 1;
 			}
@@ -271,9 +271,9 @@ static int update_nd_link_layer_addr(unsigned char *data, int len, unsigned char
 		if (len >= 24) {
 			mac = scan_tlv(&data[24], len - 24, 1, 1);
 			if (mac) {
-				RTW_INFO("Neighbor Solicitation, replace MAC From: %02x:%02x:%02x:%02x:%02x:%02x, To: %02x:%02x:%02x:%02x:%02x:%02x\n",
-					mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],
-					replace_mac[0], replace_mac[1], replace_mac[2], replace_mac[3], replace_mac[4], replace_mac[5]);
+				RTW_INFO("Neighbor Solicitation, replace MAC From: "MAC_FMT", To: "MAC_FMT"\n",
+					MAC_ARG(mac),
+					MAC_ARG(replace_mac));
 				_rtw_memcpy(mac, replace_mac, 6);
 				return 1;
 			}
@@ -282,9 +282,9 @@ static int update_nd_link_layer_addr(unsigned char *data, int len, unsigned char
 		if (len >= 24) {
 			mac = scan_tlv(&data[24], len - 24, 2, 1);
 			if (mac) {
-				RTW_INFO("Neighbor Advertisement, replace MAC From: %02x:%02x:%02x:%02x:%02x:%02x, To: %02x:%02x:%02x:%02x:%02x:%02x\n",
-					mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],
-					replace_mac[0], replace_mac[1], replace_mac[2], replace_mac[3], replace_mac[4], replace_mac[5]);
+				RTW_INFO("Neighbor Advertisement, replace MAC From: "MAC_FMT", To: "MAC_FMT"\n",
+					MAC_ARG(mac),
+					MAC_ARG(replace_mac));
 				_rtw_memcpy(mac, replace_mac, 6);
 				return 1;
 			}
@@ -293,9 +293,9 @@ static int update_nd_link_layer_addr(unsigned char *data, int len, unsigned char
 		if (len >= 40) {
 			mac = scan_tlv(&data[40], len - 40, 2, 1);
 			if (mac) {
-				RTW_INFO("Redirect,  replace MAC From: %02x:%02x:%02x:%02x:%02x:%02x, To: %02x:%02x:%02x:%02x:%02x:%02x\n",
-					mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],
-					replace_mac[0], replace_mac[1], replace_mac[2], replace_mac[3], replace_mac[4], replace_mac[5]);
+				RTW_INFO("Redirect,  replace MAC From: "MAC_FMT", To: "MAC_FMT"\n",
+					MAC_ARG(mac),
+					MAC_ARG(replace_mac));
 				_rtw_memcpy(mac, replace_mac, 6);
 				return 1;
 			}

@@ -95,7 +95,6 @@ struct bb_ch_rpt_info {
 	enum bb_ch_info_en_t ch_info_data_mode;
 	struct bb_ch_info_cr_cfg_info bb_ch_info_cr_cfg_i;
 	struct bb_ch_info_cr_cfg_info bb_ch_info_cur_cr_cfg_i;
-	struct bb_ch_info_cr_info bb_ch_info_cr_i; /*CR callback table*/
 	struct bb_ch_rpt_size_info bb_ch_rpt_size_i;
 	struct bb_ch_info_raw_info bb_ch_info_raw_i; /*save dumped ch-info data*/
 	struct bb_ch_info_physts_info bb_ch_info_physts_i;

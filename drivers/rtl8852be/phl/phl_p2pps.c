@@ -168,19 +168,21 @@ _phl_p2pps_calc_next_noa_s_time(struct phl_info_t *phl_info,
 	_os_mem_cpy(d, new_desc, orig_desc, sizeof(*orig_desc));
 	old_st = (((u64)orig_desc->start_t_h << 32) | orig_desc->start_t_l);
 	PHL_TRACE(COMP_PHL_P2PPS, _PHL_INFO_, "[NOA]_phl_p2pps_calc_next_noa_s_time():old_st: 0x%08x %08x\n",
-		(u32)(old_st >> 32), (u32)old_st);
+	          (u32)(old_st >> 32), (u32)old_st);
 	tog_t = (((u64)rpt->tsf_h << 32) | rpt->tsf_l);
 	PHL_TRACE(COMP_PHL_P2PPS, _PHL_INFO_, "[NOA]_phl_p2pps_calc_next_noa_s_time():tog_t = 0x%08x %08x\n",
-		(u32)(tog_t >> 32), (u32)tog_t);
+	          (u32)(tog_t >> 32), (u32)tog_t);
 	delta_t = tog_t - old_st;
 	PHL_TRACE(COMP_PHL_P2PPS, _PHL_INFO_, "[NOA]_phl_p2pps_calc_next_noa_s_time():delta_t = 0x%08x %08x\n",
-		(u32)(delta_t >> 32), (u32)delta_t);
-	intv_cnt = _os_division64(delta_t,  new_desc->interval) + 1;
-	PHL_TRACE(COMP_PHL_P2PPS, _PHL_INFO_, "[NOA]_phl_p2pps_calc_next_noa_s_time():intv_cnt = 0x%08x %08x\n",
-		(u32)(intv_cnt >> 32), (u32)intv_cnt);
+	          (u32)(delta_t >> 32), (u32)delta_t);
+	if (new_desc->interval) {
+		intv_cnt = _os_division64(delta_t, new_desc->interval) + 1;
+		PHL_TRACE(COMP_PHL_P2PPS, _PHL_INFO_, "[NOA]_phl_p2pps_calc_next_noa_s_time():intv_cnt = 0x%08x %08x\n",
+		          (u32)(intv_cnt >> 32), (u32)intv_cnt);
+	}
 	new_st = old_st + (intv_cnt * new_desc->interval);
 	PHL_TRACE(COMP_PHL_P2PPS, _PHL_INFO_, "[NOA]_phl_p2pps_calc_next_noa_s_time():new_st = 0x%08x %08x\n",
-		(u32)(new_st >> 32), (u32)new_st);
+	          (u32)(new_st >> 32), (u32)new_st);
 	new_desc->start_t_h = new_st >> 32;
 	new_desc->start_t_l = new_st & 0xFFFFFFFF;
 }
@@ -573,7 +575,7 @@ _phl_p2pps_noa_enable(struct rtw_phl_p2pps_info *psinfo,
 				noa_desc->tag, noa_desc->noa_id, hal_ret);
 			_phl_p2pps_noa_increase_desc(psinfo,noa_info);
 			/* Update macid exclude self macid */
-			if (rtw_phl_role_is_ap_category(w_role)) {
+			if (w_role && rtw_phl_role_is_ap_category(w_role)) {
 				ret = _phl_p2p_ps_up_clients_macid_for_ap_role(
 								phl_info, psinfo,
 								w_role);

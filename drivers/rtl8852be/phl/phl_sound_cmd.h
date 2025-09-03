@@ -15,6 +15,7 @@
 #ifndef _PHL_SOUND_CMD_H_
 #define _PHL_SOUND_CMD_H_
 
+#ifdef CONFIG_PHL_BEAMFORM
 #ifdef CONFIG_PHL_CMD_BF
 
 enum snd_cmd_disp_ctrl {
@@ -82,4 +83,8 @@ void phl_snd_cmd_sound_cancel_msg(struct phl_info_t *phl_info);
 #define phl_snd_cmd_sound_evt(_p, _w, _g, _e) RTW_PHL_STATUS_SUCCESS
 #define phl_snd_cmd_ntfy_ps(_p, _w, _e) RTW_PHL_STATUS_SUCCESS
 #endif /* end of CONFIG_PHL_CMD_BF */
+#else
+#define phl_snd_cmd_register_module(_phl_info) RTW_PHL_STATUS_SUCCESS
+#define phl_snd_cmd_ntfy_ps(_phl, _wrole, _enter) RTW_PHL_STATUS_SUCCESS
+#endif
 #endif

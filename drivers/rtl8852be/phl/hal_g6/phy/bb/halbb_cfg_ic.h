@@ -33,14 +33,17 @@
 	#define BB_8852A_2_SUPPORT /*> CBV*/
 #endif
 
-#if defined(CONFIG_RTL8852B) || defined(CONFIG_RTL8852BP) || defined(CONFIG_RTL8852BT)
+#if defined(CONFIG_RTL8852B) || defined(CONFIG_RTL8852BP) || defined(CONFIG_RTL8852BT) || defined(CONFIG_RTL8852BPT)
 	#define BB_8852B_SUPPORT
 #endif
 
-#if defined(CONFIG_RTL8852C) || defined(CONFIG_RTL8852D)
+#if defined(CONFIG_RTL8852C) || defined(CONFIG_RTL8852D) || defined(CONFIG_RTL8842A)
 	#define BB_8852C_SUPPORT
 	#ifdef CONFIG_RTL8852D
 	#define BB_8852D_SUPPORT
+	#endif
+	#ifdef CONFIG_RTL8842A
+	#define BB_8842A_SUPPORT
 	#endif
 #endif
 

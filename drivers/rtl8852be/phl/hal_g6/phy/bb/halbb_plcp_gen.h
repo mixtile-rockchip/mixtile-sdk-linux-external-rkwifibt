@@ -40,12 +40,14 @@
 
 struct plcp_mcs_table_in_t {
 	u8 spec_idx : 3;
-	u8 mcs : 5;
-	u8 nss : 4;		
+	u8 rsvd0 : 5;
+	u8 mcs : 6;
+	u8 rsvd1 : 2;
+	u8 nss : 4;
 	u8 bw : 3;//0:BW20, 1:BW40, 2:BW80, 3:BW160 4:BW320 /*enum channel_width*/
-	u8 rsvd0 : 1;
+	u8 rsvd2 : 1;
 	u8 ru_size : 5; //0:RU26, 1:RU52, 2:RU106, 3:RU242, 4:RU484, 5:RU996, 6:RU996x2, 7:hesigb, 8:RU996x4, 9:RU52_26, 10:RU106_26, 11:RU484_242, 12:RU996_484, ..., 16:RU996X3_484
-	u8 rsvd1 : 3;
+	u8 rsvd3 : 3;
 	bool dcm;
 	bool fec;
 };

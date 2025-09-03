@@ -15,6 +15,15 @@
 #define _OS_INTFS_C_
 
 #include <drv_types.h>
+#ifdef CONFIG_RTW_RPS
+#include <linux/sched/isolation.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+#include <net/netdev_rx_queue.h>
+#endif
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 9, 0)
+#include <net/rps.h>
+#endif
+#endif
 
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Realtek Wireless Lan Driver");
@@ -25,6 +34,9 @@ MODULE_VERSION(DRIVERVERSION);
 int netdev_open(struct net_device *pnetdev);
 static int netdev_close(struct net_device *pnetdev);
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 8, 0)
+#define strlcpy(p, q, s) strscpy(p, q, s)
+#endif
 
 /**
  * rtw_net_set_mac_address
@@ -390,10 +402,160 @@ void rtw_hook_if_ops(struct net_device *ndev)
 #ifdef CONFIG_CONCURRENT_MODE
 static void rtw_hook_vir_if_ops(struct net_device *ndev);
 #endif
+
+#ifdef CONFIG_RTW_RPS
+static int rtw_rps_cpumask_housekeeping(struct cpumask *mask)
+{
+	if(!cpumask_empty(mask)) {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0)
+		cpumask_and(mask, mask ,housekeeping_cpumask(HK_TYPE_DOMAIN));
+		cpumask_and(mask, mask ,housekeeping_cpumask(HK_TYPE_WQ));
+#else
+		cpumask_and(mask, mask ,housekeeping_cpumask(HK_FLAG_DOMAIN | HK_FLAG_WQ));
+#endif
+		if (cpumask_empty(mask))
+			return -EINVAL;
+	}
+	return 0;
+}
+
+static int rtw_netdev_rx_queue_set_rps_mask(struct netdev_rx_queue *queue,
+					    cpumask_var_t mask)
+{
+	static DEFINE_MUTEX(rtw_rps_map_mutex);
+	struct rps_map *old_map, *map;
+	int cpu, i;
+
+	map = kzalloc(max_t(unsigned int,
+			    RPS_MAP_SIZE(cpumask_weight(mask)), L1_CACHE_BYTES),
+		      GFP_KERNEL);
+	if(!map)
+		return -ENOMEM;
+
+	i = 0;
+	for_each_cpu_and(cpu, mask, cpu_online_mask)
+		map->cpus[i++] = cpu;
+
+	if (i) {
+		map->len = i;
+	} else {
+		kfree(map);
+		map = NULL;
+	}
+
+	mutex_lock(&rtw_rps_map_mutex);
+	old_map = rcu_dereference_protected(queue->rps_map,
+					    mutex_is_locked(&rtw_rps_map_mutex));
+	rcu_assign_pointer(queue->rps_map, map);
+
+	if(map)
+		static_branch_inc(&rps_needed);
+	if(old_map)
+		static_branch_dec(&rps_needed);
+
+	mutex_unlock(&rtw_rps_map_mutex);
+
+	if (old_map)
+		kfree_rcu(old_map, rcu);
+	return 0;
+}
+
+static int rtw_store_rps_map(struct netdev_rx_queue *queue)
+{
+	cpumask_var_t mask;
+	int err;
+
+	if(!capable(CAP_NET_ADMIN))
+		return -EPERM;
+
+	if(!alloc_cpumask_var(&mask, GFP_KERNEL))
+		return -ENOMEM;
+
+	*mask->bits = RPS_CPU_MASK;
+
+	err = rtw_rps_cpumask_housekeeping(mask);
+	if (err)
+		goto out;
+
+	err = rtw_netdev_rx_queue_set_rps_mask(queue, mask);
+
+out:
+	free_cpumask_var(mask);
+	return err;
+
+}
+
+static void rtw_rps_dev_flow_table_release(struct rcu_head *rcu)
+{
+	struct rps_dev_flow_table *table = container_of(rcu,
+	    struct rps_dev_flow_table, rcu);
+	vfree(table);
+}
+
+static int rtw_store_rps_dev_flow_table_cnt(struct netdev_rx_queue *queue)
+{
+	unsigned long mask, count;
+	struct rps_dev_flow_table *table, *old_table;
+	static DEFINE_SPINLOCK(rtw_rps_dev_flow_lock);
+	int rc;
+
+	if (!capable(CAP_NET_ADMIN))
+		return -EPERM;
+
+	count = RPS_FLOW_CNT;
+
+	if (count) {
+		mask = count -1;
+		/* mask = roundup_pow_of_two(count) - 1;
+		 * without overflow...
+		 */
+		while ((mask | (mask >> 1)) != mask)
+			mask |= (mask >> 1);
+		/* On 64 bit arches, must check mask fits in table->mask (u32),
+		 * and on 32 bit arches, must check
+		 * RPS_DEV_FLOW_TABLE_SIZE(mask + 1) doesn't overflow.
+		 */
+#if BITS_PER_LONG > 32
+		if (mask > (unsigned long)(u32)mask)
+			return -EINVAL;
+#else
+		if (mask > (ULONG_MAX - RPS_DEV_FLOW_TABLE_SIZE(1))
+				/ sizeof(struct rps_dev_flow)) {
+			/* Enforce a limit to prevent overflow */
+			return -EINVAL;
+		}
+#endif
+		table = vmalloc(RPS_DEV_FLOW_TABLE_SIZE(mask + 1));
+		if(!table)
+			return -ENOMEM;
+
+		table->mask = mask;
+		for (count = 0; count <= mask; count++)
+			table->flows[count].cpu = RPS_NO_CPU;
+	} else {
+		table = NULL;
+	}
+
+	spin_lock(&rtw_rps_dev_flow_lock);
+	old_table = rcu_dereference_protected(queue->rps_flow_table,
+					      lockdep_is_held(&rtw_rps_dev_flow_lock));
+	rcu_assign_pointer(queue->rps_flow_table, table);
+	spin_unlock(&rtw_rps_dev_flow_lock);
+
+	if(old_table)
+		call_rcu(&old_table->rcu, rtw_rps_dev_flow_table_release);
+
+	return 0;
+}
+#endif
+
 struct net_device *rtw_init_netdev(_adapter *old_padapter)
 {
 	_adapter *padapter;
 	struct net_device *pnetdev;
+#ifdef CONFIG_RTW_RPS
+	u8 idx;
+#endif
 
 	if (old_padapter != NULL) {
 		rtw_os_ndev_free(old_padapter);
@@ -403,6 +565,15 @@ struct net_device *rtw_init_netdev(_adapter *old_padapter)
 
 	if (!pnetdev)
 		return NULL;
+
+#ifdef CONFIG_RTW_RPS
+	if(pnetdev && pnetdev->_rx) {
+		for (idx = 0; idx < pnetdev->num_rx_queues; idx++) {
+			rtw_store_rps_map(pnetdev->_rx + idx);
+			rtw_store_rps_dev_flow_table_cnt(pnetdev->_rx + idx);
+		}
+	}
+#endif
 
 	padapter = rtw_netdev_priv(pnetdev);
 	padapter->pnetdev = pnetdev;
@@ -973,12 +1144,7 @@ u8 rtw_init_default_value(_adapter *padapter)
 	padapter->fix_rx_ampdu_accept = RX_AMPDU_ACCEPT_INVALID;
 	padapter->fix_rx_ampdu_size = RX_AMPDU_SIZE_INVALID;
 #ifdef CONFIG_TX_AMSDU
-	#ifdef CORE_TX_AMSDU_AGG_NUM
-	padapter->tx_amsdu = CORE_TX_AMSDU_AGG_NUM;
-	#else
-	padapter->tx_amsdu = 2;
-	#endif
-	pregistrypriv->tx_amsdu_aggnum = padapter->tx_amsdu;
+	padapter->tx_amsdu = pregistrypriv->tx_amsdu_aggnum;
 #ifdef RTW_WKARD_TX_DROP
 	padapter->tx_amsdu_rate = 100;
 #else
@@ -1045,9 +1211,10 @@ struct dvobj_priv *devobj_init(void)
 	ATOMIC_SET(&pdvobj->disable_func, 0);
 	/* move to phl */
 	/* rtw_macid_ctl_init(&pdvobj->macid_ctl); */
-
+#if 0
 	_rtw_spinlock_init(&pdvobj->cam_ctl.lock);
 	_rtw_mutex_init(&pdvobj->cam_ctl.sec_cam_access_mutex);
+#endif
 #if defined(RTK_129X_PLATFORM) && defined(CONFIG_PCI_HCI)
 	_rtw_spinlock_init(&pdvobj->io_reg_lock);
 #endif
@@ -1098,10 +1265,10 @@ void devobj_deinit(struct dvobj_priv *pdvobj)
 	_rtw_mutex_free(&pdvobj->setbw_mutex);
 	/* move to phl */
 	/* rtw_macid_ctl_deinit(&pdvobj->macid_ctl); */
-
+#if 0
 	_rtw_spinlock_free(&pdvobj->cam_ctl.lock);
 	_rtw_mutex_free(&pdvobj->cam_ctl.sec_cam_access_mutex);
-
+#endif
 #if defined(RTK_129X_PLATFORM) && defined(CONFIG_PCI_HCI)
 	_rtw_spinlock_free(&pdvobj->io_reg_lock);
 #endif
@@ -1170,10 +1337,6 @@ u8 rtw_reset_drv_sw(_adapter *padapter)
 
 	_clr_fwstate_(pmlmepriv, WIFI_UNDER_SURVEY | WIFI_UNDER_LINKING);
 
-#ifdef DBG_CONFIG_ERROR_DETECT
-	if (is_primary_adapter(padapter))
-		rtw_hal_sreset_reset_value(padapter);
-#endif
 
 	/* mlmeextpriv */
 	mlmeext_set_scan_state(&padapter->mlmeextpriv, SCAN_DISABLE);
@@ -1230,8 +1393,8 @@ u8 devobj_data_init(struct dvobj_priv *dvobj)
 
 	devobj_decide_init_chplan(dvobj);
 
-	rtw_edcca_mode_update(dvobj, true);
-	rtw_rfctl_chset_apply_regulatory(dvobj, true);
+	rtw_rfctl_apply_init_chplan(dvobj_to_rfctl(dvobj), true);
+
 	op_class_pref_apply_regulatory(dvobj_to_rfctl(dvobj), REG_CHANGE);
 
 	init_channel_list(dvobj_get_primary_adapter(dvobj));
@@ -1305,7 +1468,12 @@ u8 rtw_init_drv_sw(_adapter *padapter)
 		ret8 = _FAIL;
 		goto exit;
 	}
-
+#ifdef CONFIG_RTW_FSM
+	if (rtw_fsm_init(&padapter->fsmpriv, padapter) == _FAIL) {
+		ret8 = _FAIL;
+		goto exit;
+	}
+#endif
 #ifdef CONFIG_P2P
 	init_wifidirect_info(padapter, P2P_ROLE_DISABLE);
 	reset_global_wifidirect_info(padapter);
@@ -1395,10 +1563,8 @@ u8 rtw_init_drv_sw(_adapter *padapter)
 	_rtw_memset(pwdev_priv->pno_mac_addr, 0xFF, ETH_ALEN);
 #endif
 
-#ifdef CONFIG_STA_CMD_DISPR
 	rtw_connect_req_init(padapter);
 	rtw_disconnect_req_init(padapter);
-#endif /* CONFIG_STA_CMD_DISPR */
 
 #ifdef CONFIG_AP_MODE
 	_rtw_spinlock_init(&padapter->ap_stop_st_lock);
@@ -1675,10 +1841,8 @@ u8 rtw_free_drv_sw(_adapter *padapter)
 #endif
 
 	rtw_free_mlme_priv(&padapter->mlmepriv);
-#ifdef CONFIG_STA_CMD_DISPR
 	rtw_connect_req_free(padapter);
 	rtw_disconnect_req_free(padapter);
-#endif /* CONFIG_STA_CMD_DISPR */
 
 #ifdef CONFIG_AP_MODE
 	_rtw_spinlock_free(&padapter->ap_stop_st_lock);
@@ -1698,6 +1862,10 @@ u8 rtw_free_drv_sw(_adapter *padapter)
 #ifdef CONFIG_WOWLAN
 	rtw_free_wow(padapter);
 #endif /* CONFIG_WOWLAN */
+
+#ifdef CONFIG_RTW_FSM
+	rtw_fsm_deinit(&padapter->fsmpriv);
+#endif
 
 	/* rtw_mfree((void *)padapter, sizeof (padapter)); */
 
@@ -2320,6 +2488,10 @@ static int _netdev_open(struct net_device *pnetdev)
 		#endif
 	}
 
+	#ifdef CONFIG_RTW_FSM
+	rtw_fsm_start(&padapter->fsmpriv);
+	#endif
+
 	#ifdef CONFIG_RTW_NAPI
 	if(padapter->napi_state == NAPI_DISABLE) {
 		napi_enable(&padapter->napi);
@@ -2508,15 +2680,13 @@ static int netdev_close(struct net_device *pnetdev)
 		if (pnetdev)
 			rtw_netif_stop_queue(pnetdev);
 
+		rtw_join_abort_timeout(padapter, 300);
+
 		/* s2. */
 		if (check_fwstate(pmlmepriv, WIFI_ASOC_STATE)) {
 			rtw_disassoc_cmd(padapter, 500, RTW_CMDF_WAIT_ACK);
 			/* s2-2*/
-			if (1
-#ifdef CONFIG_STA_CMD_DISPR
-			    && (MLME_IS_STA(padapter) == _FALSE)
-#endif /* CONFIG_STA_CMD_DISPR */
-			   )
+			if (MLME_IS_STA(padapter) == _FALSE)
 				rtw_free_assoc_resources_cmd(padapter, _TRUE, RTW_CMDF_WAIT_ACK);
 			/* s2-3.  indicate disconnect to os */
 			rtw_indicate_disconnect(padapter, 0, _FALSE);
@@ -2529,9 +2699,7 @@ static int netdev_close(struct net_device *pnetdev)
 			pmlmeinfo->wifi_reason_code = WLAN_REASON_DEAUTH_LEAVING;
 		}
 
-#ifdef CONFIG_AP_CMD_DISPR
 		rtw_ap_stop_wait(padapter);
-#endif
 	}
 
 #ifdef CONFIG_BR_EXT
@@ -2551,13 +2719,16 @@ static int netdev_close(struct net_device *pnetdev)
 	rtw_wapi_disable_tx(padapter);
 #endif
 
+#ifdef CONFIG_RTW_FSM
+	rtw_fsm_stop(&padapter->fsmpriv);
+#endif
+
 #ifdef CONFIG_RTW_NAPI
 	if (padapter->napi_state == NAPI_ENABLE) {
 		napi_disable(&padapter->napi);
 		padapter->napi_state = NAPI_DISABLE;
 	}
 #endif /* CONFIG_RTW_NAPI */
-
 	rtw_hw_iface_deinit(padapter);
 	padapter->netif_up = _FALSE;
 
@@ -2918,11 +3089,7 @@ int rtw_suspend_free_assoc_resource(_adapter *padapter)
 
 	if (check_fwstate(pmlmepriv, WIFI_ASOC_STATE) == _TRUE) {
 		/* s2-2. */
-		if (1
-#ifdef CONFIG_STA_CMD_DISPR
-		    && (MLME_IS_STA(padapter) == _FALSE)
-#endif /* CONFIG_STA_CMD_DISPR */
-		   )
+		if (MLME_IS_STA(padapter) == _FALSE)
 			rtw_free_assoc_resources(padapter, _TRUE);
 
 		/* s2-3.  indicate disconnect to os */
@@ -2973,9 +3140,7 @@ int rtw_suspend_wow(_adapter *padapter)
 #endif
 
 	if (pwrpriv->wowlan_mode == _TRUE) {
-#ifdef CONFIG_CMD_GENERAL
 		rtw_phl_watchdog_stop(dvobj->phl);
-#endif
 		rtw_mi_netif_stop_queue(padapter);
 		#ifdef CONFIG_CONCURRENT_MODE
 		rtw_mi_buddy_netif_carrier_off(padapter);
@@ -3068,7 +3233,7 @@ int rtw_suspend_ap_wow(_adapter *padapter)
 
 		RTW_INFO("back to linked/linking union - ch:%u, bw:%u, offset:%u\n",
 			u_chdef.chan, u_chdef.bw, u_chdef.offset);
-		set_channel_bwmode(padapter, padapter_link, u_chdef.chan, u_chdef.offset, u_chdef.bw, RFK_TYPE_FORCE_NOT_DO);
+		set_bch_bwmode(padapter, padapter_link, u_chdef.band, u_chdef.chan, u_chdef.offset, u_chdef.bw, RFK_TYPE_FORCE_NOT_DO);
 	}
 
 	/*FOR ONE AP - TODO :Multi-AP*/
@@ -3178,6 +3343,11 @@ int rtw_suspend_common(_adapter *padapter)
 			pwrpriv->wowlan_mode |= pwrpriv->wowlan_p2p_mode;
 #endif /* CONFIG_P2P_WOWLAN */
 
+		if (check_fwstate(pmlmepriv, WIFI_ASOC_STATE))
+			pwrpriv->wowlan_no_link_mode = _FALSE;
+		else
+			pwrpriv->wowlan_no_link_mode = _TRUE;
+
 		if (pwrpriv->wowlan_mode == _TRUE)
 			rtw_suspend_wow(padapter);
 		else
@@ -3281,9 +3451,6 @@ int rtw_resume_process_wow(_adapter *padapter)
 		RTW_INFO("%s: disconnect reason: %02x\n", __func__,
 			 wowpriv->wow_wake_reason);
 
-		rtw_sta_media_status_rpt(padapter,
-					 rtw_get_stainfo(&padapter->stapriv,
-					 get_bssid(&padapter->mlmepriv)), 0);
 		rtw_disassoc_cmd(padapter, 0, RTW_CMDF_WAIT_ACK);
 		if (MLME_IS_ASOC(padapter) == _TRUE)
 			rtw_free_assoc_resources(padapter, _TRUE);
@@ -3310,14 +3477,12 @@ int rtw_resume_process_wow(_adapter *padapter)
 	} else {
 		if (rtw_chk_roam_flags(padapter, RTW_ROAM_ON_RESUME)) {
 			RTW_INFO("%s: do roaming\n", __func__);
-			rtw_roaming(padapter, NULL);
+			rtw_roaming(padapter, NULL, RTW_ROAM_ON_RESUME);
 		}
 	}
 
 	if (pwrpriv->wowlan_mode == _TRUE) {
-#ifdef CONFIG_CMD_GENERAL
 		rtw_phl_watchdog_start(dvobj->phl);
-#endif
 #if 0 /*ndef CONFIG_IPS_CHECK_IN_WD*/
 		rtw_set_pwr_state_check_timer(pwrpriv);
 #endif
@@ -3400,7 +3565,7 @@ int rtw_resume_process_ap_wow(_adapter *padapter)
 
 		RTW_INFO(FUNC_ADPT_FMT" back to linked/linking union - ch:%u, bw:%u, offset:%u\n",
 			FUNC_ADPT_ARG(padapter), u_chdef.chan, u_chdef.bw, u_chdef.offset);
-		set_channel_bwmode(padapter, padapter_link, u_chdef.chan, u_chdef.offset, u_chdef.bw, RFK_TYPE_FORCE_NOT_DO);
+		set_bch_bwmode(padapter, padapter_link, u_chdef.band, u_chdef.chan, u_chdef.offset, u_chdef.bw, RFK_TYPE_FORCE_NOT_DO);
 	}
 
 	/*FOR ONE AP - TODO :Multi-AP*/
@@ -3464,7 +3629,7 @@ void rtw_mi_resume_process_normal(_adapter *padapter)
 				RTW_INFO(FUNC_ADPT_FMT" fwstate:0x%08x - WIFI_STATION_STATE\n", FUNC_ADPT_ARG(iface), get_fwstate(pmlmepriv));
 
 				if (rtw_chk_roam_flags(iface, RTW_ROAM_ON_RESUME))
-					rtw_roaming(iface, NULL);
+					rtw_roaming(iface, NULL, RTW_ROAM_ON_RESUME);
 
 			} else if (MLME_IS_AP(iface) || MLME_IS_MESH(iface)) {
 				RTW_INFO(FUNC_ADPT_FMT" %s\n", FUNC_ADPT_ARG(iface), MLME_IS_AP(iface) ? "AP" : "MESH");

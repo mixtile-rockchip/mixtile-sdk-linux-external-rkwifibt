@@ -50,6 +50,7 @@ extern const struct btc_chip chip_8852b;
 extern const struct btc_chip chip_8852bp;
 extern const struct btc_chip chip_8851b;
 extern const struct btc_chip chip_8852bt;
+extern const struct btc_chip chip_8852bpt;
 void _8852b_rfe_type(struct btc_t *btc);
 void _8852b_init_cfg(struct btc_t *btc);
 void _8852b_wl_tx_power(struct btc_t *btc, u32 level);

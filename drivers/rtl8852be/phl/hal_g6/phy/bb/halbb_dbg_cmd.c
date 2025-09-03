@@ -229,7 +229,7 @@ void halbb_lps_ch_info_dbg(struct bb_info *bb, char input[][16], u32 *_used,
 	bool ret = false;
 	u8 i = 0;
 
-	halbb_lps_save_ch_info(bb);
+	(void)halbb_lps_save_ch_info(bb);
 
 	for(i = 0; i < 10; i++) {
 		ret = halbb_lps_info_status_chk(bb);
@@ -297,6 +297,7 @@ void halbb_cmn_msg_setting(struct bb_info *bb, char input[][16], u32 *_used,
 void halbb_trace_dbg(struct bb_info *bb, char input[][16], u32 *_used,
 		       char *output, u32 *_out_len)
 {
+	struct bb_stat_info *stat_t = &bb->bb_stat_i;
 	u64 pre_debug_components, one = 1;
 	u64 comp = 0;
 	u32 used = *_used;
@@ -305,8 +306,7 @@ void halbb_trace_dbg(struct bb_info *bb, char input[][16], u32 *_used,
 	u8 i = 0;
 
 	for (i = 0; i < 5; i++) {
-		if (input[i + 1])
-			HALBB_SCAN(input[i + 1], DCMD_DECIMAL, &val[i]);
+		HALBB_SCAN(input[i + 1], DCMD_DECIMAL, &val[i]);
 	}
 	comp = bb->dbg_component;
 	pre_debug_components = bb->dbg_component;
@@ -438,11 +438,13 @@ void halbb_trace_dbg(struct bb_info *bb, char input[][16], u32 *_used,
 		BB_DBG_CNSL(out_len, used, output + used, out_len - used,
 			 "Disable all debug components\n");
 	} else {
-		if (val[1] == 1) /*@enable*/
+		if (val[1] == 1) {/*@enable*/
 			bb->dbg_component |= (one << val[0]);
-		else if (val[1] == 2) /*@disable*/
+			if (BIT(val[0]) == DBG_FA_CNT)
+				stat_t->stat_show_en = true;
+		} else if (val[1] == 2) {/*@disable*/
 			bb->dbg_component &= ~(one << val[0]);
-		else {
+		} else {
 			if (BIT(val[0]) == DBG_CMN) {
 				halbb_cmn_msg_setting(bb, input, &used, output, &out_len);
 			} else {
@@ -803,6 +805,9 @@ void halbb_cmd_parser(struct bb_info *bb_0, char input_in[][MAX_ARGV],
 	case HALBB_PHY_STATUS:
 		halbb_physts_dbg(bb, input, &used, output, &out_len);
 		break;
+	case HALBB_RX_DESC:
+		halbb_rxd_dbg(bb, input, &used, output, &out_len);
+		break;
 #if 0
 #ifdef HALBB_DCC_ENHANCE
 	case HALBB_DCC:
@@ -902,6 +907,17 @@ void halbb_cmd_parser(struct bb_info *bb_0, char input_in[][MAX_ARGV],
 	case HALBB_LPS_CH_INFO:
 		halbb_lps_ch_info_dbg(bb, input, &used, output, &out_len);
 		break;
+	case HALBB_DV_PXP_DBG:
+		#ifdef HALBB_DV_PXP_DBG_SUPPORT
+		halbb_dv_pxp_dbg(bb, input, &used, output, &out_len);
+		#endif
+		break;
+	case HALBB_PLCP_DBG:
+		halbb_plcp_cmd_dbg(bb, phy_idx_tmp, input, &used, output, &out_len);
+		break;
+	case HALBB_AGC:
+		halbb_agc_dbg(bb, input, &used, output, &out_len);
+		break;
 	default:
 		BB_DBG_CNSL(out_len, used, output + used, out_len - used,
 			 "Do not support this command\n");
@@ -989,8 +1005,7 @@ void halbb_fw_dbg(struct bb_info *bb, char input[][16], u32 *_used,
 		goto out;
 	}
 	for (i = 0; i < 5; i++) {
-		if (input[i + 1])
-			HALBB_SCAN(input[i + 1], DCMD_DECIMAL, &val[i]);
+		HALBB_SCAN(input[i + 1], DCMD_DECIMAL, &val[i]);
 	}
 	if (val[0] == 1) {
 		BB_DBG_CNSL(out_len, used, output + used, out_len - used,

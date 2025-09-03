@@ -88,7 +88,7 @@ struct halrf_dpk_info {
 	u32	rx_sram[KPATH][512];			/*path/addr/rpt*/
 	u32	dpk_dciq[KPATH];
 	u32	dpk_pas[KPATH][32];
-	u32	dpk_coef[KPATH][KPATH][28];		/*path/is_first/addr*/
+	u32	dpk_coef[KPATH][2][28];		/*path/is_first/addr*/
 	s16	dpk_coef_i[2][20];			/*is_first/addr*/
 	s16	dpk_coef_q[2][20];			/*is_first/addr*/
 	u8	c_chk[KPATH];

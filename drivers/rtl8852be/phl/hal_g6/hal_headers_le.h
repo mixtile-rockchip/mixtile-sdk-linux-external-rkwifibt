@@ -24,6 +24,7 @@
 #include "../phl_types.h"
 #include "../phl_regulation_def.h"
 #include "../phl_txpwr.h"
+#include "../phl_version.h"
 /* Exported structure/definition from PHL */
 #include "../phl_util.h"
 #include "mac/mac_exp_def.h"

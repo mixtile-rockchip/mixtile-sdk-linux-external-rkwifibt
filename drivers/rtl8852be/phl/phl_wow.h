@@ -30,8 +30,8 @@
 #define get_wow_group_algo_type(_wow_info) (_wow_info->wow_wake_info.group_sec_algo)
 
 struct phl_wow_error {
-	u16 init;
-	u16 deinit;
+	u32 init;
+	u32 deinit;
 };
 
 struct phl_wow_stat {
@@ -109,6 +109,10 @@ void phl_record_wow_stat(struct phl_wow_info *wow_info);
 
 void phl_wow_handle_wake_rsn(struct phl_wow_info *wow_info, u8 *reset);
 
+enum rtw_phl_status phl_set_wowlan(struct phl_info_t *phl_info, u8 enter, bool disable_inband);
+enum rtw_phl_status phl_cmd_set_wowlan_hdl(struct phl_info_t *phl_info, u8 *param);
+enum rtw_phl_status phl_cmd_set_wowlan(struct phl_wow_info *wow_info, u8 enter, bool direct);
+
 enum rtw_phl_status phl_wow_init_precfg(struct phl_wow_info *wow_info);
 
 enum rtw_phl_status phl_wow_init_postcfg(struct phl_wow_info *wow_info);
@@ -125,7 +129,7 @@ void phl_reset_wow_info(struct phl_wow_info *wow_info);
 
 enum rtw_phl_status phl_wow_func_en(struct phl_wow_info *wow_info);
 
-void phl_wow_func_dis(struct phl_wow_info *wow_info);
+enum rtw_phl_status phl_wow_func_dis(struct phl_wow_info *wow_info);
 
 void phl_wow_decide_op_mode(struct phl_wow_info *wow_info, struct rtw_phl_stainfo_t *sta);
 #ifdef CONFIG_POWER_SAVE
@@ -135,6 +139,7 @@ void phl_wow_ps_pwr_ntfy(struct phl_wow_info *wow_info, bool enter_ps);
 
 enum rtw_phl_status phl_wow_ps_pwr_cfg(struct phl_wow_info *wow_info, bool enter_ps);
 #endif
+
 #endif /* CONFIG_WOWLAN */
 
 #endif /* _PHL_WOW_H_ */

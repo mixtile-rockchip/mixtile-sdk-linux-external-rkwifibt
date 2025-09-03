@@ -14,6 +14,9 @@
  ******************************************************************************/
 
 #include "tcpip_checksum_offload.h"
+
+u8 chk_dmac_with_llc[MAX_MACID_NUM_WITH_LLC];
+
 #if MAC_AX_FW_REG_OFLD
 u32 mac_tcpip_chksum_ofd(struct mac_ax_adapter *adapter,
 			 u8 en_tx_chksum_ofd, u8 en_rx_chksum_ofd)
@@ -97,5 +100,25 @@ u32 mac_chk_rx_tcpip_chksum_ofd(struct mac_ax_adapter *adapter,
 		return MAC_AX_CHKSUM_OFD_IPV4_UDP_OK;
 
 	return MAC_AX_CHKSUM_OFD_IPV6_UDP_OK;
+}
+
+u32 mac_read_with_llc(struct mac_ax_adapter *adapter,
+		      u16 macid, u8 *with_llc_en)
+{
+	if (macid >= adapter->hw_info->macid_num)
+		return MACMACIDFL;
+	*with_llc_en = chk_dmac_with_llc[macid];
+
+	return MACSUCCESS;
+}
+
+u32 mac_write_with_llc(struct mac_ax_adapter *adapter,
+		       u16 macid, u8 with_llc_en)
+{
+	if (macid >= adapter->hw_info->macid_num)
+		return MACMACIDFL;
+	chk_dmac_with_llc[macid] = with_llc_en;
+
+	return MACSUCCESS;
 }
 

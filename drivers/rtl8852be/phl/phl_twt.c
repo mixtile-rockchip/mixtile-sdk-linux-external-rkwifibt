@@ -2558,7 +2558,7 @@ enum rtw_phl_status rtw_phl_twt_parse_setup_info(u8 *pkt, u16 length,
 		return pstatus;
 	}
 	twt_ele = pkt + TOKEN_OFFSET + TOKEN_LENGTH;
-	setup_info->dialog_token = GET_DIALOG_TOKEN(pkt + TOKEN_OFFSET);
+	setup_info->dialog_token = GET_ACTION_DT(pkt + TOKEN_OFFSET);
 	pstatus = rtw_phl_twt_parse_element(twt_ele, ele_length,
 						&setup_info->twt_element);
 	PHL_TRACE(COMP_PHL_TWT, _PHL_INFO_, "<== rtw_phl_twt_parse_setup_info(): pstatus(%d)\n",

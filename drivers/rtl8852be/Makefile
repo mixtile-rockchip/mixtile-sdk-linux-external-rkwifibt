@@ -30,6 +30,8 @@ EXTRA_CFLAGS += -Wno-self-assign
 EXTRA_CFLAGS += -Wno-header-guard
 endif
 
+export CONFIG_RTL8852BE = m
+
 GCC_VER_49 := $(shell echo `$(CC) -dumpversion | cut -f1-2 -d.` \>= 4.9 | bc )
 ifeq ($(GCC_VER_49),1)
 EXTRA_CFLAGS += -Wno-date-time	# Fix compile error && warning on gcc 4.9 and later
@@ -42,13 +44,13 @@ EXTRA_LDFLAGS += --strip-debug
 CONFIG_AUTOCFG_CP = n
 
 ########################## WIFI IC ############################
-CONFIG_RTL8852A = n
 CONFIG_RTL8852B = y
 CONFIG_RTL8852BP = n
 CONFIG_RTL8852BT = n
 CONFIG_RTL8851B = n
 CONFIG_RTL8852C = n
 CONFIG_RTL8852D = n
+CONFIG_RTL8842A = n
 ######################### Interface ###########################
 CONFIG_USB_HCI = n
 CONFIG_PCI_HCI = y
@@ -58,6 +60,8 @@ CONFIG_GSPI_HCI = n
 CONFIG_MP_INCLUDED = y
 CONFIG_CONCURRENT_MODE = n
 CONFIG_POWER_SAVE = y
+CONFIG_IPS_MODE = default
+CONFIG_LPS_MODE = default
 CONFIG_BTC = y
 CONFIG_WAPI_SUPPORT = n
 CONFIG_EFUSE_CONFIG_FILE = y
@@ -71,6 +75,19 @@ CONFIG_TXPWR_BY_RATE = y
 CONFIG_TXPWR_BY_RATE_EN = y
 CONFIG_TXPWR_LIMIT = y
 CONFIG_TXPWR_LIMIT_EN = n
+CONFIG_PCI_ASPM = n
+CONFIG_PCI_RTW_MSI = y
+CONFIG_PCI_64BIT_DMA = n
+
+# Enable Receive Packet Steering to improve performance
+CONFIG_RTW_RPS = n
+# CONFIG_RPS_CPU_MASK definition:
+#    bit0: Enable CPU0
+#    bit1: Enable CPU1
+#    bit2: Enable CPU2
+#    bit3: Enable CPU3
+CONFIG_RPS_CPU_MASK = 0x0f
+CONFIG_RPS_FLOW_CNT = 4096
 
 ####################### RTW regulatory DB selection  ######################
 # RTW regulatory database version to select
@@ -90,9 +107,9 @@ CONFIG_RTW_CHPLAN_6G = 0xFFFF
 CONFIG_80211D = y
 # 0: disable, 1: enable, 2: enable when INIT/USER set world wide mode
 CONFIG_RTW_COUNTRY_IE_SLAVE_EN_MODE = 0
-# BIT0: take intersection when having multiple received IEs, otherwise choose effected one from received IEs
+# BIT0: deprecated BIT
 # BIT1: consider all environment BSSs, otherwise associated BSSs only
-CONFIG_RTW_COUNTRY_IE_SLAVE_FLAGS = 0x01
+CONFIG_RTW_COUNTRY_IE_SLAVE_FLAGS = 0x00
 
 ########################## EDCCA for regulatory ##########################
 # NORMAL: Without regulatory consideration
@@ -120,8 +137,7 @@ CONFIG_IP_R_MONITOR = n #arp VOQ and high rate
 CONFIG_RTW_UP_MAPPING_RULE = tos
 
 CONFIG_PHL_ARCH = y
-CONFIG_FSM = n
-CONFIG_CMD_DISP = y
+CONFIG_RTW_FSM = y
 
 CONFIG_HWSIM = n
 
@@ -138,7 +154,6 @@ CONFIG_DRV_FAKE_AP = n
 CONFIG_DBG_AX_CAM = y
 
 USE_TRUE_PHY = y
-CONFIG_I386_BUILD_VERIFY = n
 CONFIG_RTW_MBO = y
 # CONFIG_RTKM - n/m/y for not support / standalone / built-in
 CONFIG_RTKM ?= n
@@ -154,8 +169,8 @@ endif
 CONFIG_RTW_DEBUG = y
 # default log level is _DRV_INFO_ = 4,
 # please refer to "How_to_set_driver_debug_log_level.doc" to set the available level.
-CONFIG_RTW_LOG_LEVEL = 4
-CONFIG_RTW_PHL_LOG_LEVEL = 4
+CONFIG_RTW_LOG_LEVEL = 2
+CONFIG_RTW_PHL_LOG_LEVEL = 2
 
 # CONFIG_RTW_APPEND_LOGLEVEL decide if append kernel log level to each messages.
 # default "n" for don't append.
@@ -173,7 +188,7 @@ CONFIG_RTW_APPEND_LOGLEVEL = n
 
 # enable /proc/net/rtlxxxx/ debug interfaces
 CONFIG_PROC_DEBUG = y
-
+CONFIG_SELF_DIAG_INFO = y
 ############################# MLO #############################
 CONFIG_80211BE_EHT = n
 ifeq ($(CONFIG_80211BE_EHT), y)
@@ -188,7 +203,7 @@ endif
 EXTRA_CFLAGS += -DRTW_NETWORK_LINK_MAX=$(RTW_NETWORK_LINK_MAX)
 EXTRA_CFLAGS += -DDTYPE=$(DTYPE)
 ######################## Wake On Lan ##########################
-CONFIG_WOWLAN = n
+CONFIG_WOWLAN = y
 # CONFIG_WAKE_TYPE definition:
 #    bit0: magic packet
 #    bit1: unicast packet (default pattern match)
@@ -196,10 +211,12 @@ CONFIG_WOWLAN = n
 #    bit3: customized pattern match
 #    bit4: pairwise key rekey
 CONFIG_WAKEUP_TYPE = 0x0f
+CONFIG_WOW_IPS_MODE = default
+CONFIG_WOW_LPS_MODE = default
 #bit0: disBBRF off, #bit1: Wireless remote controller (WRC)
 CONFIG_SUSPEND_TYPE = 0
 CONFIG_WOW_STA_MIX = n
-CONFIG_GPIO_WAKEUP = n
+CONFIG_GPIO_WAKEUP = y
 # Please contact with RTK support team first. After getting the agreement from RTK support team, 
 # you are just able to modify the CONFIG_WAKEUP_GPIO_IDX with customized requirement.
 CONFIG_WAKEUP_GPIO_IDX = default
@@ -220,7 +237,25 @@ CONFIG_MP_VHT_HW_TX_MODE = n
 ###################### ROAMING #####################################
 CONFIG_LAYER2_ROAMING = y
 #bit0: ROAM_ON_EXPIRED, #bit1: ROAM_ON_RESUME, #bit2: ROAM_ACTIVE
+#bit3: ROAM_QUICK_SCAN
 CONFIG_ROAMING_FLAG = 0x3
+# 2:2G, 5:5G, 6:6G, 52:5G-2G, 526:5G-2G-6G, 562:5G-6G-2G, ...
+CONFIG_ROAM_SCAN_ORDER = 52
+
+###################### BTC #####################################
+# CONFIG_BTC_EXT_CFG_ESOC_TYPE definition:
+#    0: NONE
+#    1: BT_8761
+#    2: BT_8771
+#    3: SILAB_MG21
+#    4: NORDI_NRF52840
+CONFIG_BTC_EXT_CFG_ESOC_TYPE = 0
+
+# CONFIG_BTC_EXT_CFG_ANT_ISO_DB definition:
+#    default: use halbtc default antenna isolation value
+#    other decimal value: use antenna isolation value actually measured
+#                         from customer platform (unit: dB)
+CONFIG_BTC_EXT_CFG_ANT_ISO_DB = default
 
 ###################### Platform Related #######################
 CONFIG_PLATFORM_I386_PC = n
@@ -270,24 +305,10 @@ endif
 ifeq ($(CONFIG_PLATFORM_RTL8198D), y)
 DRV_PATH = $(src)
 else
-#DRV_PATH = $(TopDIR)
+DRV_PATH = $(TopDIR)
+endif
+
 DRV_PATH = $(src)
-endif
-
-########### HAL_RTL8852A #################################
-ifeq ($(CONFIG_RTL8852A), y)
-IC_NAME := rtl8852a
-ifeq ($(CONFIG_USB_HCI), y)
-MODULE_NAME = 8852au
-endif
-ifeq ($(CONFIG_PCI_HCI), y)
-MODULE_NAME = 8852ae
-endif
-ifeq ($(CONFIG_SDIO_HCI), y)
-MODULE_NAME = 8852as
-endif
-
-endif
 
 ########### HAL_RTL8852B #################################
 ifeq ($(CONFIG_RTL8852B), y)
@@ -358,10 +379,6 @@ endif
 ifeq ($(CONFIG_PCI_HCI), y)
 MODULE_NAME = 8852ce
 endif
-ifeq ($(CONFIG_SDIO_HCI), y)
-MODULE_NAME = 8852cs
-endif
-
 endif
 
 ########### HAL_RTL8852D #################################
@@ -373,7 +390,14 @@ endif
 ifeq ($(CONFIG_PCI_HCI), y)
 MODULE_NAME = 8852de
 endif
+endif
 
+########### HAL_RTL8842A #################################
+ifeq ($(CONFIG_RTL8842A), y)
+IC_NAME := rtl8842a
+ifeq ($(CONFIG_USB_HCI), y)
+MODULE_NAME = 8842au
+endif
 endif
 
 ########### AUTO_CFG  #################################
@@ -386,15 +410,15 @@ endif
 ifeq ($(CONFIG_MP_INCLUDED), y)
 #MODULE_NAME := $(MODULE_NAME)_mp
 EXTRA_CFLAGS += -DCONFIG_MP_INCLUDED
+EXTRA_CFLAGS += -DRTW_MP_INIT_IN_MP_START
 CONFIG_PHL_TEST_SUITE = y
 endif
 
-ifeq ($(CONFIG_FSM), y)
-EXTRA_CFLAGS += -DCONFIG_FSM
-endif
-
-ifeq ($(CONFIG_CMD_DISP), y)
-EXTRA_CFLAGS += -DCONFIG_CMD_DISP
+ifeq ($(CONFIG_RTW_FSM), y)
+EXTRA_CFLAGS += -DCONFIG_RTW_FSM
+#EXTRA_CFLAGS += -DCONFIG_RTW_FSM_XXX
+EXTRA_CFLAGS += -DCONFIG_RTW_FSM_RRM
+#EXTRA_CFLAGS += -DCONFIG_RTW_FSM_BTM
 endif
 
 ifeq ($(CONFIG_PHL_TEST_SUITE), y)
@@ -407,10 +431,28 @@ endif
 
 ifeq ($(CONFIG_POWER_SAVE), y)
 EXTRA_CFLAGS += -DCONFIG_POWER_SAVE
+ifneq ($(CONFIG_IPS_MODE), default)
+EXTRA_CFLAGS += -DRTW_IPS_MODE=$(CONFIG_IPS_MODE)
+endif
+ifneq ($(CONFIG_LPS_MODE), default)
+EXTRA_CFLAGS += -DRTW_LPS_MODE=$(CONFIG_LPS_MODE)
+endif
+ifneq ($(CONFIG_WOW_IPS_MODE), default)
+EXTRA_CFLAGS += -DRTW_WOW_IPS_MODE=$(CONFIG_WOW_IPS_MODE)
+endif
+ifneq ($(CONFIG_WOW_LPS_MODE), default)
+EXTRA_CFLAGS += -DRTW_WOW_LPS_MODE=$(CONFIG_WOW_LPS_MODE)
+endif
 endif
 
 ifeq ($(CONFIG_BTC), y)
 EXTRA_CFLAGS += -DCONFIG_BTC
+EXTRA_CFLAGS += -DCONFIG_BTC_EXT_CFG_ESOC_TYPE=$(CONFIG_BTC_EXT_CFG_ESOC_TYPE)
+ifeq ($(CONFIG_BTC_EXT_CFG_ANT_ISO_DB), default)
+EXTRA_CFLAGS += -DCONFIG_BTC_EXT_CFG_ANT_ISO_DB=0xFF
+else
+EXTRA_CFLAGS += -DCONFIG_BTC_EXT_CFG_ANT_ISO_DB=$(CONFIG_BTC_EXT_CFG_ANT_ISO_DB)
+endif
 endif
 
 ifeq ($(CONFIG_WAPI_SUPPORT), y)
@@ -490,6 +532,24 @@ else ifeq ($(CONFIG_TXPWR_LIMIT_EN), y)
 EXTRA_CFLAGS += -DCONFIG_TXPWR_LIMIT_EN=1
 else ifeq ($(CONFIG_TXPWR_LIMIT_EN), auto)
 EXTRA_CFLAGS += -DCONFIG_TXPWR_LIMIT_EN=2
+endif
+
+ifeq ($(CONFIG_PCI_ASPM), y)
+EXTRA_CFLAGS += -DCONFIG_PCI_ASPM
+endif
+
+ifeq ($(CONFIG_PCI_RTW_MSI), n)
+EXTRA_CFLAGS += -DCONFIG_RTW_FORCE_PCI_MSI_DISABLE
+endif
+
+ifeq ($(CONFIG_PCI_64BIT_DMA), y)
+EXTRA_CFLAGS += -DCONFIG_64BIT_DMA
+endif
+
+ifeq ($(CONFIG_RTW_RPS), y)
+EXTRA_CFLAGS += -DCONFIG_RTW_RPS
+EXTRA_CFLAGS += -DRPS_CPU_MASK=$(CONFIG_RPS_CPU_MASK)
+EXTRA_CFLAGS += -DRPS_FLOW_CNT=$(CONFIG_RPS_FLOW_CNT)
 endif
 
 ifneq ($(CONFIG_RTW_COUNTRY_CODE), XX)
@@ -574,6 +634,7 @@ endif
 
 ifeq ($(CONFIG_LAYER2_ROAMING), y)
 	EXTRA_CFLAGS += -DCONFIG_LAYER2_ROAMING -DCONFIG_ROAMING_FLAG=$(CONFIG_ROAMING_FLAG)
+	EXTRA_CFLAGS += -DCONFIG_ROAM_SCAN_ORDER=$(CONFIG_ROAM_SCAN_ORDER)
 endif
 
 ifeq ($(CONFIG_PNO_SUPPORT), y)
@@ -706,6 +767,10 @@ ifeq ($(CONFIG_PROC_DEBUG), y)
 EXTRA_CFLAGS += -DCONFIG_PROC_DEBUG
 endif
 
+ifeq ($(CONFIG_SELF_DIAG_INFO), y)
+EXTRA_CFLAGS += -DCONFIG_SELF_DIAG_INFO
+endif
+
 ifeq ($(CONFIG_RTW_UP_MAPPING_RULE), dscp)
 EXTRA_CFLAGS += -DCONFIG_RTW_UP_MAPPING_RULE=1
 else
@@ -735,13 +800,9 @@ ifeq ($(CONFIG_DBG_AX_CAM), y)
 EXTRA_CFLAGS += -DCONFIG_DBG_AX_CAM
 endif
 
-ifeq ($(CONFIG_I386_BUILD_VERIFY), y)
-EXTRA_CFLAGS += -DCONFIG_I386_BUILD_VERIFY
-endif
-
 ifeq ($(CONFIG_RTW_MBO), y)
 EXTRA_CFLAGS += -DCONFIG_RTW_MBO -DCONFIG_RTW_WNM -DCONFIG_RTW_BTM_ROAM
-EXTRA_CFLAGS += -DCONFIG_RTW_80211K
+#EXTRA_CFLAGS += -DCONFIG_RTW_80211K
 EXTRA_CFLAGS += -DCONFIG_RTW_80211R
 EXTRA_CFLAGS += -DRTW_FT_DBG=0 -DRTW_WNM_DBG=0 -DRTW_MBO_DBG=0
 endif
@@ -772,13 +833,11 @@ export CC_STRIP = $(CROSS_COMPILE)strip
 endif
 
 ifneq ($(KERNELRELEASE),)
-export CONFIG_RTL8852BE = m
 ########### COMMON #################################
 include $(src)/common.mk
 
 EXTRA_CFLAGS += -DPHL_PLATFORM_LINUX
 EXTRA_CFLAGS += -DCONFIG_PHL_ARCH
-EXTRA_CFLAGS += -w
 
 ifeq ($(RTW_PHL_RX), y)
 EXTRA_CFLAGS += -DRTW_PHL_RX

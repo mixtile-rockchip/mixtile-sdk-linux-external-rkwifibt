@@ -403,6 +403,31 @@ u8 *rtw_get_ie(const u8 *pbuf, sint index, sint *len, sint limit)
 	return NULL;
 }
 
+u8 *rtw_get_ext_ie(const u8 *pbuf, sint ext_id, sint *len, sint limit)
+{
+	sint tmp, i;
+	const u8 *p;
+
+	if (limit < 3)
+		return NULL;
+
+	p = pbuf;
+	i = 0;
+	*len = 0;
+	do {
+		if (*p == WLAN_EID_EXTENSION && *(p + 2) == ext_id) {
+			*len = *(p + 1);
+			return (u8 *)p;
+		} else {
+			tmp = *(p + 1);
+			p += (tmp + 2);
+			i += (tmp + 2);
+		}
+	} while (i + 3 <= limit);
+
+	return NULL;
+}
+
 /**
  * rtw_get_ie_ex - Search specific IE from a series of IEs
  * @in_ie: Address of IEs to search
@@ -753,7 +778,7 @@ u8 rtw_update_rate_bymode(WLAN_BSSID_EX *pbss_network, u32 mode)
 		}
 		network_type = WLAN_MD_11B;
 	} else {
-		if (pbss_network->Configuration.DSConfig > 14) {
+		if (BSS_EX_OP_BAND(pbss_network) != BAND_ON_24G){
 			/* Remove CCK in support_rate IE */
 			rtw_filter_suppport_rateie(pbss_network, OFDM);
 			network_type = WLAN_MD_11A;
@@ -2468,6 +2493,10 @@ void rtw_ies_get_bchbw(u8 *ies, int ies_len, enum band_type *band, u8 *chan, u8 
 	*chan = 0;
 	*bw = CHANNEL_WIDTH_20;
 	*offset = CHAN_OFFSET_NO_EXT;
+	if (freq0)
+		*freq0 = 0;
+	if (freq1)
+		*freq1 = 0;
 
 	p = rtw_get_ie(ies, _DSSET_IE_, &ie_len, ies_len);
 	if (p && ie_len > 0) {
@@ -2564,8 +2593,8 @@ void rtw_ies_get_bchbw(u8 *ies, int ies_len, enum band_type *band, u8 *chan, u8 
 
 void rtw_bss_get_chbw(WLAN_BSSID_EX *bss, enum band_type *band, u8 *ch, u8 *bw, u8 *offset, u8 ht, u8 vht, u8 he)
 {
-	rtw_ies_get_bchbw(bss->IEs + sizeof(NDIS_802_11_FIXED_IEs)
-		, bss->IELength - sizeof(NDIS_802_11_FIXED_IEs)
+	rtw_ies_get_bchbw(bss->IEs + _FIXED_IE_LENGTH_
+		, bss->IELength - _FIXED_IE_LENGTH_
 		, band, ch, bw, offset, NULL, NULL, ht, vht, he);
 
 	if (*ch == 0) {
@@ -3724,5 +3753,14 @@ u8 rtw_check_amsdu_disable(u8 mode, u8 spp_opt)
 	else
 		ret = _FALSE;
 	return ret;
+}
+
+char *get_macaddr_str(char *str, void *sel, const u8 *addr)
+{
+	if (sel == RTW_DBGDUMP)
+		snprintf(str, MAC_FMT_LEN, MAC_FMT, MAC_ARG(addr));
+	else
+		snprintf(str, MAC_FMT_LEN, MAC_FMT_SEL, MAC_ARG_SEL(addr));
+	return str;
 }
 
