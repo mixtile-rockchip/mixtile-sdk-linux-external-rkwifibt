@@ -2,7 +2,26 @@
  * Broadcom Dongle Host Driver (DHD),
  * Linux-specific network interface for transmit(tx) path
  *
- * Copyright (C) 2022, Broadcom.
+ * Copyright (C) 2025 Synaptics Incorporated. All rights reserved.
+ *
+ * This software is licensed to you under the terms of the
+ * GNU General Public License version 2 (the "GPL") with Broadcom special exception.
+ *
+ * INFORMATION CONTAINED IN THIS DOCUMENT IS PROVIDED "AS-IS," AND SYNAPTICS
+ * EXPRESSLY DISCLAIMS ALL EXPRESS AND IMPLIED WARRANTIES, INCLUDING ANY
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE,
+ * AND ANY WARRANTIES OF NON-INFRINGEMENT OF ANY INTELLECTUAL PROPERTY RIGHTS.
+ * IN NO EVENT SHALL SYNAPTICS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, PUNITIVE, OR CONSEQUENTIAL DAMAGES ARISING OUT OF OR IN CONNECTION
+ * WITH THE USE OF THE INFORMATION CONTAINED IN THIS DOCUMENT, HOWEVER CAUSED
+ * AND BASED ON ANY THEORY OF LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * NEGLIGENCE OR OTHER TORTIOUS ACTION, AND EVEN IF SYNAPTICS WAS ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE. IF A TRIBUNAL OF COMPETENT JURISDICTION
+ * DOES NOT PERMIT THE DISCLAIMER OF DIRECT DAMAGES OR ANY OTHER DAMAGES,
+ * SYNAPTICS' TOTAL CUMULATIVE LIABILITY TO ANY PARTY SHALL NOT
+ * EXCEED ONE HUNDRED U.S. DOLLARS
+ *
+ * Copyright (C) 2025, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -63,7 +82,11 @@
 #include <linux/rtc.h>
 #include <linux/namei.h>
 #include <asm/uaccess.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
+#include <linux/unaligned.h>
+#else
 #include <asm/unaligned.h>
+#endif /* KERNEL >= 6.12 */
 #include <dhd_linux_priv.h>
 
 #include <epivers.h>
@@ -82,6 +105,7 @@
 #include <dhd_linux_wq.h>
 #include <dhd.h>
 #include <dhd_linux.h>
+#include <dhd_linux_tx.h>
 #include <dhd_linux_pktdump.h>
 #ifdef DHD_WET
 #include <dhd_wet.h>
@@ -96,9 +120,6 @@
 #include <dhd_debug.h>
 #if defined(WL_CFG80211)
 #include <wl_cfg80211.h>
-#ifdef WL_BAM
-#include <wl_bam.h>
-#endif	/* WL_BAM */
 #endif	/* WL_CFG80211 */
 #ifdef PNO_SUPPORT
 #include <dhd_pno.h>
@@ -156,9 +177,7 @@
 #include <dhd_wlfc.h>
 #endif
 
-#if defined(OEM_ANDROID)
 #include <wl_android.h>
-#endif
 #include <dhd_config.h>
 
 #define WME_PRIO2AC(prio)  wme_fifo2ac[prio2fifo[(prio)]]
@@ -399,6 +418,14 @@ BCMFASTPATH(__dhd_sendpkt)(dhd_pub_t *dhdp, int ifidx, void *pktbuf)
 
 #ifdef PROP_TXSTATUS
 	if (dhd_wlfc_is_supported(dhdp)) {
+		DHD_GENERAL_LOCK(dhdp, flags);
+		if (ifp->del_in_progress) {
+			DHD_GENERAL_UNLOCK(dhdp, flags);
+			PKTCFREE(dhdp->osh, pktbuf, TRUE);
+			return -ENODEV;
+		}
+		DHD_GENERAL_UNLOCK(dhdp, flags);
+
 		/* store the interface ID */
 		DHD_PKTTAG_SETIF(PKTTAG(pktbuf), ifidx);
 
@@ -450,7 +477,7 @@ BCMFASTPATH(__dhd_sendpkt)(dhd_pub_t *dhdp, int ifidx, void *pktbuf)
 #ifdef PROP_TXSTATUS
 		/* tx_packets counter can counted only when wlfc is disabled */
 		if (!dhd_wlfc_is_supported(dhdp))
-#endif
+#endif /* PROP_TXSTATUS */
 		{
 			dhdp->tx_packets++;
 			dhdp->tx_bytes += datalen;
@@ -490,6 +517,15 @@ BCMFASTPATH(dhd_sendpkt)(dhd_pub_t *dhdp, int ifidx, void *pktbuf)
 	DHD_BUS_BUSY_SET_IN_SEND_PKT(dhdp);
 	DHD_GENERAL_UNLOCK(dhdp, flags);
 
+#ifdef DHD_PCIE_RUNTIMEPM
+	if (dhdpcie_runtime_bus_wake(dhdp, FALSE, __builtin_return_address(0))) {
+		DHD_ERROR(("%s : pcie is still in suspend state!!\n", __FUNCTION__));
+		PKTCFREE(dhdp->osh, pktbuf, TRUE);
+		ret = -EBUSY;
+		goto exit;
+	}
+#endif /* DHD_PCIE_RUNTIMEPM */
+
 	DHD_GENERAL_LOCK(dhdp, flags);
 	if (DHD_BUS_CHECK_SUSPEND_OR_SUSPEND_IN_PROGRESS(dhdp)) {
 		DHD_ERROR(("%s: bus is in suspend(%d) or suspending(0x%x) state!!\n",
@@ -505,6 +541,10 @@ BCMFASTPATH(dhd_sendpkt)(dhd_pub_t *dhdp, int ifidx, void *pktbuf)
 	DHD_GENERAL_UNLOCK(dhdp, flags);
 
 	ret = __dhd_sendpkt(dhdp, ifidx, pktbuf);
+
+#ifdef DHD_PCIE_RUNTIMEPM
+exit:
+#endif
 
 	DHD_GENERAL_LOCK(dhdp, flags);
 	DHD_BUS_BUSY_CLEAR_IN_SEND_PKT(dhdp);
@@ -609,6 +649,21 @@ BCMFASTPATH(dhd_start_xmit)(struct sk_buff *skb, struct net_device *net)
 	DHD_BUS_BUSY_SET_IN_TX(&dhd->pub);
 	DHD_GENERAL_UNLOCK(&dhd->pub, flags);
 
+#ifdef DHD_PCIE_RUNTIMEPM
+	if (dhdpcie_runtime_bus_wake(&dhd->pub, FALSE, dhd_start_xmit)) {
+		/* In order to avoid pkt loss. Return NETDEV_TX_BUSY until run-time resumed. */
+		/* stop the network queue temporarily until resume done */
+		DHD_GENERAL_LOCK(&dhd->pub, flags);
+		if (!dhdpcie_is_resume_done(&dhd->pub)) {
+			dhd_bus_stop_queue(dhd->pub.bus);
+		}
+		DHD_BUS_BUSY_CLEAR_IN_TX(&dhd->pub);
+		dhd_os_busbusy_wake(&dhd->pub);
+		DHD_GENERAL_UNLOCK(&dhd->pub, flags);
+		return NETDEV_TX_BUSY;
+	}
+#endif /* DHD_PCIE_RUNTIMEPM */
+
 	DHD_GENERAL_LOCK(&dhd->pub, flags);
 #ifdef BCMPCIE
 	if (DHD_BUS_CHECK_SUSPEND_OR_SUSPEND_IN_PROGRESS(&dhd->pub)) {
@@ -651,14 +706,12 @@ BCMFASTPATH(dhd_start_xmit)(struct sk_buff *skb, struct net_device *net)
 		DHD_ERROR(("%s: xmit rejected pub.up=%d busstate=%d \n",
 			__FUNCTION__, dhd->pub.up, dhd->pub.busstate));
 		dhd_tx_stop_queues(net);
-#if defined(OEM_ANDROID)
 		/* Send Event when bus down detected during data session */
 		if (dhd->pub.up && !dhd->pub.hang_was_sent && !DHD_BUS_CHECK_REMOVE(&dhd->pub)) {
 			DHD_ERROR(("%s: Event HANG sent up\n", __FUNCTION__));
 			dhd->pub.hang_reason = HANG_REASON_BUS_DOWN;
 			net_os_send_hang_message(net);
 		}
-#endif /* OEM_ANDROID */
 		DHD_BUS_BUSY_CLEAR_IN_TX(&dhd->pub);
 		dhd_os_busbusy_wake(&dhd->pub);
 		DHD_GENERAL_UNLOCK(&dhd->pub, flags);
@@ -708,18 +761,6 @@ BCMFASTPATH(dhd_start_xmit)(struct sk_buff *skb, struct net_device *net)
 		PKTSETLEN(dhd->pub.osh, skb, length);
 	}
 
-#ifdef TPUT_MONITOR
-	if (dhd->pub.conf->tput_monitor_ms) {
-		dhd_os_sdlock_txq(&dhd->pub);
-		dhd->pub.conf->net_len += PKTLEN(dhd->pub.osh, skb);
-		dhd_os_sdunlock_txq(&dhd->pub);
-		if ((dhd->pub.conf->data_drop_mode == XMIT_DROP) &&
-				(PKTLEN(dhd->pub.osh, skb) > 500)) {
-			dev_kfree_skb(skb);
-			return NETDEV_TX_OK;
-		}
-	}
-#endif
 	/* Make sure there's enough room for any header */
 #if !defined(BCM_ROUTER_DHD)
 	if (skb_cow(skb, (dhd->pub.hdrlen + htsfdlystat_sz))) {
@@ -862,11 +903,10 @@ BCMFASTPATH(dhd_start_xmit)(struct sk_buff *skb, struct net_device *net)
 #endif /* DHD_PSTA */
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 19, 0) && defined(DHD_TCP_PACING_SHIFT)
-#ifndef DHD_DEFAULT_TCP_PACING_SHIFT
-#define DHD_DEFAULT_TCP_PACING_SHIFT 7
-#endif /* DHD_DEFAULT_TCP_PACING_SHIFT */
-	if (skb->sk) {
-		sk_pacing_shift_update(skb->sk, DHD_DEFAULT_TCP_PACING_SHIFT);
+	if (dhd->pub.conf->tcp_pacing_shift && skb->sk) {
+		sk_pacing_shift_update(skb->sk, dhd->pub.conf->tcp_pacing_shift);
+	} else {
+		skb_orphan(skb);
 	}
 #else
 #if defined(BCMPCIE) && defined(DHD_VSDB_SKIP_ORPHAN) && defined(WL_CFG80211)
@@ -874,12 +914,6 @@ BCMFASTPATH(dhd_start_xmit)(struct sk_buff *skb, struct net_device *net)
 #endif /* (BCMPCIE) && (DHD_VSDB_SKIP_ORPHAN) && defined(WL_CFG80211) */
 	skb_orphan(skb);
 #endif /* LINUX_VERSION_CODE >= 4.19.0 && DHD_TCP_PACING_SHIFT */
-
-	/* move from dhdsdio_sendfromq(), try to orphan skb early */
-	if (dhd->pub.conf->orphan_move == 2)
-		PKTORPHAN(skb, dhd->pub.conf->tsq);
-	else if (dhd->pub.conf->orphan_move == 3)
-		skb_orphan(skb);
 
 #ifdef DHDTCPSYNC_FLOOD_BLK
 	if (dhd_tcpdata_get_flag(&dhd->pub, pktbuf) == FLAG_SYNCACK) {

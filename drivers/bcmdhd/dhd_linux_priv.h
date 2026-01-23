@@ -1,7 +1,26 @@
 /*
  * DHD Linux header file - contains private structure definition of the Linux specific layer
  *
- * Copyright (C) 2022, Broadcom.
+ * Copyright (C) 2025 Synaptics Incorporated. All rights reserved.
+ *
+ * This software is licensed to you under the terms of the
+ * GNU General Public License version 2 (the "GPL") with Broadcom special exception.
+ *
+ * INFORMATION CONTAINED IN THIS DOCUMENT IS PROVIDED "AS-IS," AND SYNAPTICS
+ * EXPRESSLY DISCLAIMS ALL EXPRESS AND IMPLIED WARRANTIES, INCLUDING ANY
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE,
+ * AND ANY WARRANTIES OF NON-INFRINGEMENT OF ANY INTELLECTUAL PROPERTY RIGHTS.
+ * IN NO EVENT SHALL SYNAPTICS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, PUNITIVE, OR CONSEQUENTIAL DAMAGES ARISING OUT OF OR IN CONNECTION
+ * WITH THE USE OF THE INFORMATION CONTAINED IN THIS DOCUMENT, HOWEVER CAUSED
+ * AND BASED ON ANY THEORY OF LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * NEGLIGENCE OR OTHER TORTIOUS ACTION, AND EVEN IF SYNAPTICS WAS ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE. IF A TRIBUNAL OF COMPETENT JURISDICTION
+ * DOES NOT PERMIT THE DISCLAIMER OF DIRECT DAMAGES OR ANY OTHER DAMAGES,
+ * SYNAPTICS' TOTAL CUMULATIVE LIABILITY TO ANY PARTY SHALL NOT
+ * EXCEED ONE HUNDRED U.S. DOLLARS
+ *
+ * Copyright (C) 2025, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -47,11 +66,15 @@
 #include <dhd_debug.h>
 #include <dhd_linux.h>
 #include <dhd_bus.h>
+#include <fwpkg_utils.h>
 
 #ifdef PCIE_FULL_DONGLE
 #include <bcmmsgbuf.h>
 #include <dhd_flowring.h>
 #endif /* PCIE_FULL_DONGLE */
+#if defined(DHD_HWTSTAMP) && (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 30))
+#include <linux/net_tstamp.h>
+#endif /* defined(DHD_HWTSTAMP) && (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 30)) */
 
 #ifdef RX_PKT_POOL
 #define RX_PKTPOOL_RESCHED_DELAY_MS 500u
@@ -77,11 +100,13 @@ typedef struct dhd_info {
 	*/
 	dhd_if_t *iflist[DHD_MAX_IFS + DHD_MAX_STATIC_IFS];
 	wifi_adapter_info_t *adapter;			/* adapter information, interrupt, fw path etc. */
+	fwpkg_info_t fwpkg;	/* combined fw package info structure */
 	char fw_path[PATH_MAX];		/* path to firmware image */
 	char nv_path[PATH_MAX];		/* path to nvram vars file */
 	char clm_path[PATH_MAX];	/* path to CLM data */
 	char conf_path[PATH_MAX];	/* path to config vars file */
 	char sig_path[PATH_MAX];	/* path to rtecdc.sig file */
+	char tmp_path[PATH_MAX];	/* path to logstrs vars file */
 #ifdef DHD_UCODE_DOWNLOAD
 	char uc_path[PATH_MAX];	/* path to ucode image */
 #endif /* DHD_UCODE_DOWNLOAD */
@@ -106,6 +131,11 @@ typedef struct dhd_info {
 
 	timer_list_compat_t timer;
 	bool wd_timer_valid;
+#ifdef DHD_PCIE_RUNTIMEPM
+	timer_list_compat_t rpm_timer;
+	bool rpm_timer_valid;
+	tsk_ctl_t	  thr_rpm_ctl;
+#endif /* DHD_PCIE_RUNTIMEPM */
 	struct tasklet_struct tasklet;
 	spinlock_t	sdlock;
 	spinlock_t	txqlock;
@@ -143,7 +173,6 @@ typedef struct dhd_info {
 	struct wakeup_source *wl_nanwake; /* NAN wakelock */
 #endif /* CONFIG_HAS_WAKELOCK */
 
-#if defined(OEM_ANDROID)
 	/* net_device interface lock, prevent race conditions among net_dev interface
 	 * calls and wifi_on or wifi_off
 	 */
@@ -152,11 +181,6 @@ typedef struct dhd_info {
 #if defined(APF)
 	struct mutex dhd_apf_mutex;
 #endif /* APF */
-#else
-#if defined(APF)
-	struct mutex dhd_apf_mutex;
-#endif /* APF */
-#endif /* OEM_ANDROID */
 	spinlock_t wakelock_spinlock;
 	spinlock_t wakelock_evt_spinlock;
 	uint32 wakelock_counter;
@@ -441,6 +465,9 @@ typedef struct dhd_info {
 	osl_atomic_t dump_status;
 	struct work_struct dhd_dump_proc_work;
 #endif /* DHD_FILE_DUMP_EVENT && DHD_FW_COREDUMP */
+#if defined(DHD_HWTSTAMP) && (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 30))
+	struct hwtstamp_config stmpconf;
+#endif /* defined(DHD_HWTSTAMP) && (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 30)) */
 } dhd_info_t;
 
 /** priv_link is the link between netdev and the dhdif and dhd_info structs. */
@@ -480,7 +507,10 @@ void dhd_lb_tx_handler(unsigned long data);
 #endif /* DHD_LB_TXP */
 
 #if defined(DHD_LB_RXP)
+/* DHD load balancing: deferral of work to another online CPU */
 int dhd_napi_poll(struct napi_struct *napi, int budget);
+extern void dhd_rx_emerge_enqueue(dhd_pub_t *dhdp, void *pkt);
+extern void* dhd_rx_emerge_dequeue(dhd_pub_t *dhdp);
 void dhd_rx_napi_dispatcher_work(struct work_struct * work);
 void dhd_lb_rx_napi_dispatch(dhd_pub_t *dhdp);
 void dhd_lb_rx_pkt_enqueue(dhd_pub_t *dhdp, void *pkt, int ifidx);
@@ -520,7 +550,10 @@ extern uint sssr_enab;
 extern uint fis_enab;
 #endif /* DHD_SSSR_DUMP */
 
-#if defined(ANDROID_VERSION) && (LINUX_VERSION_CODE  >= KERNEL_VERSION(4, 14, 0))
+#if (ANDROID_VERSION > 0) && (LINUX_VERSION_CODE  >= KERNEL_VERSION(4, 14, 0))
+#define WAKELOCK_BACKPORT
+#endif
+#if defined(CUSTOMER_HW_ROCKCHIP) && (LINUX_VERSION_CODE  >= KERNEL_VERSION(4, 19, 0))
 #define WAKELOCK_BACKPORT
 #endif
 
@@ -546,5 +579,7 @@ do { \
 #define dhd_wake_lock_timeout(wakeup_source, timeout)	\
 	__pm_wakeup_event(wakeup_source, jiffies_to_msecs(timeout))
 #endif /* CONFIG_HAS_WAKELOCK */
+
+extern int _dhd_set_mac_address(dhd_info_t *dhd, int ifidx, uint8 *addr, bool skip_stop);
 
 #endif /* __DHD_LINUX_PRIV_H__ */

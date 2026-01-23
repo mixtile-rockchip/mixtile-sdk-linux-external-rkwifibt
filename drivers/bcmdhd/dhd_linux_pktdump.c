@@ -1,7 +1,26 @@
 /*
  * Packet dump helper functions
  *
- * Copyright (C) 2022, Broadcom.
+ * Copyright (C) 2025 Synaptics Incorporated. All rights reserved.
+ *
+ * This software is licensed to you under the terms of the
+ * GNU General Public License version 2 (the "GPL") with Broadcom special exception.
+ *
+ * INFORMATION CONTAINED IN THIS DOCUMENT IS PROVIDED "AS-IS," AND SYNAPTICS
+ * EXPRESSLY DISCLAIMS ALL EXPRESS AND IMPLIED WARRANTIES, INCLUDING ANY
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE,
+ * AND ANY WARRANTIES OF NON-INFRINGEMENT OF ANY INTELLECTUAL PROPERTY RIGHTS.
+ * IN NO EVENT SHALL SYNAPTICS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, PUNITIVE, OR CONSEQUENTIAL DAMAGES ARISING OUT OF OR IN CONNECTION
+ * WITH THE USE OF THE INFORMATION CONTAINED IN THIS DOCUMENT, HOWEVER CAUSED
+ * AND BASED ON ANY THEORY OF LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * NEGLIGENCE OR OTHER TORTIOUS ACTION, AND EVEN IF SYNAPTICS WAS ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE. IF A TRIBUNAL OF COMPETENT JURISDICTION
+ * DOES NOT PERMIT THE DISCLAIMER OF DIRECT DAMAGES OR ANY OTHER DAMAGES,
+ * SYNAPTICS' TOTAL CUMULATIVE LIABILITY TO ANY PARTY SHALL NOT
+ * EXCEED ONE HUNDRED U.S. DOLLARS
+ *
+ * Copyright (C) 2025, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -492,6 +511,10 @@ dhd_dump_pkt(dhd_pub_t *dhdp, int ifidx, uint8 *pktdata, uint32 pktlen,
 	}
 	if (ether_type == ETHER_TYPE_ARP) {
 		if (dhd_check_arp(pktdata, ether_type)) {
+#ifdef ARP_DETECTION
+			if (!tx)
+				wl_ext_arp_receive(dhdp, ifidx);
+#endif /* ARP_DETECTION */
 			dhd_arp_dump(dhdp, ifidx, pktdata, tx, pkthash, pktfate);
 		}
 	}
@@ -646,7 +669,7 @@ dhd_dump_pkt_clear(dhd_pub_t *dhdp)
 	bzero(&pktcnts->dns_cnt, sizeof(pkt_cnt_t));
 }
 
-bool
+static bool
 dhd_dump_pkt_enabled(dhd_pub_t *dhdp)
 {
 	pkt_cnts_log_t *pktcnts;

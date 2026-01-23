@@ -4,7 +4,26 @@
  * Provides type definitions and function prototypes used to link the
  * DHD OS, bus, and protocol modules.
  *
- * Copyright (C) 2022, Broadcom.
+ * Copyright (C) 2025 Synaptics Incorporated. All rights reserved.
+ *
+ * This software is licensed to you under the terms of the
+ * GNU General Public License version 2 (the "GPL") with Broadcom special exception.
+ *
+ * INFORMATION CONTAINED IN THIS DOCUMENT IS PROVIDED "AS-IS," AND SYNAPTICS
+ * EXPRESSLY DISCLAIMS ALL EXPRESS AND IMPLIED WARRANTIES, INCLUDING ANY
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE,
+ * AND ANY WARRANTIES OF NON-INFRINGEMENT OF ANY INTELLECTUAL PROPERTY RIGHTS.
+ * IN NO EVENT SHALL SYNAPTICS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, PUNITIVE, OR CONSEQUENTIAL DAMAGES ARISING OUT OF OR IN CONNECTION
+ * WITH THE USE OF THE INFORMATION CONTAINED IN THIS DOCUMENT, HOWEVER CAUSED
+ * AND BASED ON ANY THEORY OF LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * NEGLIGENCE OR OTHER TORTIOUS ACTION, AND EVEN IF SYNAPTICS WAS ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE. IF A TRIBUNAL OF COMPETENT JURISDICTION
+ * DOES NOT PERMIT THE DISCLAIMER OF DIRECT DAMAGES OR ANY OTHER DAMAGES,
+ * SYNAPTICS' TOTAL CUMULATIVE LIABILITY TO ANY PARTY SHALL NOT
+ * EXCEED ONE HUNDRED U.S. DOLLARS
+ *
+ * Copyright (C) 2025, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -44,7 +63,7 @@ extern void dhd_bus_unregister(void);
 
 /* Download firmware image and nvram image */
 extern int dhd_bus_download_firmware(struct dhd_bus *bus, osl_t *osh,
-	char *fw_path, char *nv_path, char *clm_path, char *conf_path);
+	char *fw_path, char *nv_path);
 #if defined(BT_OVER_SDIO)
 extern int dhd_bus_download_btfw(struct dhd_bus *bus, osl_t *osh, char *btfw_path);
 #endif /* defined (BT_OVER_SDIO) */
@@ -85,6 +104,10 @@ extern int dhd_bus_rxctl(struct dhd_bus *bus, uchar *msg, uint msglen);
 /* Watchdog timer function */
 extern bool dhd_bus_watchdog(dhd_pub_t *dhd);
 
+#ifdef OOB_GPIO_TSF_INTR
+extern int dhd_bus_oob_tsf_intr_register(dhd_pub_t *dhdp);
+extern void dhd_bus_oob_tsf_intr_unregister(dhd_pub_t *dhdp);
+#endif /* OOB_GPIO_TSF_INTR */
 extern int dhd_bus_oob_intr_register(dhd_pub_t *dhdp);
 extern void dhd_bus_oob_intr_unregister(dhd_pub_t *dhdp);
 extern void dhd_bus_oob_intr_set(dhd_pub_t *dhdp, bool enable);
@@ -428,5 +451,12 @@ void * dhd_bus_get_socram_buf(struct dhd_bus *bus, struct dhd_pub *dhdp);
 #endif
 
 void dhd_bus_set_signature_path(struct dhd_bus *bus, char *sig_path);
+
+int dhdsdio_mpdu_init(dhd_pub_t *dhdp);
+extern void dhd_bus_pktq_flush(dhd_pub_t *dhdp);
+
+#if defined(BCMSDIO)
+extern void dhd_bus_check_srmemsize(dhd_pub_t *dhdp);
+#endif /* BCMSDIO */
 
 #endif /* _dhd_bus_h_ */

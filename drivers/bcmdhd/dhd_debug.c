@@ -1,7 +1,26 @@
 /*
  * DHD debugability support
  *
- * Copyright (C) 2022, Broadcom.
+ * Copyright (C) 2025 Synaptics Incorporated. All rights reserved.
+ *
+ * This software is licensed to you under the terms of the
+ * GNU General Public License version 2 (the "GPL") with Broadcom special exception.
+ *
+ * INFORMATION CONTAINED IN THIS DOCUMENT IS PROVIDED "AS-IS," AND SYNAPTICS
+ * EXPRESSLY DISCLAIMS ALL EXPRESS AND IMPLIED WARRANTIES, INCLUDING ANY
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE,
+ * AND ANY WARRANTIES OF NON-INFRINGEMENT OF ANY INTELLECTUAL PROPERTY RIGHTS.
+ * IN NO EVENT SHALL SYNAPTICS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, PUNITIVE, OR CONSEQUENTIAL DAMAGES ARISING OUT OF OR IN CONNECTION
+ * WITH THE USE OF THE INFORMATION CONTAINED IN THIS DOCUMENT, HOWEVER CAUSED
+ * AND BASED ON ANY THEORY OF LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * NEGLIGENCE OR OTHER TORTIOUS ACTION, AND EVEN IF SYNAPTICS WAS ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE. IF A TRIBUNAL OF COMPETENT JURISDICTION
+ * DOES NOT PERMIT THE DISCLAIMER OF DIRECT DAMAGES OR ANY OTHER DAMAGES,
+ * SYNAPTICS' TOTAL CUMULATIVE LIABILITY TO ANY PARTY SHALL NOT
+ * EXCEED ONE HUNDRED U.S. DOLLARS
+ *
+ * Copyright (C) 2025, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -42,8 +61,11 @@
 #include <dhd_linux_priv.h>
 #include <dhd_linux_wq.h>
 #endif /* DBG_PKT_MON */
-#if defined(DHD_PKT_LOGGING) && defined(DHD_PKT_LOGGING_DBGRING)
+#if defined(DHD_PKT_LOGGING) || defined(DBG_PKT_MON)
 #include <dhd_pktlog.h>
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0))
+#include <linux/sched/clock.h>
+#endif /* KENEL >=4.11 */
 #endif /* DHD_PKT_LOGGING && DHD_PKT_LOGGING_DBGRING */
 
 #if defined(DHD_EVENT_LOG_FILTER)
@@ -454,7 +476,7 @@ dhd_dbg_msgtrace_msg_parser(void *event_data)
 #ifdef SHOW_LOGTRACE
 #define DATA_UNIT_FOR_LOG_CNT 4
 
-int
+static int
 replace_percent_p_to_x(char *fmt)
 {
 	int p_to_x_done = FALSE;
@@ -511,7 +533,7 @@ replace_percent_p_to_x(char *fmt)
 }
 
 /* To identify format of types %Ns where N >= 0 is a number */
-bool
+static bool
 check_valid_string_format(char *curr_ptr)
 {
 	char *next_ptr;
@@ -536,7 +558,7 @@ check_valid_string_format(char *curr_ptr)
 }
 
 /* To identify format of non string format types */
-bool
+static bool
 check_valid_non_string_format(char *curr_ptr)
 {
 	char *next_ptr;
@@ -592,11 +614,11 @@ done:
 #define LOG_PRINT_THRESH      (1u * USEC_PER_SEC)
 #endif /* LOG_PRINT_THRESH */
 #endif /* DHD_DEBUG */
-#endif
+#endif /* DHD_LOG_PRINT_RATE_LIMIT */
 #define EL_PARSE_VER	"V02"
 static uint64 verboselog_ts_saved = 0;
 
-bool
+static bool
 dhd_dbg_process_event_log_hdr(event_log_hdr_t *log_hdr, prcd_event_log_hdr_t *prcd_log_hdr)
 {
 	event_log_extended_hdr_t *ext_log_hdr;
@@ -766,7 +788,7 @@ dhd_dbg_verboselog_printf(dhd_pub_t *dhdp, prcd_event_log_hdr_t *plog_hdr,
 {
 	dhd_event_log_t *raw_event = (dhd_event_log_t *)raw_event_ptr;
 	uint16 count;
-	int log_level, id;
+	int log_level, id, len;
 	char fmtstr_loc_buf[ROMSTR_SIZE] = { 0 };
 	char (*str_buf)[SIZE_LOC_STR] = NULL;
 	char *str_tmpptr = NULL;
@@ -836,13 +858,6 @@ dhd_dbg_verboselog_printf(dhd_pub_t *dhdp, prcd_event_log_hdr_t *plog_hdr,
 		else {
 			bcm_binit(&b, fmtstr_loc_buf, FMTSTR_SIZE);
 			/* XXX: The 'hdr->count - 1' is dongle time */
-#ifndef OEM_ANDROID
-			bcm_bprintf(&b, "%06d.%03d EL: %d 0x%x",
-				(uint32)(log_ptr[plog_hdr->count - 1] / EL_MSEC_PER_SEC),
-				(uint32)(log_ptr[plog_hdr->count - 1] % EL_MSEC_PER_SEC),
-				plog_hdr->tag,
-				plog_hdr->fmt_num_raw);
-#else
 			bcm_bprintf(&b, "%06d.%03d EL:%s:%u:%u %d %d 0x%x",
 				(uint32)(log_ptr[plog_hdr->count - 1] / EL_MSEC_PER_SEC),
 				(uint32)(log_ptr[plog_hdr->count - 1] % EL_MSEC_PER_SEC),
@@ -850,7 +865,6 @@ dhd_dbg_verboselog_printf(dhd_pub_t *dhdp, prcd_event_log_hdr_t *plog_hdr,
 				plog_hdr->tag,
 				plog_hdr->count,
 				plog_hdr->fmt_num_raw);
-#endif /* !OEM_ANDROID */
 			for (count = 0; count < (plog_hdr->count - 1); count++) {
 				bcm_bprintf(&b, " %x", log_ptr[count]);
 			}
@@ -881,7 +895,9 @@ dhd_dbg_verboselog_printf(dhd_pub_t *dhdp, prcd_event_log_hdr_t *plog_hdr,
 				raw_event->fmts[plog_hdr->fmt_num]);
 			plog_hdr->count++;
 		} else {
-			snprintf(fmtstr_loc_buf, FMTSTR_SIZE, "CONSOLE_E:%u:%u %06d.%03d %s",
+			len = snprintf(fmtstr_loc_buf, FMTSTR_SIZE, PERCENT_S DHD_LOG_PREFIXS,
+				PRINTF_SYSTEM_TIME);
+			snprintf(fmtstr_loc_buf+len, FMTSTR_SIZE, "CONSOLE_E:%u:%u %06d.%03d %s",
 				logset, block,
 				(uint32)(log_ptr[plog_hdr->count - 1] / EL_MSEC_PER_SEC),
 				(uint32)(log_ptr[plog_hdr->count - 1] % EL_MSEC_PER_SEC),
@@ -1383,7 +1399,7 @@ dhd_dbg_trace_evnt_handler(dhd_pub_t *dhdp, void *event_data,
 /*
  * dhd_dbg_set_event_log_tag : modify the state of an event log tag
  */
-void
+static void
 dhd_dbg_set_event_log_tag(dhd_pub_t *dhdp, uint16 tag, uint8 set_num, uint8 is_set)
 {
 	wl_el_tag_params_t pars;
@@ -1403,7 +1419,7 @@ dhd_dbg_set_event_log_tag(dhd_pub_t *dhdp, uint16 tag, uint8 set_num, uint8 is_s
 
 	ret = dhd_wl_ioctl_cmd(dhdp, WLC_SET_VAR, iovbuf, sizeof(iovbuf), TRUE, 0);
 	if (ret) {
-//		DHD_ERROR(("%s set log tag iovar failed %d\n", __FUNCTION__, ret));
+		DHD_ERROR(("%s set log tag iovar failed %d\n", __FUNCTION__, ret));
 	}
 }
 
@@ -1621,7 +1637,8 @@ __dhd_dbg_pkt_hash(uintptr_t pkt, uint32 pktid)
 #define __TIMESPEC64_TO_US(ts) \
 	(((ts).tv_sec * USEC_PER_SEC) + ((ts).tv_nsec / NSEC_PER_USEC))
 
-uint32
+#ifdef DBG_PKT_MON
+static uint32
 __dhd_dbg_driver_ts_usec(void)
 {
 	struct osl_timespec ts;
@@ -1629,6 +1646,7 @@ __dhd_dbg_driver_ts_usec(void)
 	osl_get_monotonic_boottime(&ts);
 	return ((uint32)(__TIMESPEC64_TO_US(ts)));
 }
+#endif /* DBG_PKT_MON */
 
 wifi_tx_packet_fate
 __dhd_dbg_map_tx_status_to_pkt_fate(uint16 status)
@@ -1792,7 +1810,7 @@ __dhd_dbg_free_rx_pkts(dhd_pub_t *dhdp, dhd_dbg_rx_info_t *rx_pkts,
 	return BCME_OK;
 }
 
-void
+static void
 __dhd_dbg_dump_pkt_info(dhd_pub_t *dhdp, dhd_dbg_pkt_info_t *info)
 {
 	if (DHD_PKT_MON_DUMP_ON()) {
@@ -1809,7 +1827,7 @@ __dhd_dbg_dump_pkt_info(dhd_pub_t *dhdp, dhd_dbg_pkt_info_t *info)
 	}
 }
 
-void
+static void
 __dhd_dbg_dump_tx_pkt_info(dhd_pub_t *dhdp, dhd_dbg_tx_info_t *tx_pkt,
 	uint16 count)
 {
@@ -1820,7 +1838,7 @@ __dhd_dbg_dump_tx_pkt_info(dhd_pub_t *dhdp, dhd_dbg_tx_info_t *tx_pkt,
 	}
 }
 
-void
+static void
 __dhd_dbg_dump_rx_pkt_info(dhd_pub_t *dhdp, dhd_dbg_rx_info_t *rx_pkt,
 	uint16 count)
 {
@@ -2078,7 +2096,8 @@ dhd_dbg_monitor_tx_pkts(dhd_pub_t *dhdp, void *pkt, uint32 pktid, frame_type typ
 				clone_pkt = PKTDUP(dhdp->osh, pkt);
 				skb_pull((struct sk_buff*)clone_pkt, SDIO_HLEN);
 				tx_pkts[pkt_pos].info.pkt = clone_pkt;
-				tx_pkts[pkt_pos].info.pkt_len = PKTLEN(dhdp->osh, clone_pkt) - SDIO_HLEN;
+				tx_pkts[pkt_pos].info.pkt_len =
+					PKTLEN(dhdp->osh, clone_pkt) - SDIO_HLEN;
 #else
 				tx_pkts[pkt_pos].info.pkt = PKTDUP(dhdp->osh, pkt);
 				tx_pkts[pkt_pos].info.pkt_len = PKTLEN(dhdp->osh, pkt);
@@ -2497,6 +2516,7 @@ dhd_dbg_monitor_get_rx_pkts(dhd_pub_t *dhdp, void __user *user_buf,
 	if ((ret = memcpy_s(tmp_rx_pkt, alloc_len, ori_rx_pkt, alloc_len))) {
 		DHD_PKT_MON_UNLOCK(dhdp->dbg->pkt_mon_lock, flags);
 		DHD_ERROR(("%s: failed to copy tmp_rx_pkt ret:%d", __FUNCTION__, ret));
+		ret = -EINVAL;
 		goto exit;
 	}
 	for (i = 0; i < pkt_count; i++) {
@@ -2505,6 +2525,7 @@ dhd_dbg_monitor_get_rx_pkts(dhd_pub_t *dhdp, void __user *user_buf,
 		if (!tmp_rx_pkt[i].info.pkt) {
 			DHD_PKT_MON_UNLOCK(dhdp->dbg->pkt_mon_lock, flags);
 			DHD_ERROR(("%s: failed to copy skb", __FUNCTION__));
+			ret = -ENOMEM;
 			goto exit;
 		}
 	}
@@ -2682,7 +2703,8 @@ dhd_dbg_process_tx_status(dhd_pub_t *dhdp, void *pkt,
 	} \
 }
 
-void print_roam_chan_list(char *prefix, uint chan_num, uint16 band_2g,
+static void
+print_roam_chan_list(char *prefix, uint chan_num, uint16 band_2g,
 	uint16 uni2a, uint8 uni3, uint8 *uni2c)
 {
 	struct bcmstrbuf b;
@@ -3381,22 +3403,14 @@ void
 dhd_dbg_detach(dhd_pub_t *dhdp)
 {
 	dhd_dbg_t *dbg;
-#if defined(DHD_DEBUGABILITY_LOG_DUMP_RING) || defined(DHD_DEBUGABILITY_EVENT_RING) || \
-	defined(DHD_PKT_LOGGING_DBGRING)
 	int ring_id;
 	dhd_dbg_ring_t *ring = NULL;
-#endif /* DHD_DEBUGABILITY_LOG_DUMP_RING || BTLOG ||
-	* DHD_DEBUGABILITY_EVENT_RING || DHD_PKT_LOGGING_DBGRING ||
-	* (DEBUGABILITY && CUSTOMER_HW6)
-	*/
 
 	dbg = dhdp->dbg;
 	if (!dbg) {
 		return;
 	}
 
-#if defined(DHD_DEBUGABILITY_LOG_DUMP_RING) || defined(DHD_DEBUGABILITY_EVENT_RING) || \
-	defined(DHD_PKT_LOGGING_DBGRING)
 	for (ring_id = DEBUG_RING_ID_INVALID + 1; ring_id < DEBUG_RING_ID_MAX; ring_id++) {
 		if (VALID_RING(dbg->dbg_rings[ring_id].id)) {
 			ring = &dbg->dbg_rings[ring_id];
@@ -3415,12 +3429,7 @@ dhd_dbg_detach(dhd_pub_t *dhdp)
 			ring->ring_size = 0;
 		}
 	}
-
 	VMFREE(dhdp->osh, dbg, sizeof(dhd_dbg_t));
-#endif /* DHD_DEBUGABILITY_LOG_DUMP_RING || BTLOG ||
-	* DHD_DEBUGABILITY_EVENT_RING || DHD_PKT_LOGGING_DBGRING ||
-	* (DEBUGABILITY && CUSTOMER_HW6)
-	*/
 #ifdef DHD_DEBUGABILITY_LOG_DUMP_RING
 	g_ring_buf.dhd_pub = NULL;
 #endif /* DHD_DEBUGABILITY_LOG_DUMP_RING */

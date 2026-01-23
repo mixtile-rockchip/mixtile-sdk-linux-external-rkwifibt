@@ -4,7 +4,26 @@
  * provide the caller with one common bus interface for all dongle devices. In practice, it is only
  * used for USB interfaces. DBUS is not a protocol, but an abstraction layer.
  *
- * Copyright (C) 2022, Broadcom.
+ * Copyright (C) 2025 Synaptics Incorporated. All rights reserved.
+ *
+ * This software is licensed to you under the terms of the
+ * GNU General Public License version 2 (the "GPL") with Broadcom special exception.
+ *
+ * INFORMATION CONTAINED IN THIS DOCUMENT IS PROVIDED "AS-IS," AND SYNAPTICS
+ * EXPRESSLY DISCLAIMS ALL EXPRESS AND IMPLIED WARRANTIES, INCLUDING ANY
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE,
+ * AND ANY WARRANTIES OF NON-INFRINGEMENT OF ANY INTELLECTUAL PROPERTY RIGHTS.
+ * IN NO EVENT SHALL SYNAPTICS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, PUNITIVE, OR CONSEQUENTIAL DAMAGES ARISING OUT OF OR IN CONNECTION
+ * WITH THE USE OF THE INFORMATION CONTAINED IN THIS DOCUMENT, HOWEVER CAUSED
+ * AND BASED ON ANY THEORY OF LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * NEGLIGENCE OR OTHER TORTIOUS ACTION, AND EVEN IF SYNAPTICS WAS ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE. IF A TRIBUNAL OF COMPETENT JURISDICTION
+ * DOES NOT PERMIT THE DISCLAIMER OF DIRECT DAMAGES OR ANY OTHER DAMAGES,
+ * SYNAPTICS' TOTAL CUMULATIVE LIABILITY TO ANY PARTY SHALL NOT
+ * EXCEED ONE HUNDRED U.S. DOLLARS
+ *
+ * Copyright (C) 2025, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -2620,6 +2639,11 @@ dbus_zlib_free(void *ptr)
 
 #endif /* #if defined(BCM_DNGL_EMBEDIMAGE) */
 
+void
+dhd_bus_set_signature_path(struct dhd_bus *bus, char *sig_path)
+{
+}
+
 #define DBUS_NRXQ	50
 #define DBUS_NTXQ	100
 
@@ -2762,14 +2786,12 @@ dhd_dbus_state_change(void *handle, int state)
 {
 	dhd_pub_t *dhd = (dhd_pub_t *)handle;
 	unsigned long flags;
-	wifi_adapter_info_t *adapter;
 	int wowl_dngldown = 0;
 
 	if (dhd == NULL) {
 		DBUSERR(("%s: dhd is NULL\n", __FUNCTION__));
 		return;
 	}
-	adapter = (wifi_adapter_info_t *)dhd->adapter;
 #ifdef WL_EXT_WOWL
 	wowl_dngldown = dhd_conf_wowl_dngldown(dhd);
 #endif
@@ -2868,6 +2890,33 @@ static dbus_callbacks_t dhd_dbus_cbs = {
 	dhd_dbus_pktget,
 	dhd_dbus_pktfree
 };
+
+/* Get Chip ID version */
+uint
+dhd_bus_chip_id(dhd_pub_t *dhdp)
+{
+	dhd_bus_t *bus = dhdp->bus;
+	ASSERT(bus != NULL);
+	return bus->pub.attrib.devid;
+}
+
+/* Get Chip Rev ID version */
+uint
+dhd_bus_chiprev_id(dhd_pub_t *dhdp)
+{
+	dhd_bus_t *bus = dhdp->bus;
+	ASSERT(bus);
+	ASSERT(bus != NULL);
+	return bus->pub.attrib.chiprev;
+}
+
+/* Get Chip Pkg ID version */
+uint
+dhd_bus_chippkg_id(dhd_pub_t *dhdp)
+{
+	return 0;
+
+}
 
 uint
 dhd_bus_chip(struct dhd_bus *bus)
@@ -3103,7 +3152,7 @@ dhd_bus_devreset(dhd_pub_t *dhdp, uint8 flag)
 
 void
 dhd_bus_update_fw_nv_path(struct dhd_bus *bus, char *pfw_path,
-	char *pnv_path, char *pclm_path, char *pconf_path)
+	char *pnv_path)
 {
 	DBUSTRACE(("%s\n", __FUNCTION__));
 
@@ -3114,10 +3163,8 @@ dhd_bus_update_fw_nv_path(struct dhd_bus *bus, char *pfw_path,
 
 	bus->fw_path = pfw_path;
 	bus->nv_path = pnv_path;
-	bus->dhd->clm_path = pclm_path;
-	bus->dhd->conf_path = pconf_path;
 
-	dhd_conf_set_path_params(bus->dhd, bus->fw_path, bus->nv_path);
+	dhd_conf_set_path_params(bus->dhd);
 
 }
 
@@ -3205,7 +3252,7 @@ dbus_suspend(void *context)
 	} else {
 		bus->last_suspend_end_time = OSL_LOCALTIME_NS();
 	}
-	bus->dhd->hostsleep = 2;
+	bus->dhd->hostsleep = HOSTSLEEP_DHD_SET;
 	DHD_BUS_BUSY_CLEAR_SUSPEND_IN_PROGRESS(bus->dhd);
 	dhd_os_busbusy_wake(bus->dhd);
 	DHD_LINUX_GENERAL_UNLOCK(bus->dhd, flags);
@@ -3243,7 +3290,7 @@ dbus_resume(void *context)
 
 	DHD_LINUX_GENERAL_LOCK(bus->dhd, flags);
 	DHD_BUS_BUSY_CLEAR_RESUME_IN_PROGRESS(bus->dhd);
-	bus->dhd->hostsleep = 0;
+	bus->dhd->hostsleep = HOSTSLEEP_CLEAR;
 	bus->dhd->busstate = DHD_BUS_DATA;
 	dhd_os_busbusy_wake(bus->dhd);
 	/* resume all interface network queue. */
@@ -3363,7 +3410,7 @@ dhd_dbus_probe_cb(uint16 bus_no, uint16 slot, uint32 hdrlen)
 	}
 	else if (net_attached && (pub->up == 1) && (dlneeded == 0)) {
 		// kernel resume case
-		pub->hostsleep = 0;
+		pub->hostsleep = HOSTSLEEP_CLEAR;
 		ret = dhd_dbus_sync_dongle(pub, dlneeded);
 #ifdef WL_CFG80211
 		__wl_cfg80211_up_resume(pub);

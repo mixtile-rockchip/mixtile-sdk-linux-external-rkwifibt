@@ -1,7 +1,26 @@
 /*
  * Broadcom Dongle Host Driver (DHD), RTT
  *
- * Copyright (C) 2022, Broadcom.
+ * Copyright (C) 2025 Synaptics Incorporated. All rights reserved.
+ *
+ * This software is licensed to you under the terms of the
+ * GNU General Public License version 2 (the "GPL") with Broadcom special exception.
+ *
+ * INFORMATION CONTAINED IN THIS DOCUMENT IS PROVIDED "AS-IS," AND SYNAPTICS
+ * EXPRESSLY DISCLAIMS ALL EXPRESS AND IMPLIED WARRANTIES, INCLUDING ANY
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE,
+ * AND ANY WARRANTIES OF NON-INFRINGEMENT OF ANY INTELLECTUAL PROPERTY RIGHTS.
+ * IN NO EVENT SHALL SYNAPTICS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, PUNITIVE, OR CONSEQUENTIAL DAMAGES ARISING OUT OF OR IN CONNECTION
+ * WITH THE USE OF THE INFORMATION CONTAINED IN THIS DOCUMENT, HOWEVER CAUSED
+ * AND BASED ON ANY THEORY OF LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * NEGLIGENCE OR OTHER TORTIOUS ACTION, AND EVEN IF SYNAPTICS WAS ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE. IF A TRIBUNAL OF COMPETENT JURISDICTION
+ * DOES NOT PERMIT THE DISCLAIMER OF DIRECT DAMAGES OR ANY OTHER DAMAGES,
+ * SYNAPTICS' TOTAL CUMULATIVE LIABILITY TO ANY PARTY SHALL NOT
+ * EXCEED ONE HUNDRED U.S. DOLLARS
+ *
+ * Copyright (C) 2025, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -373,7 +392,7 @@ static const struct ieee_80211_mcs_rate_info wl_mcs_info[] = {
  * Returns the rate in [Kbps] units for a caller supplied MCS/bandwidth/Nss/Sgi combination.
  *     'mcs' : a *single* spatial stream MCS (11n or 11ac)
  */
-uint
+static uint
 rate_mcs2rate(uint mcs, uint nss, uint bw, int sgi)
 {
 	const int ksps = 250; /* kilo symbols per sec, 4 us sym */
@@ -491,7 +510,7 @@ ftm_intvl2nsec(const wl_proxd_intvl_t *intvl)
 	return ret;
 }
 
-uint64
+static uint64
 ftm_intvl2usec(const wl_proxd_intvl_t *intvl)
 {
 	uint64 ret;
@@ -716,7 +735,7 @@ rtt_alloc_getset_buf(dhd_pub_t *dhd, wl_proxd_method_t method, wl_proxd_session_
 
 	*p_out_bufsize = 0;	/* init */
 	/* calculate the whole buffer size, including one reserve-tlv entry in the header */
-	proxd_iovsize = sizeof(wl_proxd_iov_t) + tlvs_bufsize;
+	proxd_iovsize = WL_PROXD_IOV_SET_ONE_BUF_LEN + tlvs_bufsize;
 
 	p_proxd_iov = (wl_proxd_iov_t *)MALLOCZ(dhd->osh, proxd_iovsize);
 	if (p_proxd_iov == NULL) {
@@ -1494,6 +1513,7 @@ dhd_rtt_nan_start_session(dhd_pub_t *dhd, rtt_target_info_t *rtt_target)
 	rtt_status_info_t *rtt_status = GET_RTTSTATE(dhd);
 	ftm_config_param_info_t ftm_params[FTM_MAX_PARAMS];
 	int ftm_param_cnt = 0;
+	nan_svc_info_t svc = {0, };
 
 	memset(ftm_params, 0, sizeof(ftm_params));
 
@@ -1532,14 +1552,17 @@ dhd_rtt_nan_start_session(dhd_pub_t *dhd, rtt_target_info_t *rtt_target)
 		goto done;
 	}
 
+	/* Other fields are 0 per on-stack initialization */
+	svc.num_ftm = rtt_target->num_frames_per_burst;
+
 	/* apply event mask */
 	dhd_rtt_set_ftm_config_param(ftm_params, &ftm_param_cnt, rtt_target,
 		WL_PROXD_TLV_ID_EVENT_MASK);
 	dhd_rtt_ftm_config(dhd, 0, NULL, 0, ftm_params, ftm_param_cnt);
 
-	DHD_RTT(("Trigger nan based range request\n"));
+	DHD_RTT_ERR(("Trigger nan based range request - n:%d\n", svc.num_ftm));
 	err = wl_cfgnan_trigger_ranging(bcmcfg_to_prmry_ndev(cfg),
-			cfg, ranging_inst, NULL, NAN_RANGE_REQ_CMD, TRUE);
+			cfg, ranging_inst, &svc, NAN_RANGE_REQ_CMD, TRUE);
 	if (unlikely(err)) {
 		goto done;
 	}
@@ -1726,6 +1749,7 @@ dhd_rtt_set_next_target_idx(dhd_pub_t *dhd, int start_idx)
 	return (int8)rtt_status->cur_idx;
 }
 
+#ifdef WL_NAN
 /* API to know if the all the targets provided in
  * startRTT call from framework are of type NAN
  */
@@ -1748,8 +1772,9 @@ dhd_rtt_is_taget_list_mode_nan(dhd_pub_t *dhd)
 exit:
 	return nan_mode;
 }
+#endif /* WL_NAN */
 
-void
+static void
 dhd_rtt_set_target_list_mode(dhd_pub_t *dhd)
 {
 	int8 idx;
@@ -2399,7 +2424,7 @@ dhd_rtt_set_geofence_setup_status(dhd_pub_t *dhd, bool inprog,
 	}
 }
 
-int
+static int
 dhd_rtt_sched_geofencing_target(dhd_pub_t *dhd)
 {
 	rtt_geofence_target_info_t  *geofence_target_info;

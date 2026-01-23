@@ -51,7 +51,7 @@ struct wl_event_q {
 	struct list_head eq_list;
 	u32 etype;
 	wl_event_msg_t emsg;
-	s8 edata[1];
+	s8 edata[BCM_FLEX_ARRAY];
 };
 
 typedef void(*EXT_EVENT_HANDLER) (struct net_device *dev, void *cb_argu,
@@ -167,10 +167,7 @@ wl_ext_event_enq_event(struct wl_event_params *event_params, u32 event,
 	if (data)
 		data_len = ntoh32(msg->datalen);
 	evtq_size = sizeof(struct wl_event_q) + data_len;
-	if (IS_ENABLED(CONFIG_PREEMPT_RT))
-		aflags = GFP_ATOMIC;
-	else
-		aflags = (in_atomic()) ? GFP_ATOMIC : GFP_KERNEL;
+	aflags = (in_atomic()) ? GFP_ATOMIC : GFP_KERNEL;
 	e = kzalloc(evtq_size, aflags);
 	if (unlikely(!e)) {
 		EVENT_ERROR("wlan", "event alloc failed\n");

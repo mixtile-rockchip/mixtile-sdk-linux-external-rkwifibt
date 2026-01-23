@@ -1,7 +1,26 @@
 /*
  * Linux cfg80211 driver - Android related functions
  *
- * Copyright (C) 2022, Broadcom.
+ * Copyright (C) 2025 Synaptics Incorporated. All rights reserved.
+ *
+ * This software is licensed to you under the terms of the
+ * GNU General Public License version 2 (the "GPL") with Broadcom special exception.
+ *
+ * INFORMATION CONTAINED IN THIS DOCUMENT IS PROVIDED "AS-IS," AND SYNAPTICS
+ * EXPRESSLY DISCLAIMS ALL EXPRESS AND IMPLIED WARRANTIES, INCLUDING ANY
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE,
+ * AND ANY WARRANTIES OF NON-INFRINGEMENT OF ANY INTELLECTUAL PROPERTY RIGHTS.
+ * IN NO EVENT SHALL SYNAPTICS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, PUNITIVE, OR CONSEQUENTIAL DAMAGES ARISING OUT OF OR IN CONNECTION
+ * WITH THE USE OF THE INFORMATION CONTAINED IN THIS DOCUMENT, HOWEVER CAUSED
+ * AND BASED ON ANY THEORY OF LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * NEGLIGENCE OR OTHER TORTIOUS ACTION, AND EVEN IF SYNAPTICS WAS ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE. IF A TRIBUNAL OF COMPETENT JURISDICTION
+ * DOES NOT PERMIT THE DISCLAIMER OF DIRECT DAMAGES OR ANY OTHER DAMAGES,
+ * SYNAPTICS' TOTAL CUMULATIVE LIABILITY TO ANY PARTY SHALL NOT
+ * EXCEED ONE HUNDRED U.S. DOLLARS
+ *
+ * Copyright (C) 2025, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -20,9 +39,8 @@
  *
  * <<Broadcom-WL-IPTag/Dual:>>
  */
-
-#ifndef _wl_android_
-#define _wl_android_
+#ifndef _wl_android_h_
+#define _wl_android_h_
 
 #include <linux/module.h>
 #include <linux/netdevice.h>
@@ -91,6 +109,7 @@ typedef struct _compat_android_wifi_priv_cmd {
 #define ANDROID_AMPDU_LEVEL	(1 << 9)
 #define ANDROID_TVPM_LEVEL	(1 << 10)
 #define ANDROID_BTC_LEVEL	(1 << 11)
+#define ANDROID_SWDIV_LEVEL	(1 << 12)
 #define ANDROID_MSG_LEVEL	(1 << 0)
 
 #define WL_MSG(name, arg1, args...) \
@@ -269,4 +288,5 @@ extern int wl_android_bcnrecv_event(struct net_device *ndev,
 extern int wl_android_set_he_6g_band(struct net_device *dev, bool enable);
 #endif /* CUSTOM_CONTROL_HE_6G_FEATURES */
 extern int wl_android_rcroam_turn_on(struct net_device *dev, int rcroam_enab);
-#endif /* _wl_android_ */
+
+#endif /* _wl_android_h_ */

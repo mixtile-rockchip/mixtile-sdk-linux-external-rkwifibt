@@ -1,7 +1,26 @@
 /*
  * Wifi Virtual Interface implementaion
  *
- * Copyright (C) 2022, Broadcom.
+ * Copyright (C) 2025 Synaptics Incorporated. All rights reserved.
+ *
+ * This software is licensed to you under the terms of the
+ * GNU General Public License version 2 (the "GPL") with Broadcom special exception.
+ *
+ * INFORMATION CONTAINED IN THIS DOCUMENT IS PROVIDED "AS-IS," AND SYNAPTICS
+ * EXPRESSLY DISCLAIMS ALL EXPRESS AND IMPLIED WARRANTIES, INCLUDING ANY
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE,
+ * AND ANY WARRANTIES OF NON-INFRINGEMENT OF ANY INTELLECTUAL PROPERTY RIGHTS.
+ * IN NO EVENT SHALL SYNAPTICS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, PUNITIVE, OR CONSEQUENTIAL DAMAGES ARISING OUT OF OR IN CONNECTION
+ * WITH THE USE OF THE INFORMATION CONTAINED IN THIS DOCUMENT, HOWEVER CAUSED
+ * AND BASED ON ANY THEORY OF LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * NEGLIGENCE OR OTHER TORTIOUS ACTION, AND EVEN IF SYNAPTICS WAS ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE. IF A TRIBUNAL OF COMPETENT JURISDICTION
+ * DOES NOT PERMIT THE DISCLAIMER OF DIRECT DAMAGES OR ANY OTHER DAMAGES,
+ * SYNAPTICS' TOTAL CUMULATIVE LIABILITY TO ANY PARTY SHALL NOT
+ * EXCEED ONE HUNDRED U.S. DOLLARS
+ *
+ * Copyright (C) 2025, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -40,9 +59,6 @@
 #ifdef WL_NAN
 #include <wl_cfgnan.h>
 #endif /* WL_NAN */
-#ifdef WL_BAM
-#include <wl_bam.h>
-#endif  /* WL_BAM */
 
 #ifdef SUPPORT_AP_RADIO_PWRSAVE
 #define RADIO_PWRSAVE_PPS               10
@@ -193,18 +209,6 @@ extern s32 wl_cfg80211_change_virtual_iface(struct wiphy *wiphy, struct net_devi
 #endif /* (LINUX_VERSION_CODE < KERNEL_VERSION(4, 12, 0) */
 	struct vif_params *params);
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 6, 0)) || \
-	defined(WL_COMPAT_WIRELESS)
-s32
-wl_cfg80211_set_channel(struct wiphy *wiphy, struct net_device *dev,
-	struct ieee80211_channel *chan,
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 6, 0))
-	enum nl80211_channel_type channel_type
-#else
-	enum nl80211_chan_width width
-#endif
-);
-#endif /* ((LINUX_VERSION < VERSION(3, 6, 0)) || WL_COMPAT_WIRELESS */
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 4, 0)) || defined(WL_COMPAT_WIRELESS)
 extern s32 wl_cfg80211_start_ap(struct wiphy *wiphy, struct net_device *dev,
 		struct cfg80211_ap_settings *info);
@@ -257,13 +261,6 @@ wl_cfg80211_add_virtual_iface(struct wiphy *wiphy,
 #endif /* LINUX_VERSION_CODE < KERNEL_VERSION(4, 12, 0) */
 	struct vif_params *params);
 extern s32 wl_cfg80211_del_virtual_iface(struct wiphy *wiphy, bcm_struct_cfgdev *cfgdev);
-extern s32 wl_cfg80211_change_beacon(struct wiphy *wiphy, struct net_device *dev,
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 7, 0))
-	struct cfg80211_ap_update *ap_info
-#else
-	struct cfg80211_beacon_data *info
-#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(6, 7, 0) */
-);
 
 extern s32 wl_get_auth_assoc_status(struct bcm_cfg80211 *cfg, struct net_device *ndev,
 	const wl_event_msg_t *e, void *data);
@@ -300,10 +297,31 @@ chanspec_t wl_cfg80211_get_ap_bw_limited_chspec(struct bcm_cfg80211 *cfg,
 int wl_cfg80211_set_softap_bw(struct bcm_cfg80211 *cfg, uint32 band, uint32 limit);
 #endif /* LIMIT_AP_BW */
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION (3, 8, 0))
-extern int wl_chspec_chandef(chanspec_t chanspec,
-	struct cfg80211_chan_def *chandef, struct wiphy *wiphy);
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0))
+extern void wl_cfgvif_delayed_remove_iface_work(struct work_struct *work);
+#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0) */
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION (3, 5, 0))
+extern int wl_chspec_chandef(struct net_device *dev, chanspec_t chanspec,
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 8, 0))
+	struct cfg80211_chan_def *chandef,
+#else
+	struct chan_info *chaninfo,
+#endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 8, 0)) */
+	struct wiphy *wiphy);
 #endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION (3, 8, 0))) */
 extern chanspec_t
 wl_channel_to_chanspec(struct wiphy *wiphy, struct net_device *dev, u32 channel, u32 bw_cap);
+s32
+wl_cfg80211_set_channel(struct wiphy *wiphy, struct net_device *dev,
+	struct ieee80211_channel *chan,
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 6, 0))
+	enum nl80211_channel_type channel_type
+#else
+	enum nl80211_chan_width width
+#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(3, 6, 0) */
+);
+#ifdef PRIMARY_IFACE_ROLE_FIX
+void wl_cfg80211_role_change(struct net_device *dev);
+#endif /* PRIMARY_IFACE_ROLE_FIX */
 #endif /* _wl_cfgvif_h_ */

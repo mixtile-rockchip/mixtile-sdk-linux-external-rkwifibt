@@ -1,7 +1,26 @@
 /*
  * Header for Linux cfg80211 scan
  *
- * Copyright (C) 2022, Broadcom.
+ * Copyright (C) 2025 Synaptics Incorporated. All rights reserved.
+ *
+ * This software is licensed to you under the terms of the
+ * GNU General Public License version 2 (the "GPL") with Broadcom special exception.
+ *
+ * INFORMATION CONTAINED IN THIS DOCUMENT IS PROVIDED "AS-IS," AND SYNAPTICS
+ * EXPRESSLY DISCLAIMS ALL EXPRESS AND IMPLIED WARRANTIES, INCLUDING ANY
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE,
+ * AND ANY WARRANTIES OF NON-INFRINGEMENT OF ANY INTELLECTUAL PROPERTY RIGHTS.
+ * IN NO EVENT SHALL SYNAPTICS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, PUNITIVE, OR CONSEQUENTIAL DAMAGES ARISING OUT OF OR IN CONNECTION
+ * WITH THE USE OF THE INFORMATION CONTAINED IN THIS DOCUMENT, HOWEVER CAUSED
+ * AND BASED ON ANY THEORY OF LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * NEGLIGENCE OR OTHER TORTIOUS ACTION, AND EVEN IF SYNAPTICS WAS ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE. IF A TRIBUNAL OF COMPETENT JURISDICTION
+ * DOES NOT PERMIT THE DISCLAIMER OF DIRECT DAMAGES OR ANY OTHER DAMAGES,
+ * SYNAPTICS' TOTAL CUMULATIVE LIABILITY TO ANY PARTY SHALL NOT
+ * EXCEED ONE HUNDRED U.S. DOLLARS
+ *
+ * Copyright (C) 2025, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -68,7 +87,7 @@ extern s32 wl_do_escan(struct bcm_cfg80211 *cfg, struct wiphy *wiphy,
 	struct net_device *ndev, struct cfg80211_scan_request *request);
 extern s32 __wl_cfg80211_scan(struct wiphy *wiphy, struct net_device *ndev,
 	struct cfg80211_scan_request *request, struct cfg80211_ssid *this_ssid);
-#if defined(WL_CFG80211_P2P_DEV_IF)
+#if defined(WL_CFG80211_P2P_DEV_IF) || (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 6, 0))
 extern s32 wl_cfg80211_scan(struct wiphy *wiphy, struct cfg80211_scan_request *request);
 #else
 extern s32 wl_cfg80211_scan(struct wiphy *wiphy, struct net_device *ndev,
@@ -76,7 +95,7 @@ extern s32 wl_cfg80211_scan(struct wiphy *wiphy, struct net_device *ndev,
 extern int wl_cfg80211_scan_stop(struct bcm_cfg80211 *cfg, bcm_struct_cfgdev *cfgdev);
 #endif /* WL_CFG80211_P2P_DEV_IF */
 
-#if defined(OEM_ANDROID) && defined(DHCP_SCAN_SUPPRESS)
+#if defined(DHCP_SCAN_SUPPRESS)
 extern void wl_cfg80211_work_handler(struct work_struct *work);
 extern void wl_cfg80211_scan_supp_timerfunc(ulong data);
 #endif /* DHCP_SCAN_SUPPRESS */
@@ -213,8 +232,10 @@ typedef struct ap_oper_data {
 extern void wl_get_ap_chanspecs(struct bcm_cfg80211 *cfg, wl_ap_oper_data_t *ap_data);
 
 extern int wl_android_get_sta_channel(struct bcm_cfg80211 *cfg);
+#ifdef WL_SUPPORT_AUTO_CHANNEL
 extern int wl_handle_acs_concurrency_cases(struct bcm_cfg80211 *cfg,
 		drv_acs_params_t *parameter, int qty, uint32 *pList);
+#endif /* WL_SUPPORT_AUTO_CHANNEL */
 #ifdef WL_SCHED_SCAN
 extern void wl_cfgscan_sched_scan_stop_work(struct work_struct *work);
 #endif /* WL_SCHED_SCAN */
@@ -230,8 +251,7 @@ void set_roam_band(int band);
 #endif /* ESCAN_CHANNEL_CACHE */
 
 #ifdef WL11U
-extern bcm_tlv_t * 
-wl_cfg80211_find_interworking_ie(const u8 *parse, u32 len);
+extern bcm_tlv_t * wl_cfg80211_find_interworking_ie(const u8 *parse, u32 len);
 extern s32
 wl_cfg80211_add_iw_ie(struct bcm_cfg80211 *cfg, struct net_device *ndev, s32 bssidx, s32 pktflag,
 	uint8 ie_id, uint8 *data, uint8 data_len);
@@ -242,4 +262,11 @@ wl_cfg80211_clear_iw_ie(struct bcm_cfg80211 *cfg, struct net_device *ndev, s32 b
 #define FW_MAJOR_VER_PFN_CHSPEC_SUPPORTED(ver) \
 	((ver.wlc_ver_major > 12) || \
 	((ver.wlc_ver_major == 12) && (ver.wlc_ver_minor >= 3))) //43756E
+
+#ifdef ROAM_CHANNEL_CACHE
+extern int init_roam_cache(struct bcm_cfg80211 *cfg, int ioctl_ver);
+extern void print_roam_cache(struct bcm_cfg80211 *cfg);
+extern void wl_update_roamscan_cache_by_band(struct net_device *dev, int band);
+#endif /* ROAM_CHANNEL_CACHE */
+
 #endif /* _wl_cfgscan_h_ */

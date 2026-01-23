@@ -1,7 +1,26 @@
 /*
  * Linux cfg80211 driver
  *
- * Copyright (C) 2022, Broadcom.
+ * Copyright (C) 2025 Synaptics Incorporated. All rights reserved.
+ *
+ * This software is licensed to you under the terms of the
+ * GNU General Public License version 2 (the "GPL") with Broadcom special exception.
+ *
+ * INFORMATION CONTAINED IN THIS DOCUMENT IS PROVIDED "AS-IS," AND SYNAPTICS
+ * EXPRESSLY DISCLAIMS ALL EXPRESS AND IMPLIED WARRANTIES, INCLUDING ANY
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE,
+ * AND ANY WARRANTIES OF NON-INFRINGEMENT OF ANY INTELLECTUAL PROPERTY RIGHTS.
+ * IN NO EVENT SHALL SYNAPTICS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, PUNITIVE, OR CONSEQUENTIAL DAMAGES ARISING OUT OF OR IN CONNECTION
+ * WITH THE USE OF THE INFORMATION CONTAINED IN THIS DOCUMENT, HOWEVER CAUSED
+ * AND BASED ON ANY THEORY OF LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * NEGLIGENCE OR OTHER TORTIOUS ACTION, AND EVEN IF SYNAPTICS WAS ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE. IF A TRIBUNAL OF COMPETENT JURISDICTION
+ * DOES NOT PERMIT THE DISCLAIMER OF DIRECT DAMAGES OR ANY OTHER DAMAGES,
+ * SYNAPTICS' TOTAL CUMULATIVE LIABILITY TO ANY PARTY SHALL NOT
+ * EXCEED ONE HUNDRED U.S. DOLLARS
+ *
+ * Copyright (C) 2025, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -77,9 +96,6 @@
 #ifdef WL_NAN
 #include <wl_cfgnan.h>
 #endif /* WL_NAN */
-#ifdef WL_BAM
-#include <wl_bam.h>
-#endif  /* WL_BAM */
 #include <dhd_dbg.h>
 
 struct wl_conf;
@@ -104,6 +120,15 @@ struct wl_ibss;
 #error "WL_SAE is for dongle-offload and WL_CLIENT_SAE is for wpa_supplicant. Please choose one."
 #endif
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 10, 0))
+#undef WL_6G_BAND
+#undef WL_5P9G
+#undef WL_P2P_6G
+#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(3, 10, 0) */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 3, 0))
+#undef WL_SUPPORT_BACKPORTED_KPATCHES
+#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(3, 3, 0) */
+
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 17, 0))
 #ifndef WL_CLIENT_SAE
 #define WL_CLIENT_SAE
@@ -119,10 +144,8 @@ struct wl_ibss;
 #define WL_GCMP_SUPPORT
 #endif /* WL_GCMP_SUPPORT */
 
-#ifdef OEM_ANDROID
 /* mandatory for Android 11 */
 #define WL_ACT_FRAME_MAC_RAND
-#endif
 
 /* WPA3 R2 */
 #ifndef WL_SAE_FT
@@ -137,12 +160,8 @@ struct wl_ibss;
 #endif /* WL_SAE */
 #endif /* WL_CLIENT_SAE */
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 17, 0) && !defined(WL_SAE))
-#define WL_SAE
-#endif /* LINUX_VERSION_CODE >= (4, 17, 0) && !(WL_SAE) */
-
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 17, 0)) && !defined(WL_DISABLE_SCAN_TYPE) \
-	&& !defined(WL_SCAN_TYPE)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 17, 0)) && !defined(WL_DISABLE_SCAN_TYPE) && \
+	!defined(WL_SCAN_TYPE)
 #define WL_SCAN_TYPE
 #endif /* WL_SCAN_TYPE */
 
@@ -160,10 +179,8 @@ struct wl_ibss;
 #define WL_SELF_MANAGED_REGDOM
 #endif /* KERNEL >= 4.0 */
 
-#ifdef OEM_ANDROID
 /* mandatory for Android 11 */
 #define WL_ACT_FRAME_MAC_RAND
-#endif
 
 #if defined(WL_6G_BAND) && !defined(WL_DISABLE_SOFTAP_6G)
 /* Unless exlicitly disabled, enable softap 6G when 6G band support is present */
@@ -438,36 +455,23 @@ extern char *dhd_log_dump_get_timestamp(void);
 #endif /* SUPPORT_AP_RADIO_PWRSAVE */
 
 #ifdef BCMWAPI_WPI
-#ifdef OEM_ANDROID
+#undef NL80211_WAPI_VERSION_1
+#define NL80211_WAPI_VERSION_1		0
+
 #ifdef CFG80211_WAPI_BKPORT
-#define IS_WAPI_VER(version) (version == NL80211_WAPI_VERSION_1)
 #undef WLAN_AKM_SUITE_WAPI_PSK
 #define WLAN_AKM_SUITE_WAPI_PSK			0x000FAC13
 #undef WLAN_AKM_SUITE_WAPI_CERT
 #define WLAN_AKM_SUITE_WAPI_CERT		0x000FAC14
 #else
-#undef NL80211_WAPI_VERSION_1
-#define NL80211_WAPI_VERSION_1		0
-
 #undef WLAN_AKM_SUITE_WAPI_PSK
 #define WLAN_AKM_SUITE_WAPI_PSK		0x000FACFE /* WAPI */
 
 #undef WLAN_AKM_SUITE_WAPI_CERT
 #define WLAN_AKM_SUITE_WAPI_CERT	0x000FACFF /* WAPI */
+#endif /* CFG80211_WAPI_BKPORT */
 
 #define IS_WAPI_VER(version) (version == NL80211_WAPI_VERSION_1)
-#endif /* CFG80211_WAPI_BKPORT */
-#else
-#undef WLAN_AKM_SUITE_WAPI_PSK
-#define WLAN_AKM_SUITE_WAPI_PSK         0x000FAC13
-
-#undef WLAN_AKM_SUITE_WAPI_CERT
-#define WLAN_AKM_SUITE_WAPI_CERT        0x000FAC14
-
-#undef NL80211_WAPI_VERSION_1
-#define NL80211_WAPI_VERSION_1			1 << 3
-#define IS_WAPI_VER(version) (version & NL80211_WAPI_VERSION_1)
-#endif /* OEM_ANDROID */
 #endif /* BCMWAPI_WPI */
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 0, 0))
@@ -637,6 +641,9 @@ do {	\
 #define WL_ERR_EX(x) WL_ERR_EX_MSG x
 #define	WL_MEM_MSG(x, args...)	\
 do {	\
+	if (wl_dbg_level & WL_DBG_DBG) {			\
+		printf(CFG80211_DEBUG_TEXT "%s : " x, __func__, ## args); \
+	}									\
 	if (wl_log_level & WL_DBG_ERR) {	\
 		DHD_LOG_DUMP_WRITE_TS_FN;	\
 		DHD_LOG_DUMP_WRITE(x, ## args);	\
@@ -688,8 +695,8 @@ do {	\
 		if (__err_ts == 0 || (__cur_ts > __err_ts && \
 		(__cur_ts - __err_ts > WL_PRINT_RATE_LIMIT_PERIOD))) { \
 			__err_ts = __cur_ts; \
-			WL_DBG(args);	\
-			WL_DBG(("[Repeats %u times]\n", __err_cnt)); \
+			WL_ERR(args);	\
+			WL_ERR(("[Repeats %u times]\n", __err_cnt)); \
 			__err_cnt = 0; \
 		} else { \
 			++__err_cnt; \
@@ -756,13 +763,6 @@ do {									\
 #define WL_PNO(x) WL_PNO_MSG x
 
 #define WL_SD(x)
-
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 7, 0))
-#define ieee80211_band nl80211_band
-#define IEEE80211_BAND_2GHZ NL80211_BAND_2GHZ
-#define IEEE80211_BAND_5GHZ NL80211_BAND_5GHZ
-#define IEEE80211_NUM_BANDS NUM_NL80211_BANDS
-#endif
 
 #define WL_SCAN_RETRY_MAX   3
 #define WL_NUM_PMKIDS_MAX   MAXPMKID
@@ -856,6 +856,10 @@ do {									\
 #define WLAN_AKM_SUITE_FT_8021X			0x000FAC03
 #endif /* WLAN_AKM_SUITE_FT_8021X */
 
+#ifndef WLAN_AKM_SUITE_PSK_SHA256
+#define WLAN_AKM_SUITE_PSK_SHA256			0x000FAC06
+#endif /* WLAN_AKM_SUITE_PSK_SHA256 */
+
 #ifndef WLAN_AKM_SUITE_FT_PSK
 #define WLAN_AKM_SUITE_FT_PSK			0x000FAC04
 #endif /* WLAN_AKM_SUITE_FT_PSK */
@@ -908,6 +912,9 @@ do {									\
 
 #define WL_PM_ENABLE_TIMEOUT 10000
 
+/* max retries for generating non-duplicate macaddr */
+#define WL_RAND_MAC_RETRIES               5u
+
 /* cfg80211 wowlan definitions */
 #define WL_WOWLAN_MAX_PATTERNS			8
 #define WL_WOWLAN_MIN_PATTERN_LEN		1
@@ -935,6 +942,7 @@ do {									\
 #endif
 
 /* Join pref defines */
+#define JOIN_PREF_RSSI_LEN              0x02
 #define JOIN_PREF_RSSI_SIZE		4	/* RSSI pref header size in bytes */
 #define JOIN_PREF_WPA_HDR_SIZE		4	/* WPA pref header size in bytes */
 #define JOIN_PREF_WPA_TUPLE_SIZE	12	/* Tuple size in bytes */
@@ -1103,6 +1111,8 @@ typedef enum wl_interface_state {
 	WL_IF_DELETE_DONE,
 	WL_IF_CHANGE_REQ,
 	WL_IF_CHANGE_DONE,
+	WL_IF_NAN_ENABLE,
+	WL_IF_NAN_DISABLE,
 	WL_IF_STATE_MAX,	/* Retain as last one */
 } wl_interface_state_t;
 
@@ -1259,7 +1269,7 @@ struct wl_event_q {
 	u32 id;			/* counter to track events */
 	wl_event_msg_t emsg;
 	u32 datalen;
-	s8 edata[1];
+	s8 edata[BCM_FLEX_ARRAY];
 };
 
 /* security information with currently associated ap */
@@ -1495,6 +1505,13 @@ struct wl_assoc_ielen {
 #define WLC_PMKLIST_V3_SUPPORT(ver) \
 	((ver.wlc_ver_major >= MIN_PMKID_LIST_V3_FW_MAJOR) || \
 	 NEW_PMK_MGR_API_BACK_PORTED(ver))
+
+#define WLC_PMKLIST_V2_API_BACK_PORTED(ver)  \
+	((ver.wlc_ver_major == 4) && (ver.wlc_ver_minor >= 3))
+
+#define WLC_PMKLIST_V2_SUPPORT(ver) \
+	((ver.wlc_ver_major == MIN_PMKID_LIST_V2_FW_MAJOR) || \
+	 WLC_PMKLIST_V2_API_BACK_PORTED(ver))
 
 /* wpa2 pmk list */
 struct wl_pmk_list {
@@ -2142,24 +2159,20 @@ struct bcm_cfg80211 {
 #endif /* WL_HOST_BAND_MGMT */
 	bool scan_suppressed;
 
-#ifdef OEM_ANDROID
 	timer_list_compat_t scan_supp_timer;
 	struct work_struct wlan_work;
-#endif /* OEM_ANDROID */
 
 	struct mutex event_sync;	/* maily for up/down synchronization */
 	bool disable_roam_event;
 	struct delayed_work pm_enable_work;
 	struct delayed_work recovery_work;
+#ifdef PROP_TXSTATUS_VSDB
+	struct delayed_work wlfc_work;
+#endif /* PROP_TXSTATUS_VSDB */
 	u32 recovery_state;
 
-#ifdef OEM_ANDROID
 	struct workqueue_struct *event_workq;   /* workqueue for event */
-#endif /* OEM_ANDROID */
 
-#ifndef OEM_ANDROID
-	bool event_workq_init;
-#endif /* OEM_ANDROID */
 	struct work_struct event_work;		/* work item for event */
 	struct mutex pm_sync;	/* mainly for pm work synchronization */
 
@@ -2232,6 +2245,10 @@ struct bcm_cfg80211 {
 #endif /* CUSTOMER_SCAN_TIMEOUT_SETTING */
 #endif /* WES_SUPPORT */
 	uint8 vif_count;	/* Virtual Interface count */
+	uint8 vndev_count;	/* Virtual network device count */
+	uint8 twt_count;
+	uint16 twt_if_bitmap;
+	bool twt_auto_sched;
 #ifdef WBTEXT
 	struct list_head wbtext_bssid_list;
 #endif /* WBTEXT */
@@ -2249,9 +2266,6 @@ struct bcm_cfg80211 {
 	spinlock_t wps_sync;	/* to protect wps states (and others if needed) */
 #endif /* WL_WPS_SYNC */
 	struct wl_fils_info fils_info;
-#ifdef WL_BAM
-	wl_bad_ap_mngr_t bad_ap_mngr;
-#endif  /* WL_BAM */
 
 	uint8 scanmac_enabled;
 	bool scanmac_config;
@@ -2298,7 +2312,7 @@ struct bcm_cfg80211 {
 	uint16  actframe_params_ver;
 	struct ether_addr af_randmac;
 	bool randomized_gas_tx;
-	u8 country[WLC_CNTRY_BUF_SZ];
+	u8 country[WLC_CNTRY_BUF_SZ + 1];
 	u8 latency_mode;
 #ifdef WL_MBO_HOST
 	void *btmreq;
@@ -2357,12 +2371,21 @@ struct bcm_cfg80211 {
 	bool p2p_6g_enabled;	/* P2P 6G support enabled */
 #endif /* WL_P2P_6G */
 	u32 authresp_status;
+	struct delayed_work	remove_iface_work;
+	/* to track the wiphy lock held context for deleting iface */
+	bool wiphy_lock_held;
+	/* Original btc mode - TODO */
+	uint32 prev_btc_mode;
+	struct delayed_work	coex_dis_work;
 #ifdef BCMDBUS
 	bool bus_resuming;
 #endif /* BCMDBUS */
 #ifdef WL_ROAM_WAR
 	struct ether_addr roaming_bssid;
 #endif /* WL_ROAM_WAR */
+#ifdef WL_HOST_ROAM_WAR
+	bool fake_connected;
+#endif /* WL_HOST_ROAM_WAR */
 #if defined(RSSIAVG)
 	wl_rssi_cache_ctrl_t g_rssi_cache_ctrl;
 	wl_rssi_cache_ctrl_t g_connected_rssi_cache_ctrl;
@@ -2430,6 +2453,31 @@ typedef struct wl_wips_event_info {
 	int16 deauth_RSSI;
 } wl_wips_event_info_t;
 
+/* Added for HOSTAPD required ACS action */
+#ifdef WL_SUPPORT_AUTO_CHANNEL
+#define APCS_MAX_RETRY        10
+#define APCS_DEFAULT_2G_CH    1
+#define APCS_DEFAULT_5G_CH    149
+#define APCS_DEFAULT_6G_CH    5
+
+enum wl_vendor_attr_acs_offload {
+	BRCM_VENDOR_ATTR_ACS_CHANNEL_INVALID = 0,
+	BRCM_VENDOR_ATTR_ACS_PRIMARY_FREQ,
+	BRCM_VENDOR_ATTR_ACS_SECONDARY_FREQ,
+	BRCM_VENDOR_ATTR_ACS_VHT_SEG0_CENTER_CHANNEL,
+	BRCM_VENDOR_ATTR_ACS_VHT_SEG1_CENTER_CHANNEL,
+
+	BRCM_VENDOR_ATTR_ACS_HW_MODE,
+	BRCM_VENDOR_ATTR_ACS_HT_ENABLED,
+	BRCM_VENDOR_ATTR_ACS_HT40_ENABLED,
+	BRCM_VENDOR_ATTR_ACS_VHT_ENABLED,
+	BRCM_VENDOR_ATTR_ACS_CHWIDTH,
+	BRCM_VENDOR_ATTR_ACS_CH_LIST,
+	BRCM_VENDOR_ATTR_ACS_FREQ_LIST,
+
+	BRCM_VENDOR_ATTR_ACS_LAST
+};
+
 /* defined for hw_mode in hostapd.conf */
 enum hostapd_hw_mode {
 	HOSTAPD_MODE_IEEE80211B,
@@ -2439,6 +2487,15 @@ enum hostapd_hw_mode {
 	HOSTAPD_MODE_IEEE80211ANY,
 	NUM_HOSTAPD_MODES
 };
+
+typedef struct acs_selected_channels {
+	u32 pri_freq; /* save slelcted primary frequency */
+	u32 sec_freq; /* save slelcted secondary frequency */
+	u8 vht_seg0_center_ch;
+	u8 vht_seg1_center_ch;
+	u16 ch_width;
+	enum hostapd_hw_mode hw_mode;
+} acs_selected_channels_t;
 
 typedef struct drv_acs_params {
 	enum hostapd_hw_mode hw_mode;
@@ -2455,51 +2512,22 @@ typedef struct drv_acs_params {
 	chanspec_t scc_chspec;
 } drv_acs_params_t;
 
+typedef struct acs_delay_work {
+	struct delayed_work acs_delay_work;
+	int init_flag;
+
+	struct net_device *ndev;
+	uint8  spect;
+	uint   wait_timeout;
+	chanspec_t ch_chosen;
+	drv_acs_params_t parameter;
+} acs_delay_work_t;
+#endif /* WL_SUPPORT_AUTO_CHANNEL */
+
 #define IS_5G_APCS_CHANNEL(channel) ((channel == 149) || \
 	(channel == 153) || \
 	(channel == 157) || \
 	(channel == 161))
-
-#ifdef WL_SOFTAP_ACS
-/* Added for HOSTAPD required ACS action */
-#define APCS_MAX_RETRY        10
-#define APCS_DEFAULT_2G_CH    1
-#define APCS_DEFAULT_5G_CH    149
-
-enum wl_vendor_attr_acs_offload {
-	BRCM_VENDOR_ATTR_ACS_CHANNEL_INVALID = 0,
-	BRCM_VENDOR_ATTR_ACS_PRIMARY_FREQ,
-	BRCM_VENDOR_ATTR_ACS_SECONDARY_FREQ,
-	BRCM_VENDOR_ATTR_ACS_VHT_SEG0_CENTER_CHANNEL,
-	BRCM_VENDOR_ATTR_ACS_VHT_SEG1_CENTER_CHANNEL,
-	BRCM_VENDOR_ATTR_ACS_HW_MODE,
-	BRCM_VENDOR_ATTR_ACS_HT_ENABLED,
-	BRCM_VENDOR_ATTR_ACS_HT40_ENABLED,
-	BRCM_VENDOR_ATTR_ACS_VHT_ENABLED,
-	BRCM_VENDOR_ATTR_ACS_CHWIDTH,
-	BRCM_VENDOR_ATTR_ACS_CH_LIST,
-	BRCM_VENDOR_ATTR_ACS_FREQ_LIST,
-
-	BRCM_VENDOR_ATTR_ACS_LAST
-};
-
-typedef struct acs_selected_channels {
-	u32 pri_freq; /* save slelcted primary frequency */
-	u32 sec_freq; /* save slelcted secondary frequency */
-	u8 vht_seg0_center_ch;
-	u8 vht_seg1_center_ch;
-	u16 ch_width;
-	enum hostapd_hw_mode hw_mode;
-} acs_selected_channels_t;
-
-typedef struct acs_delay_work {
-	struct delayed_work acs_delay_work;
-	u32 init_flag;
-	struct net_device *ndev;
-	chanspec_t ch_chosen;
-	drv_acs_params_t parameter;
-} acs_delay_work_t;
-#endif /* WL_SOFTAP_ACS */
 
 /* Struct used to populate fields needed for
 * wsec_info passphrase iovar config..
@@ -2689,11 +2717,17 @@ wl_alloc_netinfo(struct bcm_cfg80211 *cfg, struct net_device *ndev,
 	return err;
 }
 
+extern atomic_t reboot_in_progress;
 static inline void
 wl_delete_all_netinfo(struct bcm_cfg80211 *cfg)
 {
 	struct net_info *_net_info, *next;
 	unsigned long int flags;
+
+	if (OSL_ATOMIC_READ(cfg->osh, &reboot_in_progress) > -1) {
+		WL_ERR(("reboot_in_progress\n"));
+		return;
+	}
 
 	WL_CFG_NET_LIST_SYNC_LOCK(&cfg->net_list_sync, flags);
 	GCC_DIAGNOSTIC_PUSH_SUPPRESS_CAST();
@@ -2726,6 +2760,10 @@ wl_delete_all_netinfo(struct bcm_cfg80211 *cfg)
 		list_del(&_net_info->list);
 		if (_net_info->wdev) {
 			MFREE(cfg->osh, _net_info->wdev, sizeof(struct wireless_dev));
+			if (_net_info->wdev == cfg->wdev) {
+				/* On primary ndev clean up, mark it as null */
+				cfg->wdev = NULL;
+			}
 		}
 		MFREE(cfg->osh, _net_info, sizeof(struct net_info));
 	}
@@ -3192,8 +3230,13 @@ wl_iftype_to_str(int wl_iftype)
 #define scan_req_match(cfg)	(((cfg) && (cfg->scan_request) && \
 	(cfg->scan_request->dev == cfg->p2p_net)) ? true : false)
 #else
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 6, 0))
+#define scan_req_match(cfg)	(((cfg) && (cfg->scan_request) && \
+	(cfg->scan_request->wdev->netdev == cfg->p2p_net)) ? true : false)
+#else
 #define scan_req_match(cfg)	(((cfg) && p2p_is_on(cfg) && p2p_scan(cfg)) ? \
 	true : false)
+#endif /* LINUX_VERSION_CODE > KERNEL_VERSION(3, 6, 0) */
 #endif /* WL_CFG80211_P2P_DEV_IF */
 
 #define	PRINT_WDEV_INFO(cfgdev)	\
@@ -3340,13 +3383,14 @@ extern s32 wl_cfg80211_increase_p2p_bw(struct net_device *net, char* buf, int le
 #ifdef P2PLISTEN_AP_SAMECHN
 extern s32 wl_cfg80211_set_p2p_resp_ap_chn(struct net_device *net, s32 enable);
 #endif /* P2PLISTEN_AP_SAMECHN */
+#if defined(WL_NEWCFG_PRIVCMD_SUPPORT)
+extern bool wl_cfg80211_is_p2p_net(struct net_device * dev);
+#endif /* WL_NEWCFG_PRIVCMD_SUPPORT) */
 
-#if defined(OEM_ANDROID)
 /* btcoex functions */
 void* wl_cfg80211_btcoex_init(struct net_device *ndev);
 void wl_cfg80211_btcoex_deinit(void);
 void wl_cfg80211_btcoex_kill_handler(void);
-#endif /* defined(OEM_ANDROID) */
 
 extern chanspec_t wl_chspec_from_legacy(chanspec_t legacy_chspec);
 extern chanspec_t wl_chspec_driver_to_host(chanspec_t chanspec);
@@ -3399,7 +3443,7 @@ extern void wl_stop_wait_next_action_frame(struct bcm_cfg80211 *cfg, struct net_
 extern s32 wl_cfg80211_set_band(struct net_device *ndev, int band);
 #endif /* WL_HOST_BAND_MGMT */
 
-#if defined(OEM_ANDROID) && defined(DHCP_SCAN_SUPPRESS)
+#if defined(DHCP_SCAN_SUPPRESS)
 extern int wl_cfg80211_scan_suppress(struct net_device *dev, int suppress);
 #endif /* OEM_ANDROID */
 
@@ -3534,6 +3578,7 @@ extern void wl_cfg80211_del_p2p_wdev(struct net_device *dev);
 
 #ifdef P2P_LISTEN_OFFLOADING
 extern s32 wl_cfg80211_p2plo_deinit(struct bcm_cfg80211 *cfg);
+extern void wl_cfg80211_cancel_p2plo(struct bcm_cfg80211 *cfg);
 #endif /* P2P_LISTEN_OFFLOADING */
 
 /* Function to flush the FW log buffer content */
@@ -3622,10 +3667,6 @@ extern int wl_cfg80211_stop_mkeep_alive(struct net_device *ndev, struct bcm_cfg8
 extern s32 wl_cfg80211_handle_macaddr_change(struct net_device *dev, u8 *macaddr);
 extern int wl_cfg80211_handle_hang_event(struct net_device *ndev,
 	uint16 hang_reason, uint32 memdump_type);
-#ifndef OEM_ANDROID
-extern s32 wl_cfg80211_resume(struct bcm_cfg80211 *cfg);
-extern s32 wl_cfg80211_suspend(struct bcm_cfg80211 *cfg);
-#endif /* !OEM_ANDROID */
 bool wl_cfg80211_is_dpp_frame(void *frame, u32 frame_len);
 const char *get_dpp_pa_ftype(enum wl_dpp_ftype ftype);
 bool wl_cfg80211_is_dpp_gas_action(void *frame, u32 frame_len);
@@ -3638,6 +3679,16 @@ extern void update_roam_cache(struct bcm_cfg80211 *cfg, int ioctl_ver);
 extern int wl_cfgnan_get_stats(struct bcm_cfg80211 *cfg);
 #endif /* WL_NAN */
 
+#ifdef PROP_TXSTATUS_VSDB
+void
+wl_cfg80211_set_wlfc(struct net_device * dev, bool enable);
+void
+wl_wlfc_toggle_check(struct bcm_cfg80211 *cfg);
+#if defined(WL_TWT) || defined(WL_TWT_HAL_IF)
+void
+wl_cfg80211_twt_update(struct net_device * dev, uint16 cmd);
+#endif /* WL_TWT_HAL_IF || WL_TWT */
+#endif /* PROP_TXSTATUS_VSDB */
 extern s32 wl_cfg80211_set_wsec_info(struct net_device *dev, uint32 *data,
 	uint16 data_len, int tag);
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 16, 0))
@@ -3669,6 +3720,12 @@ do {	\
 	}	\
 } while (0)
 #endif /* EXT_REGD_INFO */
+
+#define WL_BAND_INIT(band, band_chan_arr) \
+do { \
+	WL_CHANNEL_ARRAY_INIT(band_chan_arr); \
+	band.n_channels = ARRAY_SIZE(band_chan_arr); \
+} while (0)
 
 #define WL_CHANNEL_COPY_FLAG(band_chan_arr)    \
 do {   \
@@ -3705,8 +3762,7 @@ extern u32 wl_dbg_level;
 extern u32 wl_log_level;
 extern u32 wl_cfg80211_debug_data_dump(struct net_device *dev, u8 *buf, u32 buf_len);
 extern void wl_cfg80211_concurrent_roam(struct bcm_cfg80211 *cfg, int enable);
-
-extern void wl_cfg80211_iface_state_ops(struct wireless_dev *wdev, wl_interface_state_t state,
+extern s32 wl_cfg80211_iface_state_ops(struct wireless_dev *wdev, wl_interface_state_t state,
 	wl_iftype_t wl_iftype, u16 wl_mode);
 extern chanspec_t wl_cfg80211_get_shared_freq(struct wiphy *wiphy);
 #ifdef SUPPORT_SET_CAC
@@ -3809,8 +3865,13 @@ extern s32 wl_cfgvendor_notify_twt_event(struct bcm_cfg80211 *cfg,
 extern int wl_get_all_sideband_chanspecs(uint center_channel, chanspec_band_t band,
 	chanspec_bw_t bw, chanspec_t *chspecs, int *cnt);
 
+#define CH_BANDWIDTH_160MHZ    160
+#define CH_BANDWIDTH_80MHZ     80
+#define CH_BANDWIDTH_40MHZ     40
+#define CH_BANDWIDTH_20MHZ     20
+
 #ifdef WL_USABLE_CHAN
-int wl_get_usable_channels(struct bcm_cfg80211 *cfg, usable_channel_info_t *u_info);
+extern int wl_get_usable_channels(struct bcm_cfg80211 *cfg, usable_channel_info_t *u_info);
 #endif /* WL_USABLE_CHAN */
 
 extern int wl_cfg80211_reassoc(struct net_device *dev, struct ether_addr *bssid,
@@ -3833,6 +3894,10 @@ extern void wl_cfg80211_wdev_unlock(struct wireless_dev *wdev);
 extern u8 *wl_get_up_table_netinfo(struct bcm_cfg80211 *cfg, struct net_device *ndev);
 extern void wl_store_up_table_netinfo(struct bcm_cfg80211 *cfg,
 	struct net_device *ndev, u8 *uptable);
+
+#ifdef EXT_REGD_INFO
+extern int wl_cfg80211_reg_dump_all(const char *pTip);
+#endif /* EXT_REGD_INFO */
 
 /* Added wl_reassoc_params_cvt_v1 due to mis-sync between DHD and FW
  * Because Dongle use wl_reassoc_params_v1_t for WLC_REASSOC
@@ -3861,11 +3926,26 @@ struct wl_cp_coex {
 	int ch_5g;
 };
 #endif /* WL_CP_COEX */
+
+#ifdef DIS_COEX_FOR_P2P_DISC
+extern int32 wl_cfg80211_btc_mode(struct bcm_cfg80211 *cfg, bool on);
+#else
+#define wl_cfg80211_btc_mode(cfg, on) do {} while (0)
+#endif /* DIS_COEX_FOR_P2P_DISC */
+
+#ifdef WL_CFG80211_MONITOR
+extern int wl_cfg80211_set_monitor_channel(struct wiphy *wiphy,
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0))
+	struct net_device *ndev,
+#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(6, 13, 0) */
+	struct cfg80211_chan_def *chandef);
+#endif /* WL_CFG80211_MONITOR */
+extern int wl_cfg80211_set_btcoex_dhcp(struct net_device *dev, dhd_pub_t *dhd, char *command);
+
 #ifdef BCMDBUS
 s32
 __wl_cfg80211_up_resume(dhd_pub_t *dhd);
 #endif /* BCMDBUS */
-void wl_wlfc_enable(struct bcm_cfg80211 *cfg, bool enable);
 s32 wl_handle_join(struct bcm_cfg80211 *cfg, struct net_device *dev,
 	wlcfg_assoc_info_t *assoc_info);
 s32 wl_handle_reassoc(struct bcm_cfg80211 *cfg, struct net_device *dev,

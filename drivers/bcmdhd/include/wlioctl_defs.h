@@ -4,7 +4,26 @@
  *
  * Definitions subject to change without notice.
  *
- * Copyright (C) 2022, Broadcom.
+ * Copyright (C) 2025 Synaptics Incorporated. All rights reserved.
+ *
+ * This software is licensed to you under the terms of the
+ * GNU General Public License version 2 (the "GPL") with Broadcom special exception.
+ *
+ * INFORMATION CONTAINED IN THIS DOCUMENT IS PROVIDED "AS-IS," AND SYNAPTICS
+ * EXPRESSLY DISCLAIMS ALL EXPRESS AND IMPLIED WARRANTIES, INCLUDING ANY
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE,
+ * AND ANY WARRANTIES OF NON-INFRINGEMENT OF ANY INTELLECTUAL PROPERTY RIGHTS.
+ * IN NO EVENT SHALL SYNAPTICS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, PUNITIVE, OR CONSEQUENTIAL DAMAGES ARISING OUT OF OR IN CONNECTION
+ * WITH THE USE OF THE INFORMATION CONTAINED IN THIS DOCUMENT, HOWEVER CAUSED
+ * AND BASED ON ANY THEORY OF LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * NEGLIGENCE OR OTHER TORTIOUS ACTION, AND EVEN IF SYNAPTICS WAS ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE. IF A TRIBUNAL OF COMPETENT JURISDICTION
+ * DOES NOT PERMIT THE DISCLAIMER OF DIRECT DAMAGES OR ANY OTHER DAMAGES,
+ * SYNAPTICS' TOTAL CUMULATIVE LIABILITY TO ANY PARTY SHALL NOT
+ * EXCEED ONE HUNDRED U.S. DOLLARS
+ *
+ * Copyright (C) 2025, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -83,14 +102,6 @@ typedef uint32 ratespec_t;
 
 #define HIGHEST_SINGLE_STREAM_MCS	7 /* MCS values greater than this enable multiple streams */
 
-#ifndef OEM_ANDROID
-/* 'proprietary' string should not exist in open source(OEM_ANDROID) */
-/* given a proprietary MCS, get number of spatial streams */
-#define GET_PROPRIETARY_11N_MCS_NSS(mcs) (1 + ((mcs) - 85) / 8)
-
-#define GET_11N_MCS_NSS(mcs) ((mcs) < 32 ? (1 + ((mcs) / 8)) \
-				: ((mcs) == 32 ? 1 : GET_PROPRIETARY_11N_MCS_NSS(mcs)))
-#endif /* !OEM_ANDROID */
 #endif /* USE_LEGACY_RSPEC_DEFS */
 
 /* Legacy defines for the nrate iovar */
@@ -624,8 +635,11 @@ typedef uint32 ratespec_t;
  * avoid build issue in BISON/CARIBOU branch
  */
 #define MFP_CAPABLE		0x0200
-#define MFP_REQUIRED	0x0400
+#define MFP_REQUIRED		0x0400
 #define MFP_SHA256		0x0800 /* a special configuration for STA for WIFI test tool */
+
+#define SAE_PWE_REQUIRED	0x1000
+#define WSEC_SAE_PWE_REQUIRED(wsec)	((wsec) & SAE_PWE_REQUIRED)
 
 /* WPA authentication mode bitvec */
 #define WPA_AUTH_DISABLED		0x0000	/* Legacy (i.e., non-WPA) */
@@ -1544,7 +1558,7 @@ typedef uint32 ratespec_t;
 #define WL_CHAN_RADAR_EU_WEATHER   (1u << 7)     /* EU Radar weather channel.
 						  * Implies an EU Radar channel.
 						  */
-#define WL_CHAN_CLM_RESTRICTED     (1u << 8)     /* channel restricted in CLM (i.e. by default) */
+#define WL_CHAN_CLM_RESTRICTED     (1u << 5)     /* channel restricted in CLM (i.e. by default) */
 #define WL_CHAN_BAND_6G            (1u << 9)     /* 6GHz-band channel */
 #define WL_CHAN_BAND_6G_VLP        (1u << 10u)   /* 6GHz VLP channel */
 #define WL_CHAN_BAND_6G_PSC        (1u << 11u)   /* 6GHz PSC channel */

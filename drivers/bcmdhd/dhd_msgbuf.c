@@ -3,7 +3,26 @@
  * Provides type definitions and function prototypes used to link the
  * DHD OS, bus, and protocol modules.
  *
- * Copyright (C) 2022, Broadcom.
+ * Copyright (C) 2025 Synaptics Incorporated. All rights reserved.
+ *
+ * This software is licensed to you under the terms of the
+ * GNU General Public License version 2 (the "GPL") with Broadcom special exception.
+ *
+ * INFORMATION CONTAINED IN THIS DOCUMENT IS PROVIDED "AS-IS," AND SYNAPTICS
+ * EXPRESSLY DISCLAIMS ALL EXPRESS AND IMPLIED WARRANTIES, INCLUDING ANY
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE,
+ * AND ANY WARRANTIES OF NON-INFRINGEMENT OF ANY INTELLECTUAL PROPERTY RIGHTS.
+ * IN NO EVENT SHALL SYNAPTICS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, PUNITIVE, OR CONSEQUENTIAL DAMAGES ARISING OUT OF OR IN CONNECTION
+ * WITH THE USE OF THE INFORMATION CONTAINED IN THIS DOCUMENT, HOWEVER CAUSED
+ * AND BASED ON ANY THEORY OF LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * NEGLIGENCE OR OTHER TORTIOUS ACTION, AND EVEN IF SYNAPTICS WAS ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE. IF A TRIBUNAL OF COMPETENT JURISDICTION
+ * DOES NOT PERMIT THE DISCLAIMER OF DIRECT DAMAGES OR ANY OTHER DAMAGES,
+ * SYNAPTICS' TOTAL CUMULATIVE LIABILITY TO ANY PARTY SHALL NOT
+ * EXCEED ONE HUNDRED U.S. DOLLARS
+ *
+ * Copyright (C) 2025, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -57,9 +76,6 @@
 #include <dhd_pcie.h>
 #include <dhd_config.h>
 #if defined(DHD_LB)
-#if !defined(LINUX) && !defined(linux) && !defined(OEM_ANDROID)
-#error "DHD Loadbalancing only supported on LINUX | OEM_ANDROID"
-#endif /* !LINUX && !OEM_ANDROID */
 #include <linux/cpu.h>
 #include <bcm_ring.h>
 #define DHD_LB_WORKQ_SZ			    (8192)
@@ -80,6 +96,10 @@
 #ifdef DHD_EWPR_VER2
 #include <dhd_bitpack.h>
 #endif /* DHD_EWPR_VER2 */
+#ifdef WL_MONITOR
+#include <dhd_linux.h>
+#endif /* WL_MONITOR */
+#include <dhd_linux_priv.h>
 
 extern char dhd_version[];
 extern char fw_version[];
@@ -910,7 +930,6 @@ static void dhd_prot_process_flow_ring_suspend_response(dhd_pub_t *dhd, void* ms
 /* Monitor Mode */
 #if defined(WL_MONITOR)
 extern bool dhd_monitor_enabled(dhd_pub_t *dhd, int ifidx);
-extern void dhd_rx_mon_pkt(dhd_pub_t *dhdp, host_rxbuf_cmpl_t* msg, void *pkt, int ifidx);
 #if defined(DBG_PKT_MON)
 extern void dhd_80211_mon_pkt(dhd_pub_t *dhdp, host_rxbuf_cmpl_t* msg, void *pkt, int ifidx);
 #endif /* DBG_PKT_MON */
@@ -1332,6 +1351,9 @@ dhd_prot_d2h_sync_livelock(dhd_pub_t *dhd, uint32 msg_seqnum, msgbuf_ring_t *rin
 	dhd_prhex("D2H MsgBuf Failure", msg, msglen, DHD_ERROR_VAL);
 
 	/* Try to resume if already suspended or suspend in progress */
+#ifdef DHD_PCIE_RUNTIMEPM
+	dhdpcie_runtime_bus_wake(dhd, CAN_SLEEP(), __builtin_return_address(0));
+#endif /* DHD_PCIE_RUNTIMEPM */
 
 	/* Skip if still in suspended or suspend in progress */
 	if (DHD_BUS_CHECK_SUSPEND_OR_ANY_SUSPEND_IN_PROGRESS(dhd)) {
@@ -1354,8 +1376,6 @@ dhd_prot_d2h_sync_livelock(dhd_pub_t *dhd, uint32 msg_seqnum, msgbuf_ring_t *rin
 exit:
 	dhd_schedule_reset(dhd);
 
-#ifdef OEM_ANDROID
-#endif /* OEM_ANDROID */
 	dhd->livelock_occured = TRUE;
 }
 
@@ -1961,7 +1981,7 @@ typedef struct dhd_pktid_log_item {
 typedef struct dhd_pktid_log {
 	uint32 items;		/* number of total items */
 	uint32 index;		/* index of pktid_log_item */
-	dhd_pktid_log_item_t map[0];	/* metadata storage */
+	dhd_pktid_log_item_t map[];	/* metadata storage */
 } dhd_pktid_log_t;
 
 typedef void * dhd_pktid_log_handle_t; /* opaque handle to pktid log */
@@ -2402,7 +2422,7 @@ typedef struct dhd_pktid_map {
 	struct bcm_mwbmap *pktid_audit; /* multi word bitmap based audit */
 #endif /* DHD_PKTID_AUDIT_ENABLED */
 	dhd_pktid_key_t	*keys; /* map_items +1 unique pkt ids */
-	dhd_pktid_item_t lockers[0];           /* metadata storage */
+	dhd_pktid_item_t lockers[];           /* metadata storage */
 } dhd_pktid_map_t;
 
 /*
@@ -3036,10 +3056,8 @@ dhd_pktid_map_save(dhd_pub_t *dhd, dhd_pktid_map_handle_t *handle, void *pkt,
 			/* collect core dump */
 			dhd->memdump_type = DUMP_TYPE_PKTID_INVALID;
 			dhd_bus_mem_dump(dhd);
-#ifdef OEM_ANDROID
 			dhd->hang_reason = HANG_REASON_PCIE_PKTID_ERROR;
 			dhd_os_send_hang_message(dhd);
-#endif /* OEM_ANDROID */
 
 		}
 #else
@@ -3123,10 +3141,8 @@ BCMFASTPATH(dhd_pktid_map_free)(dhd_pub_t *dhd, dhd_pktid_map_handle_t *handle, 
 			/* collect core dump */
 			dhd->memdump_type = DUMP_TYPE_PKTID_INVALID;
 			dhd_bus_mem_dump(dhd);
-#ifdef OEM_ANDROID
 			dhd->hang_reason = HANG_REASON_PCIE_PKTID_ERROR;
 			dhd_os_send_hang_message(dhd);
-#endif /* OEM_ANDROID */
 		}
 #else
 		ASSERT(0);
@@ -3152,10 +3168,8 @@ BCMFASTPATH(dhd_pktid_map_free)(dhd_pub_t *dhd, dhd_pktid_map_handle_t *handle, 
 			/* collect core dump */
 			dhd->memdump_type = DUMP_TYPE_PKTID_INVALID;
 			dhd_bus_mem_dump(dhd);
-#ifdef OEM_ANDROID
 			dhd->hang_reason = HANG_REASON_PCIE_PKTID_ERROR;
 			dhd_os_send_hang_message(dhd);
-#endif /* OEM_ANDROID */
 		}
 #else
 		ASSERT(0);
@@ -3187,10 +3201,8 @@ BCMFASTPATH(dhd_pktid_map_free)(dhd_pub_t *dhd, dhd_pktid_map_handle_t *handle, 
 			/* collect core dump */
 			dhd->memdump_type = DUMP_TYPE_PKTID_INVALID;
 			dhd_bus_mem_dump(dhd);
-#ifdef OEM_ANDROID
 			dhd->hang_reason = HANG_REASON_PCIE_PKTID_ERROR;
 			dhd_os_send_hang_message(dhd);
-#endif /* OEM_ANDROID */
 		}
 #else
 		ASSERT(0);
@@ -3647,7 +3659,7 @@ dhd_prot_attach(dhd_pub_t *dhd)
 		goto fail;
 
 	prot->pktid_tx_map = DHD_NATIVE_TO_PKTID_INIT(dhd, MAX_PKTID_TX);
-	if (prot->pktid_rx_map == NULL)
+	if (prot->pktid_tx_map == NULL)
 		goto fail;
 
 #ifdef IOCTLRESP_USE_CONSTMEM
@@ -3797,7 +3809,7 @@ dhd_set_host_cap2(dhd_pub_t *dhd)
 }
 #endif /* DHD_PCIE_PTM */
 
-void
+static void
 dhd_set_host_cap(dhd_pub_t *dhd)
 {
 	uint32 data = 0;
@@ -3941,7 +3953,8 @@ dhd_set_host_cap(dhd_pub_t *dhd)
 }
 
 #ifdef AGG_H2D_DB
-void dhd_agg_inflight_stats_dump(dhd_pub_t *dhd, struct bcmstrbuf *strbuf)
+static void
+dhd_agg_inflight_stats_dump(dhd_pub_t *dhd, struct bcmstrbuf *strbuf)
 {
 	uint64 *inflight_histo = dhd->prot->agg_h2d_db_info.inflight_histo;
 	uint32 i;
@@ -3959,7 +3972,8 @@ void dhd_agg_inflight_stats_dump(dhd_pub_t *dhd, struct bcmstrbuf *strbuf)
 	bcm_bprintf(strbuf, "total_inflight_histo: %llu\n", total_inflight_histo);
 }
 
-void dhd_agg_inflights_stats_update(dhd_pub_t *dhd, uint32 inflight)
+static void
+dhd_agg_inflights_stats_update(dhd_pub_t *dhd, uint32 inflight)
 {
 	uint64 *bin = dhd->prot->agg_h2d_db_info.inflight_histo;
 	uint64 *p;
@@ -3995,7 +4009,7 @@ void dhd_agg_inflights_stats_update(dhd_pub_t *dhd, uint32 inflight)
  * do not hold any spin_lock_bh().
  * Using HRTIMER_MODE_REL_SOFT causing TPUT regressions.
  */
-enum hrtimer_restart
+static enum hrtimer_restart
 dhd_msgbuf_agg_h2d_db_timer_fn(struct hrtimer *timer)
 {
 	agg_h2d_db_info_t *agg_db_info;
@@ -4028,7 +4042,7 @@ dhd_msgbuf_agg_h2d_db_timer_fn(struct hrtimer *timer)
 	return HRTIMER_NORESTART;
 }
 
-void
+static void
 dhd_msgbuf_agg_h2d_db_timer_start(dhd_prot_t *prot)
 {
 	agg_h2d_db_info_t *agg_db_info = &prot->agg_h2d_db_info;
@@ -4095,7 +4109,7 @@ dhd_prot_clearcounts(dhd_pub_t *dhd)
 	prot->tx_h2d_db_cnt = 0;
 }
 
-void
+static void
 dhd_prot_update_rings_size(dhd_prot_t *prot)
 {
 	uint16 max_items;
@@ -4694,15 +4708,9 @@ dhd_prot_reset(dhd_pub_t *dhd)
 #endif /* !DHD_LB_RXP */
 
 #if defined(DHD_LB)
-/* DHD load balancing: deferral of work to another online CPU */
 /* DHD_LB_RXP dispatchers, in dhd_linux.c */
-extern void dhd_lb_rx_napi_dispatch(dhd_pub_t *dhdp);
-extern void dhd_lb_rx_pkt_enqueue(dhd_pub_t *dhdp, void *pkt, int ifidx);
-extern unsigned long dhd_read_lb_rxp(dhd_pub_t *dhdp);
-extern void dhd_rx_emerge_enqueue(dhd_pub_t *dhdp, void *pkt);
-extern void * dhd_rx_emerge_dequeue(dhd_pub_t *dhdp);
-
 #if defined(DHD_LB_RXP)
+extern void * dhd_rx_emerge_dequeue(dhd_pub_t *dhdp);
 /**
  * dhd_lb_dispatch_rx_process - load balance by dispatch Rx processing work
  * to other CPU cores
@@ -4712,13 +4720,13 @@ dhd_lb_dispatch_rx_process(dhd_pub_t *dhdp)
 {
 	dhd_lb_rx_napi_dispatch(dhdp); /* dispatch rx_process_napi */
 }
-#endif /* DHD_LB_RXP */
 #else
 static INLINE void *
 dhd_rx_emerge_dequeue(dhd_pub_t *dhdp)
 {
 	return NULL;
 }
+#endif /* DHD_LB_RXP */
 #endif /* DHD_LB */
 
 void
@@ -5046,6 +5054,23 @@ dhd_prot_detach_edl_rings(dhd_pub_t *dhd)
 }
 #endif	/* EWP_EDL */
 
+static void
+dhd_config_dongle_host_access(dhd_pub_t *dhd)
+{
+	int ret = 0;
+#ifdef WLAN_ACCEL_BOOT
+	uint32 bus_host_access = 0;
+#else
+	uint32 bus_host_access = 1;
+#endif /* !WLAN_ACCEL_BOOT */
+	/* When WLAN_ACCEL_BOOT is enabled CFG layer will set the host_access. Else set here. */
+	ret = dhd_iovar(dhd, 0, "bus:host_access",
+		(char *)&bus_host_access, sizeof(bus_host_access), NULL, 0, TRUE);
+	if (ret) {
+		DHD_ERROR(("bus:host_access(%d) error (%d)\n", bus_host_access, ret));
+	}
+}
+
 /**
  * Initialize protocol: sync w/dongle state.
  * Sets dongle media info (iswl, drv_version, mac address).
@@ -5084,20 +5109,6 @@ int dhd_sync_with_dongle(dhd_pub_t *dhd)
 
 	DHD_ERROR(("wlc_ver_major %d, wlc_ver_minor %d\n",
 		dhd->wlc_ver_major, dhd->wlc_ver_minor));
-#ifndef OEM_ANDROID
-	/* Get the device MAC address */
-	bzero(buf, sizeof(buf));
-	strlcpy(buf, "cur_etheraddr", sizeof(buf));
-	ret = dhd_wl_ioctl_cmd(dhd, WLC_GET_VAR, buf, sizeof(buf), FALSE, 0);
-	if (ret < 0) {
-		DHD_ERROR(("%s: GET iovar cur_etheraddr FAILED\n", __FUNCTION__));
-		goto done;
-	}
-	eacopy(&buf, &dhd->mac.octet);
-	if (dhd_msg_level & DHD_INFO_VAL) {
-		bcm_print_bytes("CUR_ETHERADDR ", (uchar *)buf, ETHER_ADDR_LEN);
-	}
-#endif /* OEM_ANDROID */
 
 #ifdef DHD_FW_COREDUMP
 	/* Check the memdump capability */
@@ -5157,6 +5168,7 @@ int dhd_sync_with_dongle(dhd_pub_t *dhd)
 
 	/* Post buffers for packet reception */
 	dhd_msgbuf_rxbuf_post(dhd, FALSE); /* alloc pkt ids */
+	dhd_config_dongle_host_access(dhd);
 
 	DHD_SSSR_DUMP_INIT(dhd);
 
@@ -5475,13 +5487,11 @@ BCMFASTPATH(dhd_prot_rxbuf_post)(dhd_pub_t *dhd, uint16 count, bool use_rsv_pkti
 	pktlen = (uint32 *)((uint8 *)pktbuf_pa + sizeof(dmaaddr_t) * prot->rx_buf_burst);
 
 	for (i = 0; i < count; i++) {
-		if (
-#if defined(DHD_LB_RXP)
 		/* First try to dequeue from emergency queue which will be filled
 		 * during rx flow control.
 		*/
-		((p = dhd_rx_emerge_dequeue(dhd)) == NULL) &&
-#endif /* DHD_LB_RXP */
+		p = dhd_rx_emerge_dequeue(dhd);
+		if ((p == NULL) &&
 			((p = PKTGET(dhd->osh, prot->rxbufpost_alloc_sz, FALSE)) == NULL)) {
 			dhd->rx_pktgetfail++;
 			DHD_ERROR_RLMT(("%s:%d: PKTGET for rxbuf failed, rx_pktget_fail :%lu\n",
@@ -5504,6 +5514,8 @@ BCMFASTPATH(dhd_prot_rxbuf_post)(dhd_pub_t *dhd, uint16 count, bool use_rsv_pkti
 						__FUNCTION__, __LINE__, dhd->rx_pktgetpool_fail));
 					break;
 				}
+#else
+				break;
 #endif /* RX_PKT_POOL */
 			}
 		}
@@ -6583,6 +6595,14 @@ BCMFASTPATH(dhd_prot_process_msgbuf_rxcpl)(dhd_pub_t *dhd, int ringtype, uint32 
 	/* must be the first check in this function */
 	(void)dhd_prot_lb_rxp_flow_ctrl(dhd);
 #endif /* DHD_LB_RXP */
+#ifdef DHD_PCIE_RUNTIMEPM
+	/* Set rx_pending_due_to_rpm if device is not in resume state */
+	if (dhdpcie_runtime_bus_wake(dhd, FALSE, dhd_prot_process_msgbuf_rxcpl)) {
+		dhd->rx_pending_due_to_rpm = TRUE;
+		return more;
+	}
+	dhd->rx_pending_due_to_rpm = FALSE;
+#endif /* DHD_PCIE_RUNTIMEPM */
 
 		ring = &prot->d2hring_rx_cpln;
 	item_len = ring->item_len;
@@ -7611,10 +7631,8 @@ BCMFASTPATH(dhd_prot_txstatus_process)(dhd_pub_t *dhd, void *msg)
 			/* collect core dump */
 			dhd->memdump_type = DUMP_TYPE_PKTID_INVALID;
 			dhd_bus_mem_dump(dhd);
-#ifdef OEM_ANDROID
 			dhd->hang_reason = HANG_REASON_PCIE_PKTID_ERROR;
 			dhd_os_send_hang_message(dhd);
-#endif /* OEM_ANDROID */
 		}
 #else
 		ASSERT(0);
@@ -7655,12 +7673,12 @@ BCMFASTPATH(dhd_prot_txstatus_process)(dhd_pub_t *dhd, void *msg)
 			&status, NULL, NULL, TRUE, FALSE, TRUE);
 	}
 #endif /* DHD_PKT_LOGGING */
-#if defined(BCMPCIE) && (defined(LINUX) || defined(OEM_ANDROID))
+#if defined(BCMPCIE)
 	dhd_txcomplete(dhd, pkt, pkt_fate);
 #ifdef DHD_4WAYM4_FAIL_DISCONNECT
 	dhd_eap_txcomplete(dhd, pkt, pkt_fate, txstatus->cmn_hdr.if_id);
 #endif /* DHD_4WAYM4_FAIL_DISCONNECT */
-#endif /* BCMPCIE && (defined(LINUX) || defined(OEM_ANDROID)) */
+#endif
 
 #if DHD_DBG_SHOW_METADATA
 	if (dhd->prot->metadata_dbg &&
@@ -8515,7 +8533,7 @@ dhdmsgbuf_set_hmaptest_windows(dhd_pub_t *dhd)
 /* stop HMAPTEST does not check corerev
  * caller has to ensure corerev check
  */
-int
+static int
 dhdmsgbuf_hmaptest_stop(dhd_pub_t *dhd)
 {
 	uint32 window_config, nwindows, i;
@@ -8550,7 +8568,7 @@ dhdmsgbuf_hmaptest_stop(dhd_pub_t *dhd)
 }
 
 /* HMAP iovar intercept process */
-int
+static int
 dhdmsgbuf_hmap(dhd_pub_t *dhd, pcie_hmap_t *hmap_params, bool set)
 {
 
@@ -8632,7 +8650,7 @@ dhdmsgbuf_hmap(dhd_pub_t *dhd, pcie_hmap_t *hmap_params, bool set)
  * on chips that have HMAP
  * DHD programs hmap window registers with host addresses here.
  */
-int
+static int
 dhdmsgbuf_hmaptest(dhd_pub_t *dhd, pcie_hmaptest_t *hmaptest_params)
 {
 
@@ -8837,21 +8855,6 @@ int dhd_prot_ioctl(dhd_pub_t *dhd, int ifidx, wl_ioctl_t * ioc, void * buf, int 
 
 	DHD_TRACE(("%s: Enter\n", __FUNCTION__));
 
-#ifdef DHD_PCIE_REG_ACCESS
-#ifdef BOARD_HIKEY
-#ifndef PCIE_LNK_SPEED_GEN1
-#define PCIE_LNK_SPEED_GEN1		0x1
-#endif
-	/* BUG_ON if link speed is GEN1 in Hikey for 4389B0 */
-	if (dhd->bus->sih->buscorerev == 72) {
-		if (dhd_get_pcie_linkspeed(dhd) == PCIE_LNK_SPEED_GEN1) {
-			DHD_ERROR(("%s: ******* Link Speed is GEN1 *********\n", __FUNCTION__));
-			BUG_ON(1);
-		}
-	}
-#endif /* BOARD_HIKEY */
-#endif /* DHD_PCIE_REG_ACCESS */
-
 	if (ioc->cmd == WLC_SET_PM) {
 #ifdef DHD_PM_CONTROL_FROM_FILE
 		if (g_pm_control == TRUE) {
@@ -8995,7 +8998,7 @@ void dmaxfer_free_dmaaddr(dhd_pub_t *dhd, dhd_dmaxfer_t *dmaxfer)
 }
 
 /** test / loopback */
-int
+static int
 dhd_prepare_schedule_dmaxfer_free(dhd_pub_t *dhdp)
 {
 	dhd_prot_t *prot = dhdp->prot;
@@ -9384,6 +9387,14 @@ dhd_msgbuf_query_ioctl(dhd_pub_t *dhd, int ifidx, uint cmd, void *buf, uint len,
 			goto done;
 		}
 	}
+#if defined(OOB_GPIO_TSF_INTR) || defined(OOB_TSF_INTR)
+	if (cmd == WLC_GET_VAR && buf) {
+		if (!strcmp((char *)buf, "gettsf")) {
+			dhd->tsf_host_ns = 0;
+			dhd->tsf_intr_state = TSF_INTR_PREPARE;
+		}
+	}
+#endif /* OOB_GPIO_TSF_INTR || OOB_TSF_INTR */
 
 	DHD_CTL(("query_ioctl: ACTION %d ifdix %d cmd %d len %d \n",
 	    action, ifidx, cmd, len));
@@ -9501,7 +9512,6 @@ dhd_msgbuf_iovar_timeout_dump(dhd_pub_t *dhd)
 	dhd_prot_debug_info_print(dhd);
 }
 
-extern void dhd_validate_pcie_link_cbp_wlbp(dhd_bus_t *bus);
 /**
  * Waits for IOCTL completion message from the dongle, copies this into caller
  * provided parameter 'buf'.
@@ -10198,16 +10208,10 @@ dhd_fillup_ioct_reqst(dhd_pub_t *dhd, uint16 len, uint cmd, void* buf, int ifidx
 		return BCME_ERROR;
 
 #ifdef DBG_DW_CHK_PCIE_READ_LATENCY
-if (IS_ENABLED(CONFIG_PREEMPT_RT))
-	migrate_disable();
-else
 	preempt_disable();
 	begin_time = ktime_get();
 	dhd_bus_cmn_readshared(dhd->bus, &data, RING_RD_UPD, ring->idx);
 	end_time = ktime_get();
-if (IS_ENABLED(CONFIG_PREEMPT_RT))
-	migrate_enable();
-else
 	preempt_enable();
 	diff_ns = ktime_to_ns(ktime_sub(end_time, begin_time));
 	/* Check if the delta is greater than 1 msec */
@@ -12044,14 +12048,6 @@ dhd_prot_process_d2h_host_ts_complete(dhd_pub_t *dhd, void* buf)
 
 }
 
-/** called on e.g. flow ring delete */
-void dhd_prot_clean_flow_ring(dhd_pub_t *dhd, void *msgbuf_flow_info)
-{
-	msgbuf_ring_t *flow_ring = (msgbuf_ring_t *)msgbuf_flow_info;
-	dhd_prot_ring_detach(dhd, flow_ring);
-	DHD_INFO(("%s Cleaning up Flow \n", __FUNCTION__));
-}
-
 void dhd_prot_print_flow_ring(dhd_pub_t *dhd, void *msgbuf_flow_info, bool h2d,
 	struct bcmstrbuf *strbuf, const char * fmt)
 {
@@ -12889,8 +12885,10 @@ copy_hang_info_trap(dhd_pub_t *dhd)
 
 	bytes_written = 0;
 	dhd->hang_info_cnt = 0;
+#ifdef DHD_LOG_DUMP
 	get_debug_dump_time(dhd->debug_dump_time_hang_str);
 	copy_debug_dump_time(dhd->debug_dump_time_str, dhd->debug_dump_time_hang_str);
+#endif /* DHD_LOG_DUMP */
 
 	copy_hang_info_head(dhd->hang_info, &tr, VENDOR_SEND_HANG_EXT_INFO_LEN, FALSE,
 			&bytes_written, &dhd->hang_info_cnt, dhd->debug_dump_time_hang_str);
@@ -12898,7 +12896,9 @@ copy_hang_info_trap(dhd_pub_t *dhd)
 	DHD_INFO(("hang info head cnt: %d len: %d data: %s\n",
 		dhd->hang_info_cnt, (int)strlen(dhd->hang_info), dhd->hang_info));
 
+#ifdef DHD_LOG_DUMP
 	clear_debug_dump_time(dhd->debug_dump_time_hang_str);
+#endif /* DHD_LOG_DUMP */
 
 #ifdef DHD_EWPR_VER2
 	/* stack info & trap info are included in etd data */
@@ -12950,8 +12950,10 @@ copy_hang_info_linkdown(dhd_pub_t *dhd)
 
 	dhd->hang_info_cnt = 0;
 
+#ifdef DHD_LOG_DUMP
 	get_debug_dump_time(dhd->debug_dump_time_hang_str);
 	copy_debug_dump_time(dhd->debug_dump_time_str, dhd->debug_dump_time_hang_str);
+#endif /* DHD_LOG_DUMP */
 
 #ifdef BCMPCIE
 	/* hang reason code (0x8808) */
@@ -12979,7 +12981,9 @@ copy_hang_info_linkdown(dhd_pub_t *dhd)
 		dhd->hang_info_cnt++;
 	}
 
+#ifdef DHD_LOG_DUMP
 	clear_debug_dump_time(dhd->debug_dump_time_hang_str);
+#endif /* DHD_LOG_DUMP */
 
 	DHD_INFO(("hang info haed cnt: %d len: %d data: %s\n",
 		dhd->hang_info_cnt, (int)strlen(dhd->hang_info), dhd->hang_info));
@@ -14332,13 +14336,6 @@ dhd_prot_dma_indx_free(dhd_pub_t *dhd)
 	dhd_dma_buf_free(dhd, &prot->d2h_dma_indx_rd_buf);
 }
 
-void
-dhd_msgbuf_delay_post_ts_bufs(dhd_pub_t *dhd)
-{
-	if (dhd->prot->max_tsbufpost > 0)
-		dhd_msgbuf_rxbuf_post_ts_bufs(dhd);
-}
-
 static void
 BCMFASTPATH(dhd_prot_process_fw_timestamp)(dhd_pub_t *dhd, void* buf)
 {
@@ -14372,24 +14369,6 @@ int dhd_get_hscb_info(dhd_pub_t *dhd, void ** va, uint32 *len)
 
 	return BCME_OK;
 }
-
-#ifdef DHD_BUS_MEM_ACCESS
-int dhd_get_hscb_buff(dhd_pub_t *dhd, uint32 offset, uint32 length, void * buff)
-{
-	if (!dhd->hscb_enable) {
-		return BCME_UNSUPPORTED;
-	}
-
-	if (dhd->prot->host_scb_buf.va == NULL ||
-		((uint64)offset + length > (uint64)dhd->prot->host_scb_buf.len)) {
-		return BCME_BADADDR;
-	}
-
-	memcpy(buff, (char*)dhd->prot->host_scb_buf.va + offset, length);
-
-	return BCME_OK;
-}
-#endif /* DHD_BUS_MEM_ACCESS */
 
 static uint16
 dhd_d2h_cpl_ring_id(dhd_pub_t *dhd, msgbuf_ring_t *ring)
@@ -14632,7 +14611,7 @@ dhd_prot_smmu_fault_dump(dhd_pub_t *dhdp)
 #endif /* DHD_MAP_LOGGING */
 
 #ifdef DHD_FLOW_RING_STATUS_TRACE
-void
+static void
 dhd_dump_bus_flow_ring_status_trace(
 	dhd_bus_t *bus, struct bcmstrbuf *strbuf, dhd_frs_trace_t *frs_trace, int dumpsz, char *str)
 {

@@ -1,7 +1,26 @@
 /*
  * IP Packet Parser Module.
  *
- * Copyright (C) 2022, Broadcom.
+ * Copyright (C) 2025 Synaptics Incorporated. All rights reserved.
+ *
+ * This software is licensed to you under the terms of the
+ * GNU General Public License version 2 (the "GPL") with Broadcom special exception.
+ *
+ * INFORMATION CONTAINED IN THIS DOCUMENT IS PROVIDED "AS-IS," AND SYNAPTICS
+ * EXPRESSLY DISCLAIMS ALL EXPRESS AND IMPLIED WARRANTIES, INCLUDING ANY
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE,
+ * AND ANY WARRANTIES OF NON-INFRINGEMENT OF ANY INTELLECTUAL PROPERTY RIGHTS.
+ * IN NO EVENT SHALL SYNAPTICS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, PUNITIVE, OR CONSEQUENTIAL DAMAGES ARISING OUT OF OR IN CONNECTION
+ * WITH THE USE OF THE INFORMATION CONTAINED IN THIS DOCUMENT, HOWEVER CAUSED
+ * AND BASED ON ANY THEORY OF LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * NEGLIGENCE OR OTHER TORTIOUS ACTION, AND EVEN IF SYNAPTICS WAS ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE. IF A TRIBUNAL OF COMPETENT JURISDICTION
+ * DOES NOT PERMIT THE DISCLAIMER OF DIRECT DAMAGES OR ANY OTHER DAMAGES,
+ * SYNAPTICS' TOTAL CUMULATIVE LIABILITY TO ANY PARTY SHALL NOT
+ * EXCEED ONE HUNDRED U.S. DOLLARS
+ *
+ * Copyright (C) 2025, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -42,7 +61,9 @@
 #include <dhd_proto.h>
 #include <bcmtcp.h>
 #endif /* DHDTCPACK_SUPPRESS || DHDTCPSYNC_FLOOD_BLK */
-
+#ifdef PROP_TXSTATUS
+#include <dhd_wlfc.h>
+#endif /* PROP_TXSTATUS */
 /* special values */
 /* 802.3 llc/snap header */
 static const uint8 llc_snap_hdr[SNAP_HDR_LEN] = {0xaa, 0xaa, 0x03, 0x00, 0x00, 0x00};
@@ -773,7 +794,7 @@ dhd_tcpack_suppress(dhd_pub_t *dhdp, void *pkt)
 	DHD_TRACE(("%s %d: TCP pkt!\n", __FUNCTION__, __LINE__));
 
 	/* is it an ack ? Allow only ACK flag, not to suppress others. */
-	if (new_tcp_hdr[TCP_FLAGS_OFFSET] != TCP_FLAG_ACK) {
+	if (new_tcp_hdr[TCP_FLAGS_OFFSET] != DHD_TCP_FLAG_ACK) {
 		DHD_TRACE(("%s %d: Do not touch TCP flag 0x%x\n",
 			__FUNCTION__, __LINE__, new_tcp_hdr[TCP_FLAGS_OFFSET]));
 		goto exit;
@@ -874,6 +895,7 @@ dhd_tcpack_suppress(dhd_pub_t *dhdp, void *pkt)
 				new_tcp_hdr_len == old_tcp_hdr_len) {
 				ASSERT(memcmp(new_ether_hdr, old_ether_hdr, ETHER_HDR_LEN) == 0);
 				bcopy(new_ip_hdr, old_ip_hdr, new_ip_total_len);
+
 				PKTFREE(dhdp->osh, pkt, FALSE);
 				DHD_TRACE(("%s %d: TCP ACK replace %u -> %u\n",
 					__FUNCTION__, __LINE__, old_tcpack_num, new_tcp_ack_num));
@@ -1012,7 +1034,7 @@ dhd_tcpdata_info_get(dhd_pub_t *dhdp, void *pkt)
 
 	ASSERT(ip_total_len > ip_hdr_len + tcp_hdr_len);
 
-	if ((tcp_hdr[TCP_FLAGS_OFFSET] & TCP_FLAG_PSH) == 0) {
+	if ((tcp_hdr[TCP_FLAGS_OFFSET] & DHD_TCP_FLAG_PSH) == 0) {
 		DHD_TRACE(("%s %d: Not interested TCP DATA packet\n", __FUNCTION__, __LINE__));
 		goto exit;
 	}
@@ -1238,7 +1260,7 @@ dhd_tcpack_hold(dhd_pub_t *dhdp, void *pkt, int ifidx)
 	DHD_TRACE(("%s %d: TCP pkt!\n", __FUNCTION__, __LINE__));
 
 	/* is it an ack ? Allow only ACK flag, not to suppress others. */
-	if (new_tcp_hdr[TCP_FLAGS_OFFSET] != TCP_FLAG_ACK) {
+	if (new_tcp_hdr[TCP_FLAGS_OFFSET] != DHD_TCP_FLAG_ACK) {
 		DHD_TRACE(("%s %d: Do not touch TCP flag 0x%x\n",
 			__FUNCTION__, __LINE__, new_tcp_hdr[TCP_FLAGS_OFFSET]));
 		goto exit;
@@ -1373,6 +1395,7 @@ dhd_tcpack_hold(dhd_pub_t *dhdp, void *pkt, int ifidx)
 #endif /* TCPACK_SUPPRESS_HOLD_HRT */
 		tcpack_sup_mod->tcpack_info_cnt++;
 	} else {
+		hold = FALSE;
 		DHD_TRACE(("%s %d: No empty tcp ack info tbl\n",
 			__FUNCTION__, __LINE__));
 	}
@@ -1424,8 +1447,8 @@ dhd_tcpdata_get_flag(dhd_pub_t *dhdp, void *pkt)
 
 	flags = (uint8)tcp_hdr[TCP_FLAGS_OFFSET];
 
-	if (flags & TCP_FLAG_SYN) {
-		if (flags & TCP_FLAG_ACK) {
+	if (flags & DHD_TCP_FLAG_SYN) {
+		if (flags & DHD_TCP_FLAG_ACK) {
 			return FLAG_SYNCACK;
 		}
 		return FLAG_SYNC;

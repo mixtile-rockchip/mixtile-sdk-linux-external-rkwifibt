@@ -1,7 +1,26 @@
 /*
  * DHD BT WiFi Coex RegON Coordinator
  *
- * Copyright (C) 2022, Broadcom.
+ * Copyright (C) 2025 Synaptics Incorporated. All rights reserved.
+ *
+ * This software is licensed to you under the terms of the
+ * GNU General Public License version 2 (the "GPL") with Broadcom special exception.
+ *
+ * INFORMATION CONTAINED IN THIS DOCUMENT IS PROVIDED "AS-IS," AND SYNAPTICS
+ * EXPRESSLY DISCLAIMS ALL EXPRESS AND IMPLIED WARRANTIES, INCLUDING ANY
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE,
+ * AND ANY WARRANTIES OF NON-INFRINGEMENT OF ANY INTELLECTUAL PROPERTY RIGHTS.
+ * IN NO EVENT SHALL SYNAPTICS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, PUNITIVE, OR CONSEQUENTIAL DAMAGES ARISING OUT OF OR IN CONNECTION
+ * WITH THE USE OF THE INFORMATION CONTAINED IN THIS DOCUMENT, HOWEVER CAUSED
+ * AND BASED ON ANY THEORY OF LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * NEGLIGENCE OR OTHER TORTIOUS ACTION, AND EVEN IF SYNAPTICS WAS ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE. IF A TRIBUNAL OF COMPETENT JURISDICTION
+ * DOES NOT PERMIT THE DISCLAIMER OF DIRECT DAMAGES OR ANY OTHER DAMAGES,
+ * SYNAPTICS' TOTAL CUMULATIVE LIABILITY TO ANY PARTY SHALL NOT
+ * EXCEED ONE HUNDRED U.S. DOLLARS
+ *
+ * Copyright (C) 2025, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -106,6 +125,12 @@ static struct wbrc_pvt_data *g_wbrc_data;
 #define WBRC_LOCK(wbrc_data)	{if (wbrc_data) mutex_lock(&(wbrc_data)->wbrc_mutex);}
 #define WBRC_UNLOCK(wbrc_data)	{if (wbrc_data) mutex_unlock(&(wbrc_data)->wbrc_mutex);}
 
+/* Function prototypes */
+int wbrc_init(void);
+void wbrc_exit(void);
+int wbrc_wlan_on_started(void);
+int wbrc_wlan_on_ack(void);
+int wbrc_reset_wait_on_condition(wait_queue_head_t *reset_waitq, uint *var, uint condition);
 int wbrc_wl2bt_reset(void);
 int wbrc_bt_reset_ack(struct wbrc_pvt_data *wbrc_data);
 
@@ -228,8 +253,6 @@ static __poll_t wbrc_bt_dev_poll(struct file *filep, poll_table *wait)
 	return mask;
 }
 
-int wbrc_reset_wait_on_condition(wait_queue_head_t *reset_waitq, uint *var, uint condition);
-
 static int wbrc_bt_dev_open(struct inode *inodep, struct file *filep)
 {
 	struct wbrc_pvt_data *wbrc_data = g_wbrc_data;
@@ -280,7 +303,8 @@ static int wbrc_bt_dev_release(struct inode *inodep, struct file *filep)
 	return 0;
 }
 
-void wbrc_signal_bt_reset(struct wbrc_pvt_data *wbrc_data)
+static void
+wbrc_signal_bt_reset(struct wbrc_pvt_data *wbrc_data)
 {
 	pr_info("%s\n", __func__);
 
@@ -322,7 +346,11 @@ int wbrc_init(void)
 		goto err_register;
 	}
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0))
+	wbrc_data->wbrc_bt_dev_class = class_create(CLASS_NAME);
+#else
 	wbrc_data->wbrc_bt_dev_class = class_create(THIS_MODULE, CLASS_NAME);
+#endif /* KERNEL >= 6.4 */
 	err = PTR_ERR(wbrc_data->wbrc_bt_dev_class);
 	if (IS_ERR(wbrc_data->wbrc_bt_dev_class)) {
 		pr_alert("Failed to register device class\n");

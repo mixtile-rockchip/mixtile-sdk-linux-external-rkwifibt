@@ -1,7 +1,26 @@
 /*
  * HND SiliconBackplane PMU support.
  *
- * Copyright (C) 2022, Broadcom.
+ * Copyright (C) 2025 Synaptics Incorporated. All rights reserved.
+ *
+ * This software is licensed to you under the terms of the
+ * GNU General Public License version 2 (the "GPL") with Broadcom special exception.
+ *
+ * INFORMATION CONTAINED IN THIS DOCUMENT IS PROVIDED "AS-IS," AND SYNAPTICS
+ * EXPRESSLY DISCLAIMS ALL EXPRESS AND IMPLIED WARRANTIES, INCLUDING ANY
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE,
+ * AND ANY WARRANTIES OF NON-INFRINGEMENT OF ANY INTELLECTUAL PROPERTY RIGHTS.
+ * IN NO EVENT SHALL SYNAPTICS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, PUNITIVE, OR CONSEQUENTIAL DAMAGES ARISING OUT OF OR IN CONNECTION
+ * WITH THE USE OF THE INFORMATION CONTAINED IN THIS DOCUMENT, HOWEVER CAUSED
+ * AND BASED ON ANY THEORY OF LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * NEGLIGENCE OR OTHER TORTIOUS ACTION, AND EVEN IF SYNAPTICS WAS ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE. IF A TRIBUNAL OF COMPETENT JURISDICTION
+ * DOES NOT PERMIT THE DISCLAIMER OF DIRECT DAMAGES OR ANY OTHER DAMAGES,
+ * SYNAPTICS' TOTAL CUMULATIVE LIABILITY TO ANY PARTY SHALL NOT
+ * EXCEED ONE HUNDRED U.S. DOLLARS
+ *
+ * Copyright (C) 2025, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -212,14 +231,11 @@ extern void si_pmu_gband_spurwar(si_t *sih, osl_t *osh);
 extern bool si_pmu_is_otp_powered(si_t *sih, osl_t *osh);
 extern uint32 si_pmu_measure_alpclk(si_t *sih, osl_t *osh);
 
-extern uint32 si_pmu_chipcontrol(si_t *sih, uint reg, uint32 mask, uint32 val);
 #if defined(SAVERESTORE)
 extern void si_set_abuck_mode_4362(si_t *sih, uint8 mode);
 #endif /* SAVERESTORE */
 
 #define si_pmu_regcontrol si_pmu_vreg_control /* prevents build err because of usage in PHY */
-extern uint32 si_pmu_vreg_control(si_t *sih, uint reg, uint32 mask, uint32 val);
-extern uint32 si_pmu_pllcontrol(si_t *sih, uint reg, uint32 mask, uint32 val);
 extern void si_pmu_pllupd(si_t *sih);
 
 extern uint32 si_pmu_waitforclk_on_backplane(si_t *sih, osl_t *osh, uint32 clk, uint32 delay);
@@ -252,6 +268,9 @@ int si_pmu_ldo3p3_soft_start_bt_get(si_t *sih, osl_t *osh, int *res);
 int si_pmu_ldo3p3_soft_start_bt_set(si_t *sih, osl_t *osh, uint32 slew_rate);
 extern int si_pmu_min_res_otp_pu_set(si_t *sih, osl_t *osh, bool on);
 #endif /* !defined(BCMDONGLEHOST) */
+extern uint32 si_pmu_chipcontrol(si_t *sih, uint reg, uint32 mask, uint32 val);
+extern uint32 si_pmu_vreg_control(si_t *sih, uint reg, uint32 mask, uint32 val);
+extern uint32 si_pmu_pllcontrol(si_t *sih, uint reg, uint32 mask, uint32 val);
 
 #if defined(EDV)
 extern uint32 si_pmu_get_backplaneclkspeed(si_t *sih);
@@ -345,4 +364,6 @@ extern void si_pmu_reg_on_war_ext_wake_perst_clear(si_t *sih);
 
 extern pmuregs_t *hnd_pmur;	/* PMU core regs */
 extern void si_pmu_res_state_wait(si_t *sih, uint rsrc);
+extern void si_pmu_43711a0_pll_war(si_t *sih);
+extern void si_pmu_43711a0_udr_war(si_t *sih);
 #endif /* _hndpmu_h_ */

@@ -1,7 +1,26 @@
 /*
  * DHD Linux header file (dhd_linux exports for cfg80211 and other components)
  *
- * Copyright (C) 2022, Broadcom.
+ * Copyright (C) 2025 Synaptics Incorporated. All rights reserved.
+ *
+ * This software is licensed to you under the terms of the
+ * GNU General Public License version 2 (the "GPL") with Broadcom special exception.
+ *
+ * INFORMATION CONTAINED IN THIS DOCUMENT IS PROVIDED "AS-IS," AND SYNAPTICS
+ * EXPRESSLY DISCLAIMS ALL EXPRESS AND IMPLIED WARRANTIES, INCLUDING ANY
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE,
+ * AND ANY WARRANTIES OF NON-INFRINGEMENT OF ANY INTELLECTUAL PROPERTY RIGHTS.
+ * IN NO EVENT SHALL SYNAPTICS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, PUNITIVE, OR CONSEQUENTIAL DAMAGES ARISING OUT OF OR IN CONNECTION
+ * WITH THE USE OF THE INFORMATION CONTAINED IN THIS DOCUMENT, HOWEVER CAUSED
+ * AND BASED ON ANY THEORY OF LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * NEGLIGENCE OR OTHER TORTIOUS ACTION, AND EVEN IF SYNAPTICS WAS ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE. IF A TRIBUNAL OF COMPETENT JURISDICTION
+ * DOES NOT PERMIT THE DISCLAIMER OF DIRECT DAMAGES OR ANY OTHER DAMAGES,
+ * SYNAPTICS' TOTAL CUMULATIVE LIABILITY TO ANY PARTY SHALL NOT
+ * EXCEED ONE HUNDRED U.S. DOLLARS
+ *
+ * Copyright (C) 2025, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -62,9 +81,7 @@
 #include <linux/power/irq_history.h>
 #endif /* CONFIG_IRQ_HISTORY */
 
-#if defined(OEM_ANDROID)
 #include <linux/nl80211.h>
-#endif /* OEM_ANDROID */
 
 #ifdef WL_MONITOR
 #ifdef HOST_RADIOTAP_CONV
@@ -238,16 +255,20 @@ typedef struct wifi_adapter_info {
 	const char	*fw_path;
 	const char	*nv_path;
 	const char	*clm_path;
-	const char	*conf_path;
 	void		*wifi_plat_data;	/* wifi ctrl func, for backward compatibility */
 	uint		bus_type;
 	uint		bus_num;
 	uint		slot_num;
 	int			index;
 	int 		gpio_wl_reg_on;
-#ifdef CUSTOMER_OOB
+#ifdef OOB_INTR
 	int 		gpio_wl_host_wake;
-#endif
+#endif /* OOB_INTR */
+#ifdef OOB_GPIO_TSF_INTR
+	int 		gpio_wl_gpio_tsf;
+	uint		tsf_irq_num;
+	uint		tsf_intr_flags;
+#endif /* OOB_GPIO_TSF_INTR */
 	wait_queue_head_t status_event;
 	unsigned long status;
 #if defined(BT_OVER_SDIO)
@@ -368,12 +389,12 @@ typedef struct dhd_tx_lb_pkttag_fr {
 #define ZERO_TYPE_STR	"00"
 #endif /* BLOCK_IPV6_PACKET */
 
-#if defined(OEM_ANDROID) && defined(SOFTAP)
+#if defined(SOFTAP)
 extern bool ap_cfg_running;
 extern bool ap_fw_loaded;
 #endif
 
-#if defined(OEM_ANDROID) && defined(BCMPCIE)
+#if defined(BCMPCIE)
 extern int dhd_get_suspend_bcn_li_dtim(dhd_pub_t *dhd, int *dtim_period, int *bcn_interval);
 #else
 extern int dhd_get_suspend_bcn_li_dtim(dhd_pub_t *dhd);
@@ -468,6 +489,7 @@ typedef struct dhd_if {
 	bool recv_reassoc_evt;
 	bool post_roam_evt;
 #endif /* DHD_POST_EAPOL_M1_AFTER_ROAM_EVT */
+	bool bss_scan_suppress; 		/* scan_suppress for this interface */
 #ifdef WLDWDS
 	bool dwds;	/* DWDS interface */
 #endif /* WLDWDS */
@@ -515,11 +537,7 @@ struct dhd_rx_tx_work {
 #endif /* DHD_PCIE_NATIVE_RUNTIMEPM */
 
 #ifdef FILTER_IE
-#ifdef DHD_LINUX_STD_FW_API
 #define FILTER_IE_PATH "filter_ie"
-#else
-#define FILTER_IE_PATH "/vendor/etc/wifi/filter_ie"
-#endif /* DHD_LINUX_STD_FW_API */
 #define FILTER_IE_BUFSZ 1024 /* ioc buffsize for FILTER_IE */
 #define FILE_BLOCK_READ_SIZE 256
 #define WL_FILTER_IE_IOV_HDR_SIZE OFFSETOF(wl_filter_ie_iov_v1_t, tlvs)
@@ -543,6 +561,7 @@ wifi_adapter_info_t* dhd_wifi_platform_get_adapter(uint32 bus_type, uint32 bus_n
 int wifi_platform_set_power(wifi_adapter_info_t *adapter, bool on, unsigned long msec);
 int wifi_platform_bus_enumerate(wifi_adapter_info_t *adapter, bool device_present);
 int wifi_platform_get_irq_number(wifi_adapter_info_t *adapter, unsigned long *irq_flags_ptr);
+extern int wifi_platform_get_irq_level(wifi_adapter_info_t *adapter);
 int wifi_platform_get_mac_addr(wifi_adapter_info_t *adapter, unsigned char *buf, int ifidx);
 #ifdef DHD_COREDUMP
 int wifi_platform_set_coredump(wifi_adapter_info_t *adapter, const char *buf, int buf_len,
@@ -595,15 +614,46 @@ int dhd_get_fw_capabilities(dhd_pub_t * dhd);
 int dhd_dbus_txdata(dhd_pub_t *dhdp, void *pktbuf);
 #endif
 void dhd_event_logtrace_enqueue(dhd_pub_t *dhdp, int ifidx, void *pktbuf);
-#if defined(SUPPORT_MULTIPLE_NVRAM) || defined(SUPPORT_MULTIPLE_CLMBLOB)
 int dhd_get_platform_naming_for_nvram_clmblob_file(download_type_t component, char* file_name);
+#if defined(SUPPORT_MULTIPLE_NVRAM) || defined(SUPPORT_MULTIPLE_CLMBLOB)
 #ifdef USE_CID_CHECK
 void dhd_set_platform_ext_name_for_chip_version(char* chip_version);
 #endif /* USE_CID_CHECK */
 #endif /* SUPPORT_MULTIPLE_NVRAM || SUPPORT_MULTIPLE_CLMBLOB */
 void dhd_netif_rx_ni(struct sk_buff * skb);
-#if defined(DBG_PKT_MON) && !defined(PCIE_FULL_DONGLE)
+#ifdef WL_MONITOR
+extern bool dhd_monitor_enabled(dhd_pub_t *dhd, int ifidx);
+#ifdef BCMPCIE
+extern void dhd_rx_mon_pkt(dhd_pub_t *dhdp, host_rxbuf_cmpl_t* msg, void *pkt, int ifidx);
+#endif /* BCMPCIE */
+#endif /* WL_MONITOR */
+#if defined(DBG_PKT_MON)
+#ifdef PCIE_FULL_DONGLE
+extern void dhd_80211_mon_pkt(dhd_pub_t *dhdp, host_rxbuf_cmpl_t *msg, void *pkt, int ifidx);
+#else
 extern bool dhd_80211_mon_pkt(dhd_pub_t *dhdp, void *pkt, int ifidx);
+#endif /* PCIE_FULL_DONGLE */
 #endif /* DBG_PKT_MON */
-
+extern int dhd_ioctl_entry_local(struct net_device *net, wl_ioctl_t *ioc, int cmd);
+extern int dhd_change_mtu(dhd_pub_t *dhdp, int new_mtu, int ifidx);
+extern void wl_update_roamscan_cache_by_band(struct net_device *dev, int band);
+extern int dhd_dev_init_ioctl(struct net_device *dev);
+extern void dhd_set_packet_filter(dhd_pub_t *dhd);
+#ifdef BCMPCIE
+extern void dhd_dpc_tasklet_kill(dhd_pub_t *dhdp);
+extern void dhd_dpc_enable(dhd_pub_t *dhdp);
+#endif /* BCMPCIE */
+#ifdef DHD_SSSR_DUMP
+int dhdpcie_sssr_dump_get_before_after_len(dhd_pub_t *dhd, uint32 *arr_len);
+#endif /* DHD_SSSR_DUMP */
+#ifdef WBRC
+extern int wbrc_init(void);
+extern void wbrc_exit(void);
+extern int wbrc_wl2bt_reset(void);
+extern int wbrc_wlan_on_ack(void);
+extern int wbrc_wlan_on_started(void);
+#endif /* WBRC */
+#ifdef DHD_COREDUMP
+extern int dhd_collect_coredump(dhd_pub_t *dhdp, dhd_dump_t *dump);
+#endif /* DHD_COREDUMP */
 #endif /* __DHD_LINUX_H__ */

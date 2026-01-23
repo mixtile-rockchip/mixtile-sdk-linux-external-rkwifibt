@@ -2,7 +2,26 @@
  * Misc utility routines for accessing chip-specific features
  * of the SiliconBackplane-based Broadcom chips.
  *
- * Copyright (C) 2022, Broadcom.
+ * Copyright (C) 2025 Synaptics Incorporated. All rights reserved.
+ *
+ * This software is licensed to you under the terms of the
+ * GNU General Public License version 2 (the "GPL") with Broadcom special exception.
+ *
+ * INFORMATION CONTAINED IN THIS DOCUMENT IS PROVIDED "AS-IS," AND SYNAPTICS
+ * EXPRESSLY DISCLAIMS ALL EXPRESS AND IMPLIED WARRANTIES, INCLUDING ANY
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE,
+ * AND ANY WARRANTIES OF NON-INFRINGEMENT OF ANY INTELLECTUAL PROPERTY RIGHTS.
+ * IN NO EVENT SHALL SYNAPTICS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, PUNITIVE, OR CONSEQUENTIAL DAMAGES ARISING OUT OF OR IN CONNECTION
+ * WITH THE USE OF THE INFORMATION CONTAINED IN THIS DOCUMENT, HOWEVER CAUSED
+ * AND BASED ON ANY THEORY OF LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * NEGLIGENCE OR OTHER TORTIOUS ACTION, AND EVEN IF SYNAPTICS WAS ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE. IF A TRIBUNAL OF COMPETENT JURISDICTION
+ * DOES NOT PERMIT THE DISCLAIMER OF DIRECT DAMAGES OR ANY OTHER DAMAGES,
+ * SYNAPTICS' TOTAL CUMULATIVE LIABILITY TO ANY PARTY SHALL NOT
+ * EXCEED ONE HUNDRED U.S. DOLLARS
+ *
+ * Copyright (C) 2025, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -67,7 +86,6 @@
 #if !defined(BCMDONGLEHOST) && !defined(BCM_BOOTLOADER) && defined(SR_ESSENTIALS)
 #include <saverestore.h>
 #endif
-#include <dhd_config.h>
 
 #ifdef BCM_SDRBL
 #include <hndcpu.h>
@@ -2602,11 +2620,6 @@ si_chipid_fixup(si_t *sih)
 			sii->chipnew = sih->chip; /* save it */
 			sii->pub.chip = BCM4362_CHIP_ID; /* chip class */
 		break;
-		case BCM4356_CHIP_ID:
-		case BCM4371_CHIP_ID:
-			sii->chipnew = sih->chip; /* save it */
-			sii->pub.chip = BCM4354_CHIP_ID; /* chip class */
-			break;
 		default:
 		break;
 	}
@@ -2829,10 +2842,6 @@ si_doattach(si_info_t *sii, uint devid, osl_t *osh, volatile void *regs,
 	sih->chiprev = (w & CID_REV_MASK) >> CID_REV_SHIFT;
 	sih->chippkg = (w & CID_PKG_MASK) >> CID_PKG_SHIFT;
 
-#if defined(BCMSDIO) && (defined(HW_OOB) || defined(FORCE_WOWLAN))
-	dhd_conf_set_hw_oob_intr(sdh, sih);
-#endif
-
 	si_chipid_fixup(sih);
 
 	sih->issim = IS_SIM(sih->chippkg);
@@ -2885,12 +2894,13 @@ si_doattach(si_info_t *sii, uint devid, osl_t *osh, volatile void *regs,
 			(CHIPTYPE(sii->pub.socitype) == SOCI_NAI) ||
 			(CHIPTYPE(sii->pub.socitype) == SOCI_DVTBUS)) {
 
-			if (CHIPTYPE(sii->pub.socitype) == SOCI_AI)
+			if (CHIPTYPE(sii->pub.socitype) == SOCI_AI) {
 				SI_MSG(("Found chip type AI (0x%08x)\n", w));
-			else if (CHIPTYPE(sii->pub.socitype) == SOCI_NAI)
+			} else if (CHIPTYPE(sii->pub.socitype) == SOCI_NAI) {
 				SI_MSG(("Found chip type NAI (0x%08x)\n", w));
-			else
+			} else {
 				SI_MSG(("Found chip type DVT (0x%08x)\n", w));
+			}
 			/* pass chipc address instead of original core base */
 			if ((si_alloc_wrapper(sii)) != BCME_OK) {
 				err_at = 8;
@@ -4289,16 +4299,17 @@ BCMPOSTTRAPFN(si_corereg_addr)(si_t *sih, uint coreidx, uint regoff)
 void
 si_core_disable(const si_t *sih, uint32 bits)
 {
-	if (CHIPTYPE(sih->socitype) == SOCI_SB)
+	if (CHIPTYPE(sih->socitype) == SOCI_SB) {
 		sb_core_disable(sih, bits);
-	else if ((CHIPTYPE(sih->socitype) == SOCI_AI) ||
+	} else if ((CHIPTYPE(sih->socitype) == SOCI_AI) ||
 		(CHIPTYPE(sih->socitype) == SOCI_DVTBUS) ||
-		(CHIPTYPE(sih->socitype) == SOCI_NAI))
+		(CHIPTYPE(sih->socitype) == SOCI_NAI)) {
 		ai_core_disable(sih, bits);
-	else if (CHIPTYPE(sih->socitype) == SOCI_NCI)
+	} else if (CHIPTYPE(sih->socitype) == SOCI_NCI) {
 		nci_core_disable(sih, bits);
-	else if (CHIPTYPE(sih->socitype) == SOCI_UBUS)
+	} else if (CHIPTYPE(sih->socitype) == SOCI_UBUS) {
 		ub_core_disable(sih, bits);
+	}
 }
 
 bool
@@ -7115,12 +7126,12 @@ void si_socram_set_bankpda(si_t *sih, uint32 bankidx, uint32 bankpda)
 	origidx = si_coreidx(sih);
 
 	/* Switch to SOCRAM core */
-	if (!(regs = si_setcore(sih, SOCRAM_CORE_ID, 0)))
+	if (!(regs = si_setcore(sih, SOCRAM_CORE_ID, 0))) {
 		goto done;
-
-	if (!(wasup = si_iscoreup(sih)))
+	}
+	if (!(wasup = si_iscoreup(sih))) {
 		si_core_reset(sih, 0, 0);
-
+	}
 	corerev = si_corerev(sih);
 	if (corerev >= 16) {
 		W_REG(sii->osh, &regs->bankidx, bankidx);
@@ -7291,8 +7302,9 @@ si_tcm_size(si_t *sih)
 		if (!ret) {
 			goto done;
 		}
-	} else
+	} else {
 		SI_ERROR(("si_iscoreup!!\n"));
+	}
 
 	arm_cap_reg = (volatile uint32 *)(regs + SI_CR4_CAP);
 	corecap = R_REG(sii->osh, arm_cap_reg);

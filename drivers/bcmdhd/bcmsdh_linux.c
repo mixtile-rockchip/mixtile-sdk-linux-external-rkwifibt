@@ -1,7 +1,26 @@
 /*
  * SDIO access interface for drivers - linux specific (pci only)
  *
- * Copyright (C) 2022, Broadcom.
+ * Copyright (C) 2025 Synaptics Incorporated. All rights reserved.
+ *
+ * This software is licensed to you under the terms of the
+ * GNU General Public License version 2 (the "GPL") with Broadcom special exception.
+ *
+ * INFORMATION CONTAINED IN THIS DOCUMENT IS PROVIDED "AS-IS," AND SYNAPTICS
+ * EXPRESSLY DISCLAIMS ALL EXPRESS AND IMPLIED WARRANTIES, INCLUDING ANY
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE,
+ * AND ANY WARRANTIES OF NON-INFRINGEMENT OF ANY INTELLECTUAL PROPERTY RIGHTS.
+ * IN NO EVENT SHALL SYNAPTICS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, PUNITIVE, OR CONSEQUENTIAL DAMAGES ARISING OUT OF OR IN CONNECTION
+ * WITH THE USE OF THE INFORMATION CONTAINED IN THIS DOCUMENT, HOWEVER CAUSED
+ * AND BASED ON ANY THEORY OF LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * NEGLIGENCE OR OTHER TORTIOUS ACTION, AND EVEN IF SYNAPTICS WAS ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE. IF A TRIBUNAL OF COMPETENT JURISDICTION
+ * DOES NOT PERMIT THE DISCLAIMER OF DIRECT DAMAGES OR ANY OTHER DAMAGES,
+ * SYNAPTICS' TOTAL CUMULATIVE LIABILITY TO ANY PARTY SHALL NOT
+ * EXCEED ONE HUNDRED U.S. DOLLARS
+ *
+ * Copyright (C) 2025, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -47,6 +66,7 @@ extern void dhdsdio_isr(void * args);
 #include <linux/platform_data/gpio-odin.h>
 #endif /* defined(CONFIG_ARCH_ODIN) */
 #include <dhd_linux.h>
+#include <bcmsdbus.h>
 
 /* driver info, initialized when bcmsdh_register is called */
 static bcmsdh_driver_t drvinfo = {NULL, NULL, NULL, NULL};
@@ -77,6 +97,15 @@ typedef struct bcmsdh_os_info {
 	void			*sdioh;		/* handle to lower layer (sdioh) */
 	void			*dev;		/* handle to the underlying device */
 	bool			dev_wake_enabled;
+#ifdef OOB_GPIO_TSF_INTR
+	int 		oob_tsf_irq_num;
+	unsigned long		oob_tsf_irq_flags;
+	bool			oob_tsf_irq_registered;
+	spinlock_t		oob_tsf_irq_spinlock;
+	bool			oob_tsf_irq_enabled;
+	bcmsdh_cb_fn_t		oob_tsf_irq_handler;
+	void			*oob_tsf_irq_handler_context;
+#endif /* OOB_GPIO_TSF_INTR */
 } bcmsdh_os_info_t;
 
 /* debugging macros */
@@ -138,7 +167,20 @@ bcmsdh_chipmatch(uint16 vendor, uint16 device)
 	return (FALSE);
 }
 
-void* bcmsdh_probe(osl_t *osh, void *dev, void *sdioh, void *adapter_info, uint bus_type,
+#ifdef OOB_GPIO_TSF_INTR
+static irqreturn_t wlan_oob_tsf_irq(int irq, void *dev_id)
+{
+	bcmsdh_info_t *bcmsdh = (bcmsdh_info_t *)dev_id;
+	bcmsdh_os_info_t *bcmsdh_osinfo = bcmsdh->os_cxt;
+
+	if (bcmsdh_osinfo->oob_tsf_irq_handler)
+		bcmsdh_osinfo->oob_tsf_irq_handler(bcmsdh_osinfo->oob_tsf_irq_handler_context);
+
+	return IRQ_HANDLED;
+}
+#endif /* OOB_GPIO_TSF_INTR */
+
+void* bcmsdh_probe(osl_t *osh, void *dev, void *sdioh, wifi_adapter_info_t *adapter_info, uint bus_type,
 	uint bus_num, uint slot_num)
 {
 	ulong regs;
@@ -177,6 +219,16 @@ void* bcmsdh_probe(osl_t *osh, void *dev, void *sdioh, void *adapter_info, uint 
 		goto err;
 	}
 #endif /* defined(BCMLXSDMMC) */
+
+#ifdef OOB_GPIO_TSF_INTR
+	spin_lock_init(&bcmsdh_osinfo->oob_tsf_irq_spinlock);
+	bcmsdh_osinfo->oob_tsf_irq_num = adapter_info->tsf_irq_num;
+	bcmsdh_osinfo->oob_tsf_irq_flags = adapter_info->tsf_intr_flags;
+	if (bcmsdh_osinfo->oob_tsf_irq_num < 0) {
+		SDLX_MSG(("%s: Host OOB timesync irq is not defined\n", __FUNCTION__));
+		goto err;
+	}
+#endif /* OOB_GPIO_TSF_INTR */
 
 	/* Read the vendor/device ID from the CIS */
 	vendevid = bcmsdh_query_device(bcmsdh);
@@ -243,26 +295,6 @@ int bcmsdh_set_get_wake(bcmsdh_info_t *bcmsdh, int flag)
 #endif
 	return ret;
 }
-
-int bcmsdh_get_wake(bcmsdh_info_t *bcmsdh)
-{
-#if defined(OOB_INTR_ONLY)
-	bcmsdh_os_info_t *bcmsdh_osinfo = bcmsdh->os_cxt;
-	unsigned long flags;
-#endif
-	int ret;
-
-#if defined(OOB_INTR_ONLY)
-	spin_lock_irqsave(&bcmsdh_osinfo->oob_irq_spinlock, flags);
-#endif
-
-	ret = bcmsdh->pkt_wake;
-
-#if defined(OOB_INTR_ONLY)
-	spin_unlock_irqrestore(&bcmsdh_osinfo->oob_irq_spinlock, flags);
-#endif
-	return ret;
-}
 #endif /* DHD_WAKE_STATUS */
 
 int bcmsdh_suspend(bcmsdh_info_t *bcmsdh)
@@ -282,6 +314,26 @@ int bcmsdh_resume(bcmsdh_info_t *bcmsdh)
 		return drvinfo.resume(bcmsdh_osinfo->context);
 	return 0;
 }
+
+#ifdef DEVICE_PM_CALLBACK
+int bcmsdh_prepare(bcmsdh_info_t *bcmsdh)
+{
+	bcmsdh_os_info_t *bcmsdh_osinfo = bcmsdh->os_cxt;
+
+	if (drvinfo.prepare && drvinfo.prepare(bcmsdh_osinfo->context))
+		return -EBUSY;
+	return 0;
+}
+
+int bcmsdh_complete(bcmsdh_info_t *bcmsdh)
+{
+	bcmsdh_os_info_t *bcmsdh_osinfo = bcmsdh->os_cxt;
+
+	if (drvinfo.complete)
+		return drvinfo.complete(bcmsdh_osinfo->context);
+	return 0;
+}
+#endif /* DEVICE_PM_CALLBACK */
 
 extern int bcmsdh_register_client_driver(void);
 extern void bcmsdh_unregister_client_driver(void);
@@ -356,6 +408,59 @@ bool bcmsdh_dev_pm_enabled(bcmsdh_info_t *bcmsdh)
 
 	return bcmsdh_osinfo->dev_wake_enabled;
 }
+
+#ifdef OOB_GPIO_TSF_INTR
+int bcmsdh_oob_tsf_intr_register(bcmsdh_info_t *bcmsdh, bcmsdh_cb_fn_t oob_irq_handler,
+	void* oob_irq_handler_context)
+{
+	int err = 0;
+	bcmsdh_os_info_t *bcmsdh_osinfo = bcmsdh->os_cxt;
+
+	if (bcmsdh_osinfo->oob_tsf_irq_registered) {
+		SDLX_MSG(("%s: irq is already registered\n", __FUNCTION__));
+		return -EBUSY;
+	}
+	SDLX_MSG(("%s OOB TSF irq=%d flags=0x%x\n", __FUNCTION__,
+		(int)bcmsdh_osinfo->oob_tsf_irq_num, (int)bcmsdh_osinfo->oob_tsf_irq_flags));
+	bcmsdh_osinfo->oob_tsf_irq_handler = oob_irq_handler;
+	bcmsdh_osinfo->oob_tsf_irq_handler_context = oob_irq_handler_context;
+	bcmsdh_osinfo->oob_tsf_irq_enabled = TRUE;
+	bcmsdh_osinfo->oob_tsf_irq_registered = TRUE;
+#if defined(CONFIG_ARCH_ODIN)
+	err = odin_gpio_sms_request_irq(bcmsdh_osinfo->oob_tsf_irq_num, wlan_oob_tsf_irq,
+		bcmsdh_osinfo->oob_tsf_irq_flags, "bcmsdh_tsf"ADAPTER_IDX_STR, bcmsdh);
+#else
+	err = request_irq(bcmsdh_osinfo->oob_tsf_irq_num, wlan_oob_tsf_irq,
+		bcmsdh_osinfo->oob_tsf_irq_flags, "bcmsdh_tsf"ADAPTER_IDX_STR, bcmsdh);
+#endif /* defined(CONFIG_ARCH_ODIN) */
+	if (err) {
+		SDLX_MSG(("%s: request_irq failed with %d\n", __FUNCTION__, err));
+		bcmsdh_osinfo->oob_tsf_irq_enabled = FALSE;
+		bcmsdh_osinfo->oob_tsf_irq_registered = FALSE;
+		return err;
+	}
+
+	return err;
+}
+
+void bcmsdh_oob_tsf_intr_unregister(bcmsdh_info_t *bcmsdh)
+{
+	bcmsdh_os_info_t *bcmsdh_osinfo = bcmsdh->os_cxt;
+
+	SDLX_MSG(("%s: Enter\n", __FUNCTION__));
+	if (!bcmsdh_osinfo->oob_tsf_irq_registered) {
+		SDLX_MSG(("%s: irq is not registered\n", __FUNCTION__));
+		return;
+	}
+
+	if (bcmsdh_osinfo->oob_irq_enabled) {
+		disable_irq(bcmsdh_osinfo->oob_tsf_irq_num);
+		bcmsdh_osinfo->oob_tsf_irq_enabled = FALSE;
+	}
+	free_irq(bcmsdh_osinfo->oob_tsf_irq_num, bcmsdh);
+	bcmsdh_osinfo->oob_tsf_irq_registered = FALSE;
+}
+#endif /* OOB_GPIO_TSF_INTR */
 
 #if defined(OOB_INTR_ONLY) || defined(BCMSPI_ANDROID)
 int bcmsdh_get_oob_intr_num(bcmsdh_info_t *bcmsdh)
