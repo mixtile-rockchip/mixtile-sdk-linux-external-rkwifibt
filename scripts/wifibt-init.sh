@@ -119,7 +119,7 @@ init_bt_brcm()
 	brcm_patchram_plus1 --enable_hci --no2bytes \
 		--use_baudrate_for_download --tosleep 200000 \
 		--baudrate 1500000 \
-		--patchram ${WIFIBT_FIRMWARE_DIR:-/lib/firmware}/ $WIFIBT_TTY
+		--patchram ${WIFIBT_FIRMWARE_DIR:-/lib/firmware/brcm}/ $WIFIBT_TTY
 }
 
 # Blocked init for Rockchip uart BT
@@ -220,6 +220,15 @@ init_bt()
 	}&
 
 	wait_bt
+}
+
+#for kernel 6.12
+insmod_bt()
+{
+	try_insmod btrtl
+	try_insmod btbcm
+
+	try_insmod hci_uart
 }
 
 start_bt()
