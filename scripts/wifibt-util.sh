@@ -89,11 +89,13 @@ wifibt_module()
 {
 	MODULES=$(wifibt_info | cut -f 6)
 	for m in ${MODULES//|/ }; do
-		if [ -e "/lib/modules/${m%%:*}" ]; then
-			echo $m
+		MODULE="${m%%:*}"
+		if [ -e "/lib/modules/$MODULE" ]; then
+			echo $MODULE
 			return
 		fi
 	done
+	echo "${MODULES%%[:|]*}"
 }
 
 wifibt_quirk()
