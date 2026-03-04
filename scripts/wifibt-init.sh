@@ -117,10 +117,15 @@ init_bt_brcm_uart()
 	[ "$WIFIBT_BT_TTY" ] || return
 	which brcm_patchram_plus1 >/dev/null
 
+	FIRMWARE_DIR=/lib/firmware
+	if [ -d "$FIRMWARE_DIR/brcm" ]; then
+		FIRMWARE_DIR=$FIRMWARE_DIR/brcm
+	fi
+
 	brcm_patchram_plus1 --enable_hci --no2bytes \
 		--use_baudrate_for_download --tosleep 200000 \
 		--baudrate 1500000 \
-		--patchram ${WIFIBT_FIRMWARE_DIR:-/lib/firmware/brcm}/ \
+		--patchram $FIRMWARE_DIR/ \
 		"$WIFIBT_BT_TTY"
 }
 
