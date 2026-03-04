@@ -112,28 +112,32 @@ wait_bt()
 }
 
 # Blocked init for Broadcom uart BT
-init_bt_brcm()
+init_bt_brcm_uart()
 {
+	[ "$WIFIBT_BT_TTY" ] || return
 	which brcm_patchram_plus1 >/dev/null
 
 	brcm_patchram_plus1 --enable_hci --no2bytes \
 		--use_baudrate_for_download --tosleep 200000 \
 		--baudrate 1500000 \
-		--patchram ${WIFIBT_FIRMWARE_DIR:-/lib/firmware/brcm}/ $WIFIBT_TTY
+		--patchram ${WIFIBT_FIRMWARE_DIR:-/lib/firmware/brcm}/ \
+		"$WIFIBT_BT_TTY"
 }
 
 # Blocked init for Rockchip uart BT
 init_bt_rk_uart()
 {
+	[ "$WIFIBT_BT_TTY" ] || return
 	which rk_hciattach >/dev/null
 
-	rk_hciattach -n -s 115200 $WIFIBT_TTY rockchip 3000000 flow nosleep \
+	rk_hciattach -n -s 115200 "$WIFIBT_BT_TTY" rockchip 3000000 flow nosleep \
 		11:22:33:44:55:66
 }
 
 # Blocked init for Realtek uart BT
 init_bt_rtk_uart()
 {
+	[ "$WIFIBT_BT_TTY" ] || return
 	which rtk_hciattach >/dev/null
 
 	if ! lsmod | grep -wq hci_uart; then
@@ -145,7 +149,7 @@ init_bt_rtk_uart()
 		do_insmod hci_uart "sleep:0.5"
 	fi
 
-	rtk_hciattach -n -s 115200 $WIFIBT_TTY rtk_h5
+	rtk_hciattach -n -s 115200 "$WIFIBT_BT_TTY" rtk_h5
 }
 
 # Blocked init for Realtek USB BT
@@ -185,16 +189,17 @@ do_init_bt()
 	# Blocked init
 	case "$WIFIBT_VENDOR" in
 		Rockchip) init_bt_rk_uart;;
-		Broadcom) init_bt_brcm;;
+		Broadcom) init_bt_brcm_uart;;
 		Realtek)
-			case "$WIFIBT_BUS" in
-				usb) init_bt_rtk_usb;;
-				*) init_bt_rtk_uart;;
-			esac
+			if [ "$WIFIBT_BT_TTY" ]; then
+				init_bt_rtk_usb
+			else
+				init_bt_rtk_uart
+			fi
 			;;
 		*)
 			echo "Unknown Wi-Fi/BT chip, fallback to Broadcom..."
-			init_bt_brcm
+			init_bt_brcm_uart
 			;;
 	esac
 }
@@ -456,7 +461,7 @@ WIFIBT_VENDOR="$(wifibt-util.sh vendor)"
 WIFIBT_BUS="$(wifibt-util.sh bus)"
 WIFIBT_DEVICE="$(wifibt-util.sh device)"
 WIFIBT_MODULE="$(wifibt-util.sh module)"
-WIFIBT_TTY=$(wifibt-util.sh tty)
+WIFIBT_BT_TTY=$(wifibt-util.sh bt-tty)
 WIFIBT_QUIRK=$(wifibt-util.sh quirk)
 
 cd "${WIFIBT_MODULE_DIR:-/lib/modules}"
