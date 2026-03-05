@@ -4,6 +4,16 @@ WIFI_FILE="/var/run/.wifi-interfaces"
 BT_FILE="/var/run/.bt-state"
 RELOAD_FILE="/var/run/.wifibt-reload"
 
+BT_RFKILL=
+if [ -d /sys/class/rfkill ]; then
+	for rf in /sys/class/rfkill/*; do
+		if [ "$(cat $rf/type 2>/dev/null)" = bluetooth ]; then
+			BT_RFKILL="$rf/state"
+			break;
+		fi
+	done
+fi
+
 bt_set_disabled()
 {
 	rm -f "$BT_FILE"
@@ -32,6 +42,29 @@ bt_set_suspended()
 bt_is_suspended()
 {
 	[ -r "$BT_FILE" ] && grep -wq suspend "$BT_FILE"
+}
+
+bt_rfkill_block()
+{
+	if [ "$BT_RFKILL" ]; then
+		echo 0 > "$BT_RFKILL"
+	fi
+}
+
+bt_rfkill_unblock()
+{
+	if [ "$BT_RFKILL" ]; then
+		echo 1 > "$BT_RFKILL"
+	fi
+}
+
+bt_rfkill_state()
+{
+	if [ "$BT_RFKILL" ]; then
+		cat "$BT_RFKILL"
+	else
+		echo 1
+	fi
 }
 
 # usage: do_insmod <module> [sleep:<time>] [options]
@@ -180,13 +213,13 @@ do_init_bt()
 
 	# Reset BT
 	stop_bt
-	local RFKILL=$(grep -rl "^bluetooth" /sys/class/rfkill/*/type | \
-		sed 's/type$/state/' 2>/dev/null || true)
-	if [ "$RFKILL" ]; then
-		echo 0 | tee $RFKILL >/dev/null
+	if [ -z "$BT_RFKILL" ]; then
+		echo "No rfkill for bluetooth!"
+	else
+		bt_rfkill_block
 		echo 0 > /proc/bluetooth/sleep/btwrite
 		sleep .5
-		echo 1 | tee $RFKILL >/dev/null
+		bt_rfkill_unblock
 		echo 1 > /proc/bluetooth/sleep/btwrite
 		sleep .5
 	fi
@@ -216,6 +249,8 @@ init_bt()
 
 	# BT guardian
 	{
+		bt_rfkill_unblock
+
 		# Keep BT alive when enabled
 		while ! bt_is_disabled; do
 			# BT suspended
@@ -224,8 +259,26 @@ init_bt()
 				continue
 			fi
 
+			# BT rfkill blocked
+			if [ "$(bt_rfkill_state)" = 0 ]; then
+				sleep .5
+				continue
+			fi
+
 			# Blocked init
 			do_init_bt
+		done
+	}&
+
+	# Trigger BT re-init when rfkill is toggled externally
+	{
+		while ! bt_is_disabled; do
+			sleep 1
+
+			if bt_ready && [ "$(bt_rfkill_state)" = 0 ]; then
+				echo "BT rfkill blocked!"
+				stop_bt
+			fi
 		done
 	}&
 
@@ -263,11 +316,6 @@ start_bt()
 		echo "Failed to init BT for $WIFIBT_CHIP!"
 		bt_set_disabled
 		return 1
-	fi
-
-	if [ -e "/dev/rfkill" ]; then
-		echo "HACK: Remove /dev/rfkill to disable external BT power operations."
-		rm -f /dev/rfkill
 	fi
 
 	echo "Successfully init BT for $WIFIBT_CHIP!"
