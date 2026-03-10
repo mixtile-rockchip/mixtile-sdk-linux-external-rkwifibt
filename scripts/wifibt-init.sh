@@ -83,7 +83,7 @@ do_insmod()
 		"sleep:"*) SLEEP="${1#*:}"; shift ;;
 	esac
 
-	insmod "$MODULE" "$@"
+	insmod "$MODULE" "$@" || return 1
 	sleep "$SLEEP"
 }
 
@@ -184,7 +184,7 @@ init_bt_rtk_uart()
 			return 1
 		fi
 
-		do_insmod hci_uart "sleep:0.5"
+		do_insmod hci_uart "sleep:0.5" || return 1
 	fi
 
 	rtk_hciattach -n -s 115200 "$WIFIBT_BT_TTY" rtk_h5
@@ -198,7 +198,7 @@ init_bt_rtk_usb()
 		return 1
 	fi
 
-	do_insmod rtk_btusb
+	do_insmod rtk_btusb || return 1
 
 	# Wait for BT disabled
 	while ! bt_is_disabled; do
@@ -330,7 +330,7 @@ init_wifi()
 		Realtek) try_insmod rtkm ;;
 	esac
 
-	do_insmod $(echo $WIFIBT_MODULE | tr ':' ' ')
+	do_insmod $(echo $WIFIBT_MODULE | tr ':' ' ') || return 1
 
 	wait_wifi
 }
