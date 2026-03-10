@@ -299,7 +299,7 @@ start_bt()
 	# Ignore start request while suspending
 	if bt_is_suspended; then
 		echo "BT is suspended..."
-		return 1
+		return
 	fi
 
 	# BT guardian is running?
@@ -309,13 +309,13 @@ start_bt()
 
 	if bt_ready; then
 		echo "BT is already inited..."
-		return 0
+		return
 	fi
 
 	if ! init_bt; then
 		echo "Failed to init BT for $WIFIBT_CHIP!"
 		bt_set_disabled
-		return 1
+		return
 	fi
 
 	echo "Successfully init BT for $WIFIBT_CHIP!"
@@ -349,12 +349,12 @@ start_wifi()
 	if wifi_ready; then
 		echo "Wi-Fi is already inited..."
 		enable_wifi
-		return 0
+		return
 	fi
 
 	if ! init_wifi; then
 		echo "Failed to init Wi-Fi for $WIFIBT_CHIP!"
-		return 1
+		return
 	fi
 
 	# Enable all available Wi-Fi interfaces
