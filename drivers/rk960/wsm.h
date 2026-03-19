@@ -393,6 +393,9 @@ struct rk960_common;
 
 #define WSM_EVENT_INACTIVITY		(9)
 
+/* BSS rescue (e.g. beacon miss early warning) */
+#define WSM_EVENT_BSS_RESCUE		(10)
+
 /* MIB IDs */
 /* 4.1  dot11StationId */
 #define WSM_MIB_ID_DOT11_STATION_ID		0x0000
@@ -692,7 +695,7 @@ struct wsm_hdr {
 #ifdef FPGA_SETUP
 #define WSM_CMD_LAST_CHANCE_TIMEOUT (HZ * 9 / 2)
 #else
-#define WSM_CMD_LAST_CHANCE_TIMEOUT (HZ * 20 / 2)
+#define WSM_CMD_LAST_CHANCE_TIMEOUT (HZ * 40 / 2)
 #endif
 #define WSM_CMD_EXTENDED_TIMEOUT (HZ * 20 / 2)
 
@@ -881,9 +884,20 @@ struct wsm_lmc_key_entry {
 	struct wsm_tx_seq_counter TSC;
 };
 
-struct wsm_rec_info {
-	struct wsm_tx_seq_info LmcInterface[2];
+struct wsm_lmc_rx_bab_agreement
+{
+	u32      Mode;
+	u8       TransmitAddress[6];
+	u8       Tid;
+	u8       InterfaceId;
+};
+
+struct wsm_rec_info
+{
+	struct wsm_tx_seq_info     LmcInterface[2];
 	struct wsm_lmc_key_entry sLmcKeyEntry[24];
+	u16               SM_TX_SequenceNoTable[2];   /*NUM_BSS_SEQUENCE_NOS_TOTAL = 2*/
+	struct wsm_lmc_rx_bab_agreement RxAgreement_back[4];
 };
 
 /* 3.14 */
@@ -1688,29 +1702,52 @@ static inline int wsm_set_sdio_data_width(struct rk960_common *hw_priv,
  * 4.11 TemplateFrame
  */
 #define TEMPLATE_FRAME_TCPKEEPALIVEREQUEST_TYPE       8
-#define WSM_MAX_TEMPLATE_FRAME_SIZE     1024
+#define WSM_MAX_TEMPLATE_FRAME_SIZE                   250
+#define WSM_MAX_LOGIN_DATA_SIZE                       100
+#define WSM_RESERVED_SIZE                             50
+#define WSM_RATE_INDEX_B_1M                           0
+#define LMAC_TCPKEEPALIVE_LOGIN_MAX_LEN               100
+
 struct alive_templateframe {
 	u8   FrameType;
 	u8   Rate;
 	u16  FrameLength;
 	u8  Frame[WSM_MAX_TEMPLATE_FRAME_SIZE];
+	u8  LoginData[WSM_MAX_LOGIN_DATA_SIZE];
+	u8  Reserved[WSM_RESERVED_SIZE];
 };
 int wsm_write_template_frame(struct rk960_common *hw_priv, void *_buf, size_t buf_size, int if_id);
 int wsm_write_wpa_sm(struct rk960_common *hw_priv, void *_buf, size_t buf_size, int if_id);
 
 struct keepalive_param{
-	u32 TcpKeepAlive;          /* The unit is seconds */
-	u32 TcpKeepInterval;       /* The unit is seconds */
-	u32 TcpKeepCount;          /* The Max retry counts */
-	u32 IsEnabledTcpkeepalive; /* Whether to enable tcp keepalive function, Enable is 1, Disable is 0 */
-	u32 WakeupLen;
-	u8  WakeupData[28];
+    u32 TcpKeepAlive;          /* The unit is seconds */
+    u32 TcpKeepInterval;       /* The unit is seconds */
+    u32 TcpKeepCount;          /* The Max retry counts */
+    u8  TcpKpLoginLen;//reserved_1;            /* The TCP KeepAlive login string length (workaround) */
+    u8  IsEnabledTcpkeepalive; /* Whether to enable tcp keepalive function, Enable is 1, Disable is 0 */
+    u8  TcpKpFrameLen;//reserved_2;            /* The TCP KeepAlive packet length (workaround) */
+    u8  iv_len;                /* IV lengths */
+    u32 WakeupLen;
+    u8  WakeupData[128];
+    u8  reserved_3[40];        /* 40 bytes are reserved for future use */
+};
+
+struct keepalive_str{
+    u8  tcp_kp_heartbeat_len;                            /* The TCP KeepAlive heartbeat string length*/
+    u8  tcp_kp_login_len;                                     /* The TCP KeepAlive login string length */
+    u16 reserved;
+    u8  tcp_kp_heartbeat_str[LMAC_TCPKEEPALIVE_LOGIN_MAX_LEN];    /* heartbeat string */
+    u8  tcp_kp_login_str[LMAC_TCPKEEPALIVE_LOGIN_MAX_LEN];        /* login string */
 };
 
 #define WSM_GENERIC_REQ_ID 0x0003
 #define WSM_GENERIC_RESP_ID 0x0403
 #define HI_GEN_REQ_TCPKEEPALIVE_REQ_ID	  4
-
+#ifdef RK96X_WIFI_ONLY
+#define HI_GEN_REQ_BTCMD_FROM_HOST_ID     5
+#endif
+/* Set TCP keepalive login string and heartbeat string */
+#define HI_GEN_REQ_TCPKEEPALIVE_STR_REQ_ID       6
 struct wsm_gen_req{
 	__le32 req_id;
 	u32	   req_len;
@@ -1725,6 +1762,29 @@ static inline int wsm_req_keepalive_info(struct rk960_common *hw_priv,struct kee
 	arg.req_id = HI_GEN_REQ_TCPKEEPALIVE_REQ_ID;
 	arg.params = (u8*)req;
 	arg.req_len = sizeof(struct keepalive_param);
+
+	return wsm_generic_req(hw_priv, &arg, if_id);
+}
+
+#ifdef RK96X_WIFI_ONLY
+static inline int wsm_btcmd_app_to_dev_info(struct rk960_common *hw_priv, char *req, u32 len, int if_id)
+{
+	struct wsm_gen_req arg;
+
+	arg.req_id = HI_GEN_REQ_BTCMD_FROM_HOST_ID;
+	arg.params = (u8*)req;
+	arg.req_len = len;
+
+	return wsm_generic_req(hw_priv, &arg, if_id);
+}
+#endif
+static inline int wsm_req_keepalive_string_info(struct rk960_common *hw_priv,struct keepalive_str *req,int if_id)
+{
+	struct wsm_gen_req arg;
+
+	arg.req_id = HI_GEN_REQ_TCPKEEPALIVE_STR_REQ_ID;
+	arg.params = (u8*)req;
+	arg.req_len = sizeof(struct keepalive_str);
 
 	return wsm_generic_req(hw_priv, &arg, if_id);
 }
@@ -1830,7 +1890,9 @@ struct wsm_csync_thr {
 } __packed;
 
 int wsm_set_csync_thr(struct rk960_common *hw_priv, s8 csync, int if_id);
-
+#ifdef SUPPORT_RK962_POWERSAVE
+u16 wsm_get_keepalive_confirm(void);
+#endif
 struct wsm_device_debug_struct_info {
 	int size;
 	int mem_addr;
@@ -2408,6 +2470,38 @@ static inline u8 wsm_queue_id_to_wsm(u8 queueId)
 	return queue_mapping[queueId];
 }
 
+#ifdef CONFIG_OFFLINE_LOG_SUPPORT
+#define DEFAULT_LOG_FILE_MAX_SIZE (1 * 1024 * 1024)
+#define MAX_LOG_PATH_LENGTH 256
+#define OFFLINE_QUEUE_MAX_LEN 64
+#define OFFLINE_QUEUE_WARN_THRESHOLD 95
+#define OFFLINE_LOG_BATCH_SIZE 16
+#define WSM_OFFLINE_LOG_EN 0x0815
+#define HI_GEN_REQ_OFFLINE_LOG_REQ_ID 7
+#define OFFLINE_LOG_WIFI_EN BIT(0)
+#define OFFLINE_LOG_BT_EN BIT(1)
+#define OFFLINE_LOG_ADD_TIMESTAMP 1
+
+struct offline_buffer_entry {
+	struct list_head list;
+	u8 *data;
+	size_t len;
+};
+
+struct offline_log_common {
+	struct list_head offline_buffer_queue;
+	spinlock_t queue_lock;
+	unsigned int max_queue_len;
+	unsigned int queue_count;
+	wait_queue_head_t offline_wait_queue;
+	struct task_struct *offline_thread;
+	bool thread_should_stop;
+	loff_t offline_log_file_max_size;
+	u32 runtime_offline_log_en;
+	struct rk960_common *hw_priv;
+};
+#endif
+
 char *wsm_conv_req_resp_to_str(int id);
 int wsm_set_pm_indication(struct rk960_common *hw_priv, struct wsm_buf *buf);
 
@@ -2417,5 +2511,14 @@ int wsm_send_fw_recovery_cmd(struct rk960_common *hw_priv);
 int rk960_pending_tx_confirm(struct rk960_common *hw_priv,
 			     int if_id, u32 packetID);
 int rk960_pending_scan_complete_indication(struct rk960_common *hw_priv);
+#ifdef CONFIG_OFFLINE_LOG_SUPPORT
+int rk96x_init_offline_components(struct offline_log_common *priv);
+int offline_send_log_en(struct rk960_common *hw_priv, u32 value);
+int rk96x_offline_worker_thread(void *data);
+const char *offline_log_file_path_param(void);
+void offline_log_en_set(u32 value);
+u32 offline_log_en_get(void);
+void offline_log_file_path_set(const char *value);
+#endif
 
 #endif /* RK960_HWIO_H_INCLUDED */

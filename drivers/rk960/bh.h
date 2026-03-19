@@ -24,5 +24,6 @@ int wsm_release_tx_buffer(struct rk960_common *hw_priv, int count);
 int wsm_release_vif_tx_buffer(struct rk960_common *hw_priv, int if_id,
 			      int count);
 void hwbus_rcvbuf_init(struct rk960_common *hw_priv);
+void fw_no_sleep_set(int value);
 
 #endif /* RK960_BH_H */

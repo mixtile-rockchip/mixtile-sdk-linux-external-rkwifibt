@@ -95,6 +95,9 @@ void rk960_link_id_reset(struct work_struct *work);
 #endif
 
 void rk960_csync_param_init(struct rk960_common *hw_priv);
+#ifdef RK960_CSYNC_ADJUST
+void rk960_csync_rescue(struct rk960_common *hw_priv);
+#endif
 void rk960_csync_work(struct work_struct *work);
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(4, 6, 0))
 void rk960_csync_timer(struct timer_list *t);

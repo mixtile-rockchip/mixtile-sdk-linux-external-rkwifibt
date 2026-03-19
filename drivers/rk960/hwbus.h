@@ -55,6 +55,9 @@ int rk960_sdio_irq_subscribe(struct hwbus_priv *self);
 
 int rk960_sdio_device_init(struct hwbus_priv *self);
 int rk960_sdio_recovery_init(struct rk960_common *hw_priv);
+#ifndef RFKILL_RK
+int rK96x_wifi_power(int on);
+#endif
 
 struct hwbus_ops {
 	int (*hwbus_memcpy_fromio) (struct hwbus_priv * self, unsigned int addr,

@@ -105,6 +105,6 @@ int rk960_reg_write(struct rk960_common *priv, u32 addr,
 
 int rk960_sdio_set_bus_width(struct rk960_common *priv, int width, int lock);
 int rk960_sdio_get_bus_width(struct rk960_common *priv);
-int rk960_get_sdio_width_param(void);
+int rk960_get_sdio_width_param(struct rk960_common *priv);
 
 #endif /* RK960_HWIO_H_INCLUDED */

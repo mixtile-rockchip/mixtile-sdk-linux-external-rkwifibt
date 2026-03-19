@@ -25,6 +25,11 @@ static int fw_no_sleep = 0;
 module_param(fw_no_sleep, int, 0644);
 MODULE_PARM_DESC(fw_no_sleep, "disable fw sleep");
 
+void fw_no_sleep_set(int value)
+{
+	fw_no_sleep = value;
+}
+
 extern int rk960_jtag_debug_enable(void);
 
 static int rk960_bh(void *arg);
@@ -58,11 +63,13 @@ int wsm_release_buffer_to_fw(struct rk960_vif *priv, int count);
 int rk960_register_bh(struct rk960_common *hw_priv)
 {
 	int err = 0;
-	//struct sched_param param = {.sched_priority = 1 };
+	struct sched_param param;
+	param.sched_priority = 1;
 	RK960_DEBUG_BH("[BH] register.\n");
 	BUG_ON(hw_priv->bh_thread);
 	atomic_set(&hw_priv->bh_rx, 0);
 	atomic_set(&hw_priv->bh_tx, 0);
+	atomic_set(&hw_priv->irq_protect, 0);
 	atomic_set(&hw_priv->bh_term, 0);
 	atomic_set(&hw_priv->bh_suspend, RK960_BH_RESUMED);
 	hw_priv->buf_id_tx = 0;
@@ -167,9 +174,12 @@ void rk960_irq_handler(struct rk960_common *hw_priv)
 	if (hw_priv->wow_suspend_done)
 		rk960_pm_stay_awake(&hw_priv->pm_state, 3 * HZ / 100);
 #endif
-
-	if (atomic_add_return(1, &hw_priv->bh_rx) == 1)
-		wake_up(&hw_priv->bh_wq);
+	if (atomic_read(&hw_priv->irq_protect) == 0)
+	{
+		atomic_add_return(1, &hw_priv->irq_protect);
+		if (atomic_add_return(1, &hw_priv->bh_rx) == 1)
+			wake_up(&hw_priv->bh_wq);
+	}
 }
 
 void rk960_bh_wakeup(struct rk960_common *hw_priv)
@@ -490,7 +500,7 @@ int rk960_device_wakeup(struct rk960_common *hw_priv, int wake)
 	if (!wake)
 		hw_priv->device_can_sleep = true;
 
-	RK960_INFO_BH("[BH] Notify Device %s.\n", wake ? "wake" : "sleep");
+	RK960_DEBUG_BH("[BH] Notify Device %s.\n", wake ? "wake" : "sleep");
 	return 0;
 }
 
@@ -943,6 +953,8 @@ rx:
 #endif
 				RK960_ERROR_BH("Invalid read len: %d",
 					       read_len);
+				if(atomic_read(&hw_priv->irq_protect) >= 1)
+					atomic_sub_return(1, &hw_priv->irq_protect);
 				continue;
 			}
 
@@ -950,7 +962,11 @@ rx:
 			hwbus_rcvbuf_init(hw_priv);
 
 			if (clr_irq)
+			{
 				__rk960_clear_irq(hw_priv);
+				if(atomic_read(&hw_priv->irq_protect) >= 1)
+					atomic_sub_return(1, &hw_priv->irq_protect);
+			}
 			clr_irq = 0;
 			if (WARN_ON
 			    (rk960_data_read
@@ -1000,7 +1016,11 @@ rx_con:
 			memcpy(data, wsm, read_len);
 #else
 			if (clr_irq)
+			{
 				__rk960_clear_irq(hw_priv);
+				if(atomic_read(&hw_priv->irq_protect) >= 1)
+					atomic_sub_return(1, &hw_priv->irq_protect);
+			}
 			clr_irq = 0;
 			if (WARN_ON(rk960_data_read(hw_priv, data, alloc_len)))
 				break;
@@ -1223,6 +1243,13 @@ tx:
 			}
 
 			wsm_alloc_tx_buffer(hw_priv);
+			#ifdef SUPPORT_RK962_POWERSAVE
+			if(0x1 == wsm_get_keepalive_confirm())
+			{
+				RK960_DEBUG_TXRX("%s, line %d.\n",__func__, __LINE__);
+				continue;
+			}
+			#endif
 			ret = wsm_get_tx(hw_priv, &data, &tx_len, &tx_burst,
 					 &vif_selected);
 			if (ret <= 0) {

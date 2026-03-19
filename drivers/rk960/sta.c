@@ -217,7 +217,17 @@ void rk960_stop(struct ieee80211_hw *dev)
 
 #if 1
 	while (atomic_read(&hw_priv->tx_lock) != 1) {
-		schedule();
+		#ifdef SUPPORT_RK962_POWERSAVE
+		if(0x1 == wsm_get_keepalive_confirm())
+		{
+			if (atomic_xchg(&hw_priv->tx_lock, 1) != 1)
+				RK960_DEBUG_STA("[STA] TX is force-unlocked due to stop request.\n");
+		}
+		else
+		#endif
+		{
+			schedule();
+		}
 	}
 #else
 	/* HACK! */
@@ -672,9 +682,17 @@ int rk960_config(struct ieee80211_hw *dev, u32 changed)
 			priv->powersave_mode.fastPsmIdlePeriod =
 			    conf->dynamic_ps_timeout << 1;
 
+		/* Update PM mode when PS config changes:
+		 * For open networks, update immediately
+		 * For encrypted networks, update after PTK is installed (cipherType != 0) */
 		if (priv->join_status == RK960_JOIN_STATUS_STA &&
-		    priv->bss_params.aid)
+			priv->bss_params.aid && priv->setbssparams_done &&
+			rk960_pm_is_allowed(hw_priv, priv)) {
+			RK960_DEBUG_STA("%s:%d calling rk960_set_pm (open network or after PTK installed)\n", __func__, __LINE__);
 			rk960_set_pm(priv, &priv->powersave_mode);
+		} else {
+			RK960_DEBUG_STA("%s:%d skipping rk960_set_pm (encrypted network, PTK not installed yet)\n", __func__, __LINE__);
+		}
 	}
 
 config_out:
@@ -1140,8 +1158,16 @@ int rk960_conf_tx(struct ieee80211_hw *dev, struct ieee80211_vif *vif,
 			ret = rk960_set_uapsd_param(priv, &priv->edca);
 			if (!ret && priv->setbssparams_done &&
 			    (priv->join_status == RK960_JOIN_STATUS_STA) &&
-			    (old_uapsdFlags != priv->uapsd_info.uapsdFlags))
-				rk960_set_pm(priv, &priv->powersave_mode);
+			    (old_uapsdFlags != priv->uapsd_info.uapsdFlags)) {
+				if (rk960_pm_is_allowed(hw_priv, priv)) {
+					RK960_DEBUG_STA("[PM] %s:%d calling rk960_set_pm (open network or after PTK installed)\n",
+							 __func__, __LINE__);
+					rk960_set_pm(priv, &priv->powersave_mode);
+				} else {
+					RK960_DEBUG_STA("[PM] %s:%d skipping rk960_set_pm (encrypted network, PTK not installed yet)\n",
+							 __func__, __LINE__);
+				}
+			}
 		}
 	} else
 		ret = -EINVAL;
@@ -1196,7 +1222,11 @@ int rk960_set_pm(struct rk960_vif *priv, const struct wsm_set_pm *arg)
 	if (priv->uapsd_info.uapsdFlags != 0)
 		pm.pmMode &= ~WSM_PSM_FAST_PS_FLAG;
 
+	RK960_DEBUG_STA("[PM] %s:%d rk960_set_pm: pm.pmMode=0x%x, firmware_ps_mode.pmMode=0x%x\n",
+			__func__, __LINE__, pm.pmMode, priv->firmware_ps_mode.pmMode);
+
 	if (memcmp(&pm, &priv->firmware_ps_mode, sizeof(struct wsm_set_pm))) {
+		RK960_DEBUG_STA("[PM] %s:%d pm mode changed, will send WSM_SET_PM_REQ\n", __func__, __LINE__);
 
 		pm.fastPsmIdlePeriod = 0;
 		if (disable_ps) {
@@ -1215,9 +1245,13 @@ int rk960_set_pm(struct rk960_vif *priv, const struct wsm_set_pm *arg)
 		priv->firmware_ps_mode = pm;
 		return wsm_set_pm(priv->hw_priv, &pm, priv->if_id);
 	} else {
+		RK960_DEBUG_STA("[PM] %s:%d pm mode unchanged, skipping WSM_SET_PM_REQ\n", __func__, __LINE__);
 		return 0;
 	}
 }
+
+extern int rk960_fwcr_recovery_auth_group(struct rk960_common *hw_priv,
+        struct sk_buff *skb, struct rk960_vif *priv);
 
 int rk960_set_key(struct ieee80211_hw *dev, enum set_key_cmd cmd,
 		  struct ieee80211_vif *vif, struct ieee80211_sta *sta,
@@ -1412,12 +1446,36 @@ int rk960_set_key(struct ieee80211_hw *dev, enum set_key_cmd cmd,
                         WARN_ON(wsm_key->type != hw_priv->fwcr_keys[idx].type);
                         wsm_key = &hw_priv->fwcr_keys[idx];
                 }
+                if(0x10000 == (hw_priv->fwcr_encrypt_ap & 0xffff0000) && (0x1 == pairwise))
+                {
+                        rk960_fwcr_recovery_auth_group(hw_priv, NULL, priv);
+                }
 #endif
 		ret = WARN_ON(wsm_add_key(hw_priv, wsm_key, priv->if_id));
 		if (!ret)
 			key->hw_key_idx = idx;
 		else
 			rk960_free_key(hw_priv, idx);
+
+		/* Set power save mode after PTK is installed.
+		 * Note: PTK installation typically happens near the end of the 4-way
+		 * handshake; avoid enabling PM too early for some non-standard APs. */
+		if (!ret && pairwise && priv->join_status == RK960_JOIN_STATUS_STA &&
+		    priv->bss_params.aid && priv->setbssparams_done) {
+			/* PTK installed, now set power save mode */
+			if (priv->user_power_set_true) {
+				priv->powersave_mode.pmMode = priv->user_pm_mode;
+			} else {
+				/* Use default PM mode if user hasn't set it */
+				priv->powersave_mode.pmMode = WSM_PSM_FAST_PS;
+			}
+			/* Reset fastPsmIdlePeriod to ensure memcmp detects the change */
+			priv->powersave_mode.fastPsmIdlePeriod = 0;
+			/* Force update by clearing firmware_ps_mode to ensure command is sent */
+			memset(&priv->firmware_ps_mode, 0, sizeof(priv->firmware_ps_mode));
+			RK960_DEBUG_STA("[PM] %s:%d calling rk960_set_pm (after PTK installed)\n", __func__, __LINE__);
+			rk960_set_pm(priv, &priv->powersave_mode);
+		}
 
 		if (!ret && (pairwise
 			     || wsm_key->type == WSM_KEY_TYPE_WEP_DEFAULT)
@@ -1559,7 +1617,13 @@ int __rk960_flush(struct rk960_common *hw_priv, bool drop, int if_id)
 	struct rk960_vif *priv = __rk960_hwpriv_to_vifpriv(hw_priv, if_id);
 
 	RK960_DEBUG_STA("%s: drop %d if_id %d\n", __func__, drop, if_id);
-
+	#ifdef SUPPORT_RK962_POWERSAVE
+	if(0x1 == wsm_get_keepalive_confirm())
+	{
+		drop = 1;
+		RK960_DEBUG_TXRX("%s, set drop 1.\n", __func__);
+	}
+	#endif
 	for (;;) {
 		/* TODO: correct flush handling is required when dev_stop.
 		 * Temporary workaround: 2s
@@ -1831,6 +1895,10 @@ void rk960_event_handler(struct work_struct *work)
 		case WSM_EVENT_ERROR:
 			/* I even don't know what is it about.. */
 			//STUB();
+			RK960_INFO_STA("WSM_EVENT_ERROR.\n");
+#ifdef RK960_FW_ERROR_RECOVERY
+			rk960_signal_fw_error(hw_priv, RK960_FWERR_REASON_DEV_BCN_ER);
+#endif
 			break;
 		case WSM_EVENT_BSS_LOST:
 			{
@@ -1863,6 +1931,14 @@ void rk960_event_handler(struct work_struct *work)
 							   &priv->bss_loss_work,
 							   10 * HZ);
 				}
+				break;
+			}
+		case WSM_EVENT_BSS_RESCUE:
+			{
+				RK960_INFO_STA("[CQM] BSS rescue.\n");
+#ifdef RK960_CSYNC_ADJUST
+				rk960_csync_rescue(hw_priv);
+#endif
 				break;
 			}
 		case WSM_EVENT_BSS_REGAINED:
@@ -1946,6 +2022,7 @@ void rk960_event_handler(struct work_struct *work)
 
 					priv->powersave_mode.pmMode =
 					    WSM_PSM_ACTIVE;
+					RK960_DEBUG_STA("[PM] %s:%d calling rk960_set_pm\n", __func__, __LINE__);
 					ret =
 					    rk960_set_pm(priv,
 							 &priv->powersave_mode);
@@ -2519,7 +2596,7 @@ void rk960_join_work(struct work_struct *work)
 
 	cancel_delayed_work_sync(&priv->join_timeout);
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 19, 0))
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0))
 	bss = cfg80211_get_bss(hw_priv->hw->wiphy, NULL /*hw_priv->channel */ ,
 			       bssid, NULL, 0, IEEE80211_BSS_TYPE_ANY,
 			       IEEE80211_PRIVACY_ANY);
@@ -3243,6 +3320,8 @@ int rk960_vif_setup(struct rk960_vif *priv, int set)
 	priv->power_set_true = 0;
 	priv->user_power_set_true = 0;
 	priv->user_pm_mode = 0;
+	priv->cipherType = 0;
+	RK960_DEBUG_STA("[PM] %s:%d resetting cipherType to 0\n", __func__, __LINE__);
 	ret = rk960_debug_init_priv(hw_priv, priv);
 	if (WARN_ON(ret))
 		goto out;
@@ -4267,6 +4346,7 @@ static int rk960_set_power_save(struct ieee80211_hw *hw, u8 * data, int len)
 	if (priv->join_status == RK960_JOIN_STATUS_STA && priv->bss_params.aid
 	    && priv->setbssparams_done && priv->filter4.enable) {
 		priv->powersave_mode.pmMode = priv->user_pm_mode;
+		RK960_DEBUG_STA("%s:%d calling rk960_set_pm\n", __func__, __LINE__);
 		rk960_set_pm(priv, &priv->powersave_mode);
 	} else
 		priv->user_power_set_true = ps_elems->powerSave;

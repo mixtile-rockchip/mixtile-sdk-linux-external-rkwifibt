@@ -11,12 +11,10 @@
 #define _RK960_FIRMWARE_H_
 
 //#define ENABLE_LOADER_BEFORE_FIRMWARE
-#ifdef SUPPORT_RK962_POWERSAVE
-#define FW_LOADER_FROM_FOPEN
-#endif
-#define FW_LOADER_FROM_FOPEN
 //#define FW_MEMORY_CHECK
 #define FW_DOWNLOAD_CHECK
+
+//#define FW_LOADER_PATH_FROM_PARM
 
 #define MAX_FW_BUF_SIZE       (16*1024)
 #define MAX_SDD_BUF_SIZE      (4*1024)
@@ -37,6 +35,30 @@
 #define SDIO_START_CMD_ID		0x5A5A5A5A
 #define BOOTUP_CRC_CMD			0x5A5A5A5B
 #define SDIO_HOST_TO_LOADER_CMD	0x5A5A5A5D
+#define BOOT_UPGRADE_BOARD_CONFIG 	 0x5A5A5A5E
+
+#define RK96X_FW_VERSION_ADDR_V1_1 0x140
+#define RK96X_FW_VERSION_ADDR 0xE0
+
+#define RK960_FW1_SVN_VERSION_ADDR_V1_1 0x140
+#define RK960_FW2_SVN_VERSION_ADDR_V1_1 0x22F8
+#define RK962_FW1_SVN_VERSION_ADDR_V1_1 0x140
+#define RK962_FW2_SVN_VERSION_ADDR_V1_1 0x22F8
+
+#define RK960_FW1_SVN_VERSION_ADDR 0xE0
+#define RK960_FW2_SVN_VERSION_ADDR 0x2364
+#define RK962_FW1_SVN_VERSION_ADDR 0xE0
+#define RK962_FW2_SVN_VERSION_ADDR 0x2364
+
+#define RK960_FW1_SVN_VERSION_LIMIT_V1_1 10039  //this is 960 E1
+#define RK960_FW2_SVN_VERSION_LIMIT_V1_1 10039  //this is 960 E1
+#define RK962_FW1_SVN_VERSION_LIMIT_V1_1 10039  //this is 962 E1
+#define RK962_FW2_SVN_VERSION_LIMIT_V1_1 10039  //this is 962 E1
+
+#define RK960_FW1_SVN_VERSION_LIMIT 10039    //this is E2
+#define RK960_FW2_SVN_VERSION_LIMIT 10039    //this is E2
+#define RK962_FW1_SVN_VERSION_LIMIT 10039    //this is E2
+#define RK962_FW2_SVN_VERSION_LIMIT 10039    //this is E2
 
 /* hwio addr info */
 #define IO_RECV_LEN_L 			2
@@ -86,8 +108,12 @@ enum rk960_download_fw_name_e {
 
 int rk960_load_firmware(struct rk960_common *priv, int start_fw);
 int rk960_start_fw(struct rk960_common *priv);
+int rk960_set_fw_board_config(struct rk960_common *priv);
 int rk960_download_fw(struct rk960_common *priv, int start_fw, enum rk960_download_fw_name_e name);
 int rk960_alloc_firmware_buf(struct firmware_info *fw_info);
 void rk960_free_firmware_buf(struct firmware_info *fw_info);
+#ifdef FW_LOADER_PATH_FROM_PARM
+const char *rk960_get_fw_path_param(void);
+#endif
 
 #endif

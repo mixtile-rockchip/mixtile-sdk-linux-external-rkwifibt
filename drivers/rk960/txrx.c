@@ -21,6 +21,7 @@
 #include "sta.h"
 #include "hwbus.h"
 #include "debug.h"
+#include "config.h"
 
 #define RK960_INVALID_RATE_ID (0xFF)
 
@@ -29,28 +30,24 @@
 #endif /* CONFIG_RK960_TESTMODE */
 
 #ifdef SUPPORT_RK962_POWERSAVE
-static bool keepalive_enable = false;
-module_param(keepalive_enable, bool, 0644);
-MODULE_PARM_DESC(keepalive_enable, "keepalive enable");
-
-static u32 keepalive_port = 0;
-module_param(keepalive_port, uint, 0644);
-MODULE_PARM_DESC(keepalive_port, "keepalive port");
-
-static u32 keepalive_ip =  0x6800a8c0;//(0x68 << 24) | (0 << 16) | (0xa8 << 8) | 0xc0; (192.168.0.104)
-module_param(keepalive_ip, uint, 0644);
-MODULE_PARM_DESC(keepalive_ip, "keepalive IP address");
-
-static u32 keepalive_parameter[5];
-module_param_array(keepalive_parameter, uint, NULL, 0644);
-MODULE_PARM_DESC(keepalive_parameter, "RK960 keepalive parameter");
-
-static unsigned char keepalive_wakeupstring[28];
-module_param_array(keepalive_wakeupstring, byte, NULL, 0644);
-MODULE_PARM_DESC(keepalive_wakeupstring, "RK960 keepalive wakeupstring");
+bool keepalive_enable = false;
+u32 keepalive_port = 0;
+u32 keepalive_ip =  0x6800a8c0;//(0x68 << 24) | (0 << 16) | (0xa8 << 8) | 0xc0; (192.168.0.104)
+u32 keepalive_parameter[7];
 struct keepalive_param keepalive_param;
+struct keepalive_str keepalive_string;
 struct alive_templateframe alive_tempframe;
+unsigned char keepalive_heartbeatstring[100];
+unsigned char keepalive_loginstring[100];
+unsigned char keepalive_wakeupstring[128];
+#ifdef RK96X_WIFI_ONLY
+unsigned char btcmd_dev_to_app[64];
 #endif
+#endif
+
+static void rk960_get_encrypt_ap_from_assoc_req(struct rk960_common *hw_priv,
+						 struct sk_buff *skb,
+						 struct ieee80211_hdr *frame);
 
 static const struct ieee80211_rate *rk960_get_tx_rate(const struct rk960_common
 						      *hw_priv,
@@ -979,6 +976,8 @@ rk960_tx_h_bt(struct rk960_vif *priv,
 
 	if (unlikely(ieee80211_is_nullfunc(t->hdr->frame_control)))
 		priority = WSM_EPTA_PRIORITY_MGT;
+	else if (unlikely(ieee80211_is_auth(t->hdr->frame_control)))
+		priority = WSM_EPTA_PRIORITY_EAPOL;
 	else if (ieee80211_is_data(t->hdr->frame_control)) {
 		/* Skip LLC SNAP header (+6) */
 		u8 *payload = &t->skb->data[t->hdrlen];
@@ -1278,7 +1277,7 @@ rk960_tx_h_skb_pad(struct rk960_common *priv,
 
 /* ******************************************************************** */
 #ifdef SUPPORT_RK962_POWERSAVE
-#define KEY_UPDATE_SM_PATH "/data/key_update_sm.txt"
+/* KEY_UPDATE_SM_PATH will be generated dynamically using config_get_full_path */
 #endif
 void rk960_tx(struct ieee80211_hw *dev,
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0))
@@ -1309,6 +1308,9 @@ void rk960_tx(struct ieee80211_hw *dev,
 	struct rk960_vif *priv;
 	struct ieee80211_hdr *frame = (struct ieee80211_hdr *)skb->data;
 	struct ieee80211_mgmt *mgmt = (struct ieee80211_mgmt *)skb->data;
+#ifdef SUPPORT_FWCR
+	struct ieee80211_tx_info *info = IEEE80211_SKB_CB(skb);
+#endif
 
 	dump_ieee80211_hdr_info((unsigned char *)skb->data, skb->len, 1, 0);
 
@@ -1337,8 +1339,16 @@ void rk960_tx(struct ieee80211_hw *dev,
 
 #ifdef SUPPORT_FWCR
         if (!rk960_fwcr_recovery_auth(hw_priv, skb, priv))
-                goto drop;
+        {
+            info = IEEE80211_SKB_CB(skb);
+            info->flags |= IEEE80211_TX_STAT_ACK;
+            RK960_INFO_TXRX("%s,%d,info->flags=%x\n",__func__, __LINE__,info->flags);
+            goto drop;
+        }
 #endif
+
+	/* Set fwcr_encrypt_ap based on association request frame */
+	rk960_get_encrypt_ap_from_assoc_req(hw_priv, skb, frame);
 
 #ifdef CONFIG_RK960_TESTMODE
 	spin_lock_bh(&hw_priv->tsm_lock);
@@ -1438,55 +1448,47 @@ void rk960_tx(struct ieee80211_hw *dev,
 #ifdef SUPPORT_RK962_POWERSAVE
 	if(true == keepalive_enable)
 	{
-		RK960_INFO_TXRX("%s keepalive_port: %d\n", __func__, keepalive_port);
-		RK960_INFO_TXRX("%s keepalive_ip: %pI4.\n", __func__, &keepalive_ip);
+		if(0x1 == wsm_get_keepalive_confirm())
+		{
+			RK960_DEBUG_TXRX("Received kp confirm 1, goto drop!");
+			goto drop;
+		}
+
+		RK960_INFO_KEEPALIVE("%s keepalive_port: %d\n", __func__, keepalive_port);
+		RK960_INFO_KEEPALIVE("%s keepalive_ip: %pI4.\n", __func__, &keepalive_ip);
 		if(NULL != t.tx_info->control.hw_key)
 		{
 			keepalive_iv_len = t.tx_info->control.hw_key->iv_len;
-			RK960_INFO_TXRX("iv_len: %d.\n", t.tx_info->control.hw_key->iv_len);
+			RK960_INFO_KEEPALIVE("iv_len: %d.\n", t.tx_info->control.hw_key->iv_len);
 		}
 		else
 		{
-			RK960_INFO_TXRX("WIFI have NO password.\n");
+			RK960_INFO_KEEPALIVE("WIFI have NO password.\n");
 		}
-
 		ret = filter_ieee80211_keepalive_frame((unsigned char *)skb->data, skb->len, 1, keepalive_iv_len, keepalive_ip, keepalive_port);
 		if(0 != ret)
 		{
-			RK960_DEBUG_TXRX("filter_ieee80211_keepalive_frame SUCCESS !!!");
+			RK960_INFO_KEEPALIVE("filter_ieee80211_keepalive_frame SUCCESS !!!");
+			memset(&alive_tempframe, 0, sizeof(struct alive_templateframe));
 			alive_tempframe.FrameType = TEMPLATE_FRAME_TCPKEEPALIVEREQUEST_TYPE;
-			alive_tempframe.Rate = 100;
-			alive_tempframe.FrameLength = skb->len;
+			//The default TX Rate of TCP KeepAlive is 1M.
+			alive_tempframe.Rate = WSM_RATE_INDEX_B_1M;
+			alive_tempframe.FrameLength = WSM_MAX_TEMPLATE_FRAME_SIZE + min(keepalive_parameter[4], (u32)WSM_MAX_LOGIN_DATA_SIZE);
 
-			RK960_DEBUG_TXRX("FrameType = %d, Rate = %d, skb->len = %d\n",alive_tempframe.FrameType, alive_tempframe.Rate, skb->len);
+			RK960_INFO_KEEPALIVE("FrameType=%d, Rate=%d, skb->len=%d\n",alive_tempframe.FrameType,
+				alive_tempframe.Rate, skb->len);
 
 			memcpy(alive_tempframe.Frame, skb->data, skb->len);
 
-			//memcpy(&keepalive_parameter, skb->data + ret, sizeof(struct keepalive_param));
+			keepalive_param.TcpKpFrameLen = skb->len;
+			RK960_INFO_KEEPALIVE("FrameLength = %d.",keepalive_param.TcpKpFrameLen);
 
-			keepalive_param.TcpKeepAlive = keepalive_parameter[0];
-			keepalive_param.TcpKeepInterval = keepalive_parameter[1];
-			keepalive_param.TcpKeepCount = keepalive_parameter[2];
-			keepalive_param.IsEnabledTcpkeepalive = keepalive_parameter[3];
-			keepalive_param .WakeupLen = keepalive_parameter[4];
-			memcpy(keepalive_param.WakeupData, keepalive_wakeupstring, keepalive_param.WakeupLen);
-
-			RK960_DEBUG_TXRX("TcpKeepAlive = %d.",keepalive_param.TcpKeepAlive);
-			RK960_DEBUG_TXRX("TcpKeepInterval = %d.",keepalive_param.TcpKeepInterval);
-			RK960_DEBUG_TXRX("TcpKeepCount = %d.",keepalive_param.TcpKeepCount);
-			RK960_DEBUG_TXRX("IsEnabledTcpkeepalive = 0x%x.",keepalive_param.IsEnabledTcpkeepalive);
-			RK960_DEBUG_TXRX("WakeupLen = %d.",keepalive_param.WakeupLen);
-			RK960_DEBUG_TXRX("WakeupData = %s.",keepalive_param.WakeupData);
-			RK960_DEBUG_TXRX("WakeupData(hexint) :");
-			print_hex_dump(KERN_INFO, " ", DUMP_PREFIX_NONE, 16, 1, keepalive_param.WakeupData, keepalive_param.WakeupLen, 1);
-
-			keepalive_param.IsEnabledTcpkeepalive = (keepalive_param.IsEnabledTcpkeepalive << 16);
-			keepalive_param.IsEnabledTcpkeepalive |= keepalive_iv_len;
-			RK960_DEBUG_TXRX("IsEnabledTcpkeepalive(High 16 bits is IsEnabledTcpkeepalive, Low 16 bits is iv_len) = 0x%x.",keepalive_param.IsEnabledTcpkeepalive);
+			keepalive_param.iv_len = keepalive_iv_len;
+			RK960_INFO_KEEPALIVE("iv_len = %d.", keepalive_param.iv_len);
 
 			queue_delayed_work(hw_priv->workqueue, &hw_priv->keepalive_timeout, 0);
-			RK960_DEBUG_TXRX("CALL priv->keepalive_timeout.queue_delayed_work !!!");
-			RK960_DEBUG_TXRX("goto drop!!!");
+			RK960_INFO_KEEPALIVE("CALL priv->keepalive_timeout.queue_delayed_work !!!");
+			RK960_INFO_KEEPALIVE("goto drop!!!");
 			goto drop;
 		}
 	}
@@ -1638,7 +1640,7 @@ void rk960_tx_confirm_cb(struct rk960_common *hw_priv,
 	}
 
 	if (arg->status)
-		RK960_INFO_TXRX("TX failed: %d ackFailures %d flags %x.\n",
+		RK960_DEBUG_TXRX("TX failed: %d ackFailures %d flags %x.\n",
 				arg->status, arg->ackFailures, arg->flags);
 
 #ifdef CONFIG_RK960_TESTMODE
@@ -2174,6 +2176,22 @@ int rk960_csync_set_thresh(struct rk960_common *hw_priv, int thresh)
 	return need_update;
 }
 
+void rk960_csync_rescue(struct rk960_common *hw_priv)
+{
+	int need_update = 0;
+
+	spin_lock_bh(&hw_priv->csync_lock);
+	rk960_csync_clr_history(hw_priv, 0);
+	rk960_csync_clr_history(hw_priv, 1);
+	need_update = rk960_csync_set_thresh(hw_priv, RK960_CSYNC_DEFAULT_THRESH);
+	spin_unlock_bh(&hw_priv->csync_lock);
+
+	RK960_DEBUG_TXRX("%s: need_update %d\n", __func__, need_update);
+
+	if (need_update)
+		queue_work(hw_priv->workqueue, &hw_priv->csync_work);
+}
+
 static int rk960_csync_process(struct rk960_common *hw_priv, int index)
 {
 	struct csync_params *csync = &hw_priv->csync_params;
@@ -2293,13 +2311,13 @@ void rk960_csync_set_rssi(struct rk960_common *hw_priv, s8 rssi)
         int thresh;
 
         thresh = (s8) (-1) * rssi;
-        thresh = thresh * 2 + RK960_CSYNC_THRESH_OFFSET;
+        thresh = thresh * 2 + RK960_CSYNC_THRESH_OFFSET_JOIN;
         if (thresh < RK960_CSYNC_THRESH_MIN)
                 thresh = RK960_CSYNC_THRESH_MIN;
         else if (thresh > RK960_CSYNC_THRESH_MAX)
                 thresh = RK960_CSYNC_THRESH_MAX;
 
-        RK960_DEBUG_TXRX("%s: thresh %d\n", __func__, thresh);
+        RK960_DEBUG_TXRX("%s:join thresh %d\n", __func__, thresh);
 	spin_lock_bh(&hw_priv->csync_lock);
 	update = rk960_csync_set_thresh(hw_priv, thresh);
 	spin_unlock_bh(&hw_priv->csync_lock);
@@ -2682,23 +2700,133 @@ int rk960_pae_type(struct sk_buff *skb, int tx)
                                                 RK960_FWCR_FRAME_TYPE_2_4WAY;
                                         }
                                                
-                		} else {
-                			/* 1/4 4-Way Handshake */
-                                        return RK960_FWCR_FRAME_TYPE_1_4WAY;
-                		}
-                	} else {
-                		if (key_info & WPA_KEY_INFO_MIC) {
-                			/* 1/2 Group Key Handshake */
-                                        return  RK960_FWCR_FRAME_TYPE_1_2GRO;
-                		}
-                	}
+                        } else {
+                            /* 1/4 4-Way Handshake */
+                            return RK960_FWCR_FRAME_TYPE_1_4WAY;
+                        }
+                    } else {
+                        RK960_INFO_TXRX("%s, tx=%d\n", __func__, tx);
+                        //if (key_info & WPA_KEY_INFO_ACK) {
+                        if (!tx) {
+                            /* 1/2 Group Key Handshake */
+                            return  RK960_FWCR_FRAME_TYPE_1_2GRO;
+                        } else {
+                            /* 2/2 Group Key Handshake */
+                            return  RK960_FWCR_FRAME_TYPE_2_2GRO;
+                       }
+                    }
 		}
 	}
 
 	return 0;
 }
 
+static const u8 *rk960_mgmt_ies_ptr(const struct ieee80211_mgmt *mgmt,
+				    size_t frame_len,
+				    __le16 fc,
+				    size_t *ies_len)
+{
+	size_t offset;
+
+	if (ieee80211_is_assoc_req(fc)) {
+		offset = offsetof(struct ieee80211_mgmt, u.assoc_req.variable);
+	} else if (ieee80211_is_reassoc_req(fc)) {
+		offset = offsetof(struct ieee80211_mgmt, u.reassoc_req.variable);
+	} else {
+		return NULL;
+	}
+
+	if (frame_len < offset)
+		return NULL;
+
+	*ies_len = frame_len - offset;
+	return ((const u8 *)mgmt) + offset;
+}
+
+static u8 rk960_find_wpa_rsn_eid(const u8 *ies, size_t ies_len)
+{
+	while (ies && ies_len >= 2) {
+		u8 eid = ies[0];
+		u8 elen = ies[1];
+		size_t elem_len = (size_t)elen + 2;
+
+		if (elem_len > ies_len)
+			break;
+
+		if (eid == WLAN_EID_RSN && elen >= 2)
+			return WLAN_EID_RSN;
+
+		if (eid == WLAN_EID_VENDOR_SPECIFIC) {
+			/* WPA IE: 00:50:F2:01 */
+			if (elen >= 4 && memcmp(&ies[2], "\x00\x50\xF2\x01", 4) == 0)
+				return WLAN_EID_VENDOR_SPECIFIC;
+			/* Keep legacy OUI pattern for compatibility */
+			if (elen >= 4 && memcmp(&ies[2], "\x50\x6F\x9A\x12", 4) == 0)
+				return WLAN_EID_VENDOR_SPECIFIC;
+		}
+
+		ies += elem_len;
+		ies_len -= elem_len;
+	}
+
+	return 0;
+}
+
+/**
+ * rk960_get_encrypt_ap_from_assoc_req - Set fwcr_encrypt_ap based on association request frame
+ * @hw_priv: Pointer to rk960_common structure
+ * @skb: Pointer to sk_buff containing the frame
+ * @frame: Pointer to ieee80211_hdr structure
+ *
+ * This function checks if the frame is an association request and sets
+ * fwcr_encrypt_ap accordingly:
+ * - 0x20000 (high 16 bits) for RSN (WPA2)
+ * - 0x10000 (high 16 bits) for WPA
+ * - 0x0000 (high 16 bits) for open network
+ */
+static void rk960_get_encrypt_ap_from_assoc_req(struct rk960_common *hw_priv,
+						 struct sk_buff *skb,
+						 struct ieee80211_hdr *frame)
+{
+	const struct ieee80211_mgmt *mgmt;
+	const u8 *ies;
+	size_t ies_len = 0;
+	u8 eid;
+
+	if (!skb || !frame)
+		return;
+
+	if (!ieee80211_is_assoc_req(frame->frame_control) &&
+	    !ieee80211_is_reassoc_req(frame->frame_control))
+		return;
+
+	if (skb->len < sizeof(*mgmt))
+		return;
+
+	mgmt = (const struct ieee80211_mgmt *)skb->data;
+	ies = rk960_mgmt_ies_ptr(mgmt, skb->len, frame->frame_control, &ies_len);
+	if (!ies)
+		return;
+
+	eid = rk960_find_wpa_rsn_eid(ies, ies_len);
+	/* TODO: Check if it's WPA3 (SAE or Enterprise) */
+	if (eid == WLAN_EID_RSN) {
+		/* RSN (WPA2) */
+		hw_priv->fwcr_encrypt_ap = (hw_priv->fwcr_encrypt_ap & 0xffff) | (0x2 << 16);
+	} else if (eid == WLAN_EID_VENDOR_SPECIFIC) {
+		/* WPA */
+		hw_priv->fwcr_encrypt_ap = (hw_priv->fwcr_encrypt_ap & 0xffff) | (0x1 << 16);
+	} else {
+		/* Open network (no encryption), clear high 16 bits */
+		hw_priv->fwcr_encrypt_ap = hw_priv->fwcr_encrypt_ap & 0xffff;
+	}
+	RK960_INFO_TXRX("%s, %d, fwcr_encrypt_ap: 0x%x\n",
+			 __func__, __LINE__, hw_priv->fwcr_encrypt_ap);
+}
+
 #ifdef SUPPORT_FWCR
+/* after wpa_4_4_way, wpa_group_key_flag is set to 1 */
+int wpa_group_key_flag = 0x0;
 void rk960_fwcr_init(struct rk960_common *hw_priv)
 {
         RK960_INFO_TXRX("%s\n", __func__);
@@ -2710,6 +2838,7 @@ void rk960_fwcr_init(struct rk960_common *hw_priv)
         hw_priv->fwcr_fw_resumed = 1;
         hw_priv->fwcr_update_key = 1;
         hw_priv->fwcr_encrypt_ap = 0;
+        hw_priv->fwcr_cmd_cnt = 0;
         memset(hw_priv->fwcr_bssid, 0, 6);
         
         memset(hw_priv->fwcr_bcn, 0,
@@ -2764,6 +2893,7 @@ void rk960_fwcr_deinit(struct rk960_common *hw_priv)
 
         hw_priv->fwcr_bcn_cnt = 0;
         hw_priv->fwcr_4way_set = 0;
+        hw_priv->fwcr_cmd_cnt = 0;
 
         mutex_unlock(&hw_priv->fwcr_mux);
 }
@@ -2789,7 +2919,7 @@ void rk960_fwcr_frame_capture(struct rk960_common *hw_priv,
                 if (ieee80211_is_beacon(hdr->frame_control))
                         type = RK960_FWCR_FRAME_TYPE_BEACON;
                 if (hw_priv->fwcr_bcn_cnt >= RK960_FWCR_BCN_CNT) {
-                        RK960_ERROR_TXRX("%s: fwcr_frm_cnt over\n",
+                        RK960_DEBUG_TXRX("%s: fwcr_frm_cnt over\n",
                                 __func__);
                         goto fwcr_out;
                 }
@@ -2892,6 +3022,7 @@ void rk960_fwcr_write(struct rk960_common *hw_priv)
 	struct rk960_vif *priv = NULL;
         u8 *data, *p;
         int auth_flag = 0;
+        char fwcr_path[256];
         
 	rk960_hw_vif_read_lock(&hw_priv->vif_list_lock);
 	for (i = 0; i < 2; i++) {
@@ -2947,7 +3078,7 @@ void rk960_fwcr_write(struct rk960_common *hw_priv)
                         + sizeof(struct wsm_rx);
         }
 
-        for (i = 0; i < RK960_FWCR_GROUP_CNT; i++) {
+        for (i = 0; i < (RK960_FWCR_GROUP_CNT + 1); i++) {
                 frame = &hw_priv->fwcr_group[i];
                 if (!frame->arg || !frame->frame)
                         continue;
@@ -3039,7 +3170,7 @@ void rk960_fwcr_write(struct rk960_common *hw_priv)
                 p += frame->frame_len;
         }
 
-        for (i = 0; i < RK960_FWCR_GROUP_CNT; i++) {
+        for (i = 0; i < (RK960_FWCR_GROUP_CNT + 1); i++) {
                 frame = &hw_priv->fwcr_group[i];
                 if (!frame->arg || !frame->frame)
                         continue;
@@ -3057,8 +3188,8 @@ void rk960_fwcr_write(struct rk960_common *hw_priv)
         }
 
         RK960_INFO_TXRX("%s: size %d\n", __func__, total);
-        rk960_access_file(
-                RK960_FWCR_FRAME_SAVE_PATH, data, total, 0);
+        config_get_full_path(fwcr_path, sizeof(fwcr_path), "rk960_fwcr.bin");
+        rk960_access_file(fwcr_path, data, total, 0);
         kfree(data);
 
         mutex_unlock(&hw_priv->fwcr_mux);
@@ -3073,10 +3204,12 @@ void rk960_fwcr_read(struct rk960_common *hw_priv)
         int flag = 0;
         int key_id = 0;
         int struct_size;
+        char fwcr_path[256];
 
         hw_priv->fwcr_recovery = 0;
         
-        size = rk960_get_file_size(RK960_FWCR_FRAME_SAVE_PATH);
+        config_get_full_path(fwcr_path, sizeof(fwcr_path), "rk960_fwcr.bin");
+        size = rk960_get_file_size(fwcr_path);
         if (size <= 0) {
                 RK960_ERROR_TXRX("%s: get file fail\n", __func__);
                 return;
@@ -3088,8 +3221,7 @@ void rk960_fwcr_read(struct rk960_common *hw_priv)
                 return;
         }
 
-        ret = rk960_access_file(
-                RK960_FWCR_FRAME_SAVE_PATH, data, size, 1);
+        ret = rk960_access_file(fwcr_path, data, size, 1);
         if (ret < 0) {
                 RK960_ERROR_TXRX("%s: access file fail\n", __func__);
                 goto fwcr_read_out;
@@ -3204,7 +3336,7 @@ void rk960_fwcr_read(struct rk960_common *hw_priv)
 
         if (WARN_ON(!(flag & RK960_FWCR_FRAME_TYPE_ASSOC)))
                 goto fwcr_read_out;
-        if(1 == hw_priv->fwcr_encrypt_ap)  //encrypted AP
+        if(0x1 == (0xffff & hw_priv->fwcr_encrypt_ap))  //encrypted AP
         {
             if (WARN_ON(!(flag & RK960_FWCR_FRAME_TYPE_1_4WAY)))
                 goto fwcr_read_out;
@@ -3219,6 +3351,8 @@ void rk960_fwcr_read(struct rk960_common *hw_priv)
 fwcr_read_out:
         kfree(data);
 }
+/* wpa 4_4way type is also RK960_FWCR_FRAME_TYPE_2_4WAY */
+static int wpa_4_4_way_flag = 0x0;
 
 int rk960_fwcr_recovery_auth(struct rk960_common *hw_priv,
         struct sk_buff *skb, struct rk960_vif *priv)
@@ -3230,7 +3364,7 @@ int rk960_fwcr_recovery_auth(struct rk960_common *hw_priv,
         struct ieee80211_hdr *hdr =
                 (struct ieee80211_hdr *)skb->data;
         int key_id = 0;
-        
+
         if (!hw_priv->fwcr_recovery)
                 return -1;
 
@@ -3249,17 +3383,40 @@ int rk960_fwcr_recovery_auth(struct rk960_common *hw_priv,
         } else {
                 type = rk960_pae_type(skb, 1);
                 if (type == RK960_FWCR_FRAME_TYPE_2_4WAY) {
+                    if(0x0 == wpa_4_4_way_flag)    //wpa 4_4way type is also RK960_FWCR_FRAME_TYPE_2_4WAY
+                    {
                         frame = &hw_priv->fwcr_auth[3]; // 3/4 4-way
+                        wpa_4_4_way_flag = 0x1;
+                        wpa_group_key_flag = 0x1;
+                    }
                 } else if (type == RK960_FWCR_FRAME_TYPE_4_4WAY) {
+                    if(0x20000 == (hw_priv->fwcr_encrypt_ap & 0xffff0000)) {
                         hw_priv->fwcr_4way_set = 1;
                         hw_priv->fwcr_recovery = 0;
                         hw_priv->fw_hotboot = 0;
                         
                         schedule_work(&hw_priv->fwcr_work);
 
-                        RK960_INFO_TXRX("%s: 4-way done\n", __func__);
+                        RK960_INFO_TXRX("%s: wpa2 4-way done\n", __func__);
                         ret = 0;
                         goto fwcr_auth_out;
+                    } else if(0x10000 == (hw_priv->fwcr_encrypt_ap & 0xffff0000)) {
+                        schedule_work(&hw_priv->fwcr_work);
+                        RK960_INFO_TXRX("%s, wpa TYPE_4_4WAY\n", __func__);
+                        goto fwcr_auth_out;
+                    }
+                } else if (type == RK960_FWCR_FRAME_TYPE_2_2GRO) {
+                    hw_priv->fwcr_4way_set = 1;
+                    hw_priv->fwcr_recovery = 0;
+                    hw_priv->fw_hotboot = 0;
+
+                    schedule_work(&hw_priv->fwcr_work);
+
+                    RK960_INFO_TXRX("%s: wpa 4-way done\n", __func__);
+                    ret = 0;
+                    goto fwcr_auth_out;
+                } else {
+                    RK960_INFO_TXRX("%s: type=0x%x\n", __func__, type);
                 }
         }
 
@@ -3289,7 +3446,7 @@ fwcr_auth_send:
         mdelay(1);
         rk960_rx_cb(priv, frame->arg, &rx_skb);
 
-        if((1 != hw_priv->fwcr_encrypt_ap) && (frame->type >= RK960_FWCR_FRAME_TYPE_ASSOC))  //Unencrypted AP
+        if((0x1 != (0xffff & hw_priv->fwcr_encrypt_ap)) && (frame->type >= RK960_FWCR_FRAME_TYPE_ASSOC))  //Unencrypted AP
         {
             hw_priv->fwcr_4way_set = 1;
             hw_priv->fwcr_recovery = 0;
@@ -3309,6 +3466,55 @@ fwcr_auth_send:
                 frame = &hw_priv->fwcr_group[key_id++];
                 goto fwcr_auth_send;
         }*/
+
+fwcr_auth_out:
+        mutex_unlock(&hw_priv->fwcr_mux);
+        return ret;
+}
+
+int rk960_fwcr_recovery_auth_group(struct rk960_common *hw_priv,
+        struct sk_buff *skb, struct rk960_vif *priv)
+{
+        struct rk960_fwcr_frame_s *frame = NULL;
+        struct sk_buff *rx_skb;
+        int ret = 0;
+        int key_id = 0;
+
+        if (!hw_priv->fwcr_recovery)
+            return -1;
+
+        mutex_lock(&hw_priv->fwcr_mux);
+        RK960_INFO_TXRX("%s\n", __func__);
+        if(0x2 == wpa_group_key_flag){
+            RK960_INFO_TXRX("%s: TYPE_1_2WAY\n", __func__);
+            frame = &hw_priv->fwcr_group[key_id++];
+            wpa_group_key_flag = 0x0;
+        }
+
+        if (!frame || !frame->arg || !frame->frame) {
+                ret = -1;
+                goto fwcr_auth_out;
+        }
+
+        rx_skb = dev_alloc_skb(frame->frame_len);
+        if (!rx_skb) {
+                RK960_ERROR_TXRX("%s: alloc skb fail\n", __func__);
+                ret = -1;
+                goto fwcr_auth_out;
+        }
+
+        if (frame->type == RK960_FWCR_FRAME_TYPE_1_2GRO)
+                RK960_DEBUG_TXRX("%s: type %x key_id %d len %d\n",
+                        __func__, frame->type, key_id + 1,
+                        frame->frame_len);
+        else
+                RK960_DEBUG_TXRX("%s: type %x len %d\n",
+                        __func__, frame->type, frame->frame_len);
+        memcpy(skb_put(rx_skb, frame->frame_len),
+                frame->frame, frame->frame_len);
+
+        mdelay(1);
+        rk960_rx_cb(priv, frame->arg, &rx_skb);
 
 fwcr_auth_out:
         mutex_unlock(&hw_priv->fwcr_mux);
@@ -3361,6 +3567,7 @@ int rk960_fwcr_recovery_scan(struct rk960_common *hw_priv,
         mutex_unlock(&hw_priv->fwcr_mux);
 
         RK960_DEBUG_SCAN("scan_completed\n");
+        mdelay(10);
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(4, 6, 0))
         ieee80211_scan_completed(hw_priv->hw, &info);
 #else
@@ -3906,65 +4113,40 @@ void rk960_link_id_reset(struct work_struct *work)
 #ifdef SUPPORT_RK962_POWERSAVE
 void rk960_templateframe_higeneric_work(struct work_struct *work)
 {
-#if 0
-    u8 quzz_ko_buf[250];
-    int cnt;
-#endif
+
 	struct rk960_common *hw_priv =
 	    container_of(work, struct rk960_common, keepalive_timeout.work);
 
-	RK960_DEBUG_TXRX("%s.",__func__);
-#if 0
-    rk960_access_file(
-            KEY_UPDATE_SM_PATH, quzz_ko_buf, 244, 1);
-    //for(cnt = 0; cnt < 200; cnt += 8)
-    cnt = 0;
-    RK960_INFO_TXRX("%x:%x:%x:%x:%x:%x:%x:%x\n",quzz_ko_buf[cnt],quzz_ko_buf[cnt+1],quzz_ko_buf[cnt+2],quzz_ko_buf[cnt+3],
-            quzz_ko_buf[cnt+4],quzz_ko_buf[cnt+5],quzz_ko_buf[cnt+6],quzz_ko_buf[cnt+7]);
-    cnt = 50;
-    RK960_INFO_TXRX("%x:%x:%x:%x:%x:%x:%x:%x\n",quzz_ko_buf[cnt],quzz_ko_buf[cnt+1],quzz_ko_buf[cnt+2],quzz_ko_buf[cnt+3],
-            quzz_ko_buf[cnt+4],quzz_ko_buf[cnt+5],quzz_ko_buf[cnt+6],quzz_ko_buf[cnt+7]);
-    cnt = 100;
-    RK960_INFO_TXRX("%x:%x:%x:%x:%x:%x:%x:%x\n",quzz_ko_buf[cnt],quzz_ko_buf[cnt+1],quzz_ko_buf[cnt+2],quzz_ko_buf[cnt+3],
-            quzz_ko_buf[cnt+4],quzz_ko_buf[cnt+5],quzz_ko_buf[cnt+6],quzz_ko_buf[cnt+7]);
-    cnt = 150;
-    RK960_INFO_TXRX("%x:%x:%x:%x:%x:%x:%x:%x\n",quzz_ko_buf[cnt],quzz_ko_buf[cnt+1],quzz_ko_buf[cnt+2],quzz_ko_buf[cnt+3],
-            quzz_ko_buf[cnt+4],quzz_ko_buf[cnt+5],quzz_ko_buf[cnt+6],quzz_ko_buf[cnt+7]);
-    wsm_write_wpa_sm(hw_priv, &quzz_ko_buf, 244, 0);
-#endif
-	wsm_write_template_frame(hw_priv, &alive_tempframe, alive_tempframe.FrameLength + 4, 0);
+	if(0x1 == keepalive_parameter[3])
+	{
+		wsm_write_template_frame(hw_priv, &alive_tempframe, alive_tempframe.FrameLength + 4, 0);
+		RK960_DEBUG_TXRX("%s.alive_tempframe.FrameLength=%d",__func__, alive_tempframe.FrameLength);
+	}
+	wsm_req_keepalive_string_info(hw_priv, &keepalive_string, 0);
 	wsm_req_keepalive_info(hw_priv, &keepalive_param, 0);
+	keepalive_enable = false;
 }
 
 void rk960_wpa_sm_work(struct work_struct *work)
 {
 #if 1
-    u8 quzz_ko_buf[388];
-    int cnt;
+    u8 wpa_sm_buf[388];
+    char key_update_path[256];
 #endif
     struct rk960_common *hw_priv =
         container_of(work, struct rk960_common, rk960_wpa_sm_timeout.work);
 
     RK960_DEBUG_TXRX("%s.",__func__);
 #if 1
-    rk960_access_file(
-            KEY_UPDATE_SM_PATH, quzz_ko_buf, 380, 1);
-    //for(cnt = 0; cnt < 200; cnt += 8)
-    cnt = 0;
-    RK960_INFO_TXRX("%x:%x:%x:%x:%x:%x:%x:%x\n",quzz_ko_buf[cnt],quzz_ko_buf[cnt+1],quzz_ko_buf[cnt+2],quzz_ko_buf[cnt+3],
-            quzz_ko_buf[cnt+4],quzz_ko_buf[cnt+5],quzz_ko_buf[cnt+6],quzz_ko_buf[cnt+7]);
-    cnt = 50;
-    RK960_INFO_TXRX("%x:%x:%x:%x:%x:%x:%x:%x\n",quzz_ko_buf[cnt],quzz_ko_buf[cnt+1],quzz_ko_buf[cnt+2],quzz_ko_buf[cnt+3],
-            quzz_ko_buf[cnt+4],quzz_ko_buf[cnt+5],quzz_ko_buf[cnt+6],quzz_ko_buf[cnt+7]);
-    cnt = 100;
-    RK960_INFO_TXRX("%x:%x:%x:%x:%x:%x:%x:%x\n",quzz_ko_buf[cnt],quzz_ko_buf[cnt+1],quzz_ko_buf[cnt+2],quzz_ko_buf[cnt+3],
-            quzz_ko_buf[cnt+4],quzz_ko_buf[cnt+5],quzz_ko_buf[cnt+6],quzz_ko_buf[cnt+7]);
-    #if 0
-    cnt = 150;
-    RK960_INFO_TXRX("%x:%x:%x:%x:%x:%x:%x:%x\n",quzz_ko_buf[cnt],quzz_ko_buf[cnt+1],quzz_ko_buf[cnt+2],quzz_ko_buf[cnt+3],
-            quzz_ko_buf[cnt+4],quzz_ko_buf[cnt+5],quzz_ko_buf[cnt+6],quzz_ko_buf[cnt+7]);
-    #endif
-    wsm_write_wpa_sm(hw_priv, &quzz_ko_buf, 380, 0);
+    config_get_full_path(key_update_path, sizeof(key_update_path), "key_update_sm.txt");
+    rk960_access_file(key_update_path, wpa_sm_buf, 380, 1);
+    RK960_INFO_TXRX("wpa_sm data:\n");
+    print_hex_dump(KERN_INFO, " ", DUMP_PREFIX_NONE, 16, 1, wpa_sm_buf, 8, 1);
+    print_hex_dump(KERN_INFO, " ", DUMP_PREFIX_NONE, 16, 1, &wpa_sm_buf[50], 8, 1);
+    print_hex_dump(KERN_INFO, " ", DUMP_PREFIX_NONE, 16, 1, &wpa_sm_buf[100], 8, 1);
+    //print_hex_dump(KERN_INFO, " ", DUMP_PREFIX_NONE, 16, 1, &wpa_sm_buf[100], 8, 1);
+
+    wsm_write_wpa_sm(hw_priv, &wpa_sm_buf, 380, 0);
 #endif
 }
 #endif

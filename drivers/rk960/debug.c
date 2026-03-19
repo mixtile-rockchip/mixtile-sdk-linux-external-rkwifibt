@@ -17,6 +17,7 @@
 #include "rk960.h"
 #include "debug.h"
 #include "scan.h"
+#include "config.h"
 
 int rk960_debug_flag =
 	DEBUG_BH	|
@@ -31,7 +32,8 @@ int rk960_debug_flag =
 	DEBUG_WSM	|
 	DEBUG_AP	|
 	DEBUG_TXPOLICY  |
-	DEBUG_FW_REC;
+	DEBUG_FW_REC|
+	DEBUG_KEEPALIVE;
 
 static int debug_level =
 	DEBUG_LEVEL_ERROR	|
@@ -39,6 +41,12 @@ static int debug_level =
 	DEBUG_LEVEL_DEBUG*/;
 module_param(debug_level, int, 0644);
 MODULE_PARM_DESC(debug_level, "debug level");
+
+void debug_level_set(int value)
+{
+	debug_level = value;
+	rk960_debug_level = debug_level;
+}
 
 static int max_payload = 2304;
 module_param(max_payload, int, 0644);
@@ -634,7 +642,6 @@ static const struct file_operations fops_mem = {
 };
 
 #ifdef ENABLE_DBGFS_WRITE
-#define RK960_ADC_SAVE_PATH "/data/rk960_adc.txt"
 static ssize_t rk960_adc_read(struct file *file,
 			      char __user * user_buf, size_t count,
 			      loff_t * ppos)
@@ -643,6 +650,7 @@ static ssize_t rk960_adc_read(struct file *file,
 	int i, size = 0;
 	u32 *data;
 	int ret = 0;
+	char adc_path[256];
 
 	if (!hw_priv->debug_dump_data)
 		return 0;
@@ -666,11 +674,13 @@ static ssize_t rk960_adc_read(struct file *file,
 		data++;
 	}
 
-	rk960_access_file(RK960_ADC_SAVE_PATH, hw_priv->debug_dump_data_str,
+	config_get_full_path(adc_path, sizeof(adc_path), "rk960_adc.txt");
+	rk960_access_file(adc_path, hw_priv->debug_dump_data_str,
 			  size, 0);
 
 	size = sprintf(&hw_priv->debug_dump_data_str[0], "%s\n",
-		       "adc data is saved at: " RK960_ADC_SAVE_PATH);
+		       "adc data is saved at: ");
+	size += sprintf(&hw_priv->debug_dump_data_str[size], "%s", adc_path);
 	ret = simple_read_from_buffer(user_buf, count, ppos,
 				      hw_priv->debug_dump_data_str, size);
 
@@ -2518,10 +2528,12 @@ void dump_ieee80211_hdr_info(unsigned char *data, int len, int tx, s8 rssi)
 				RK960_INFO_TXRX("%s atim\n", direct_str);
 			} else if (ieee80211_is_disassoc(hdr->frame_control)) {
 				RK960_INFO_TXRX("%s disassoc\n", direct_str);
+				print_hex_dump(KERN_INFO, " ", DUMP_PREFIX_NONE, 16, 1, data, len, 1);
 			} else if (ieee80211_is_auth(hdr->frame_control)) {
 				RK960_INFO_TXRX("%s auth\n", direct_str);
 			} else if (ieee80211_is_deauth(hdr->frame_control)) {
 				RK960_INFO_TXRX("%s deauth\n", direct_str);
+				print_hex_dump(KERN_INFO, " ", DUMP_PREFIX_NONE, 16, 1, data, len, 1);
 			} else if (ieee80211_is_action(hdr->frame_control)) {
 				RK960_INFO_TXRX("%s action %s\n", direct_str,
 						dump_action_type(hdr, tx));
@@ -2588,18 +2600,18 @@ int filter_ieee80211_keepalive_frame(unsigned char *data, int len, int tx, int i
 
 				send_data_length = ntohs(ip->tot_len) - (ip->ihl * 4) - (th->doff * 4);
 				if(send_data_length <= 1) {
-					RK960_INFO_TXRX("ERROR !!! send_data_length = %d !!! Keepalive data length must be greater than or equal to 1 !!!\n", send_data_length);
+					RK960_INFO_KEEPALIVE("ERROR !!! send_data_length = %d !!! Keepalive data length must be greater than or equal to 1 !!!\n", send_data_length);
 					return 0;
 				}
 				if((1 != th->ack) || (0 != th->syn) || (0 != th->fin) || (0 != th->rst)) {
-					RK960_INFO_TXRX("th->ack = %d th->syn = %d,th->fin = %d,th->rst = %d , c_asfr !!!\n", th->ack,th->syn, th->fin,th->rst);
+					RK960_INFO_KEEPALIVE("th->ack = %d th->syn = %d,th->fin = %d,th->rst = %d , c_asfr !!!\n", th->ack,th->syn, th->fin,th->rst);
 					return 0;
 				}
-				RK960_INFO_TXRX("%s keepalive parameter offset = %d\n", __func__, offset + sizeof(struct iphdr) + sizeof(struct tcphdr));
+				RK960_INFO_KEEPALIVE("%s keepalive parameter offset = %d\n", __func__, offset + sizeof(struct iphdr) + sizeof(struct tcphdr));
 				offset += ip->ihl * 4 + th->doff * 4;
 
 				keepalive_offset = offset;
-				RK960_INFO_TXRX("%s keepalive offset = %d\n", __func__, keepalive_offset);
+				RK960_INFO_KEEPALIVE("%s keepalive offset = %d\n", __func__, keepalive_offset);
 			}
 		}
 	}

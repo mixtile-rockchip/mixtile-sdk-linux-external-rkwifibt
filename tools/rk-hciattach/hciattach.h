@@ -20,7 +20,8 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  *
  */
-
+#ifndef __HCIATTACH_H__
+#define __HCIATTACH_H__
 #include <termios.h>
 
 #ifndef N_HCI
@@ -61,6 +62,11 @@
 #define TRUE   (!FALSE)
 #endif
 
+#define SCO_PARA_NUM    5
+#define FLOW_CTL      0x1
+#define AUDIO_VOHCI   0x2
+#define ENABLE_PM     0x4
+
 #ifndef B3000000
 #define B3000000
 #endif
@@ -91,28 +97,43 @@
                                                         }while(0)
 
 #else
-#include <syslog.h>
 #define BT_INFO(fmt, arg...) do {  \
-                                                            syslog(LOG_INFO, "%s :" fmt "\n" , LOG_TAG, ##arg);\
+                                                            printf("TAG:%s:"fmt"\n", LOG_TAG, ##arg);\
                                                     }while(0)
 
 #define BT_DBG(fmt, arg...) do {  \
-                                                            syslog(LOG_DEBUG, "%s :" fmt "\n" , LOG_TAG, ##arg);\
+                                                            printf("TAG:%s:"fmt"\n", LOG_TAG, ##arg);\
                                                     }while(0)
 
 #define BT_WARN(fmt, arg...) do {  \
-                                                                syslog(LOG_WARNING, "%s :" fmt "\n" , LOG_TAG, ##arg);\
+                                                                printf("TAG:%s:"fmt"\n", LOG_TAG, ##arg);\
                                                         }while(0)
 
 #define BT_ERROR(fmt, arg...) do {  \
-                                                                syslog(LOG_ERR, "%s :" fmt "\n" , LOG_TAG, ##arg);\
+                                                                printf("TAG:%s:"fmt"\n", LOG_TAG, ##arg); \
                                                         }while(0)
+
 #endif
 
+struct uart_t {
+	char *type;
+	int  m_id;
+	int  p_id;
+	int  proto;
+	int  init_speed;
+	int  loader_mode;
+	int  speed;
+	int  flags;
+	int sco_para;
+	char *bdaddr;
+	int  (*init) (int fd, struct uart_t *u, struct termios *ti);
+	int  (*post) (int fd, struct uart_t *u, struct termios *ti);
+};
+
+char* getCurrentTime();
 int read_hci_event(int fd, unsigned char *buf, int size);
 int set_speed(int fd, struct termios *ti, int speed);
-int rk_bt_init(int fd, int speed, struct termios *ti,
-        const char *bdaddr);
+int rk_bt_init(int fd, struct uart_t *u, struct termios *ti);
 int reset_bluetooth(void);
 
-
+#endif

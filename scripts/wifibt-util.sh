@@ -155,7 +155,7 @@ Broadcom	AP6354	02d0:4354	bcmdhd.ko
 Broadcom	AP6356S	02d0:4356	bcmdhd.ko
 Broadcom	AP6398S	02d0:4359	bcmdhd.ko
 Broadcom	CYW4373	02d0:4373	cyw4373.ko
-Rockchip	RK960	0296:5349	rk960.ko:fw_no_sleep=1	suspend-reload
+Rockchip	RK960	0296:5349	rk96x.ko:fw_no_sleep=1	suspend-reload
 EOF
 	sed -i '1! s/[[:space:]]\+/\t/g' "$CHIPS_FILE"
 fi

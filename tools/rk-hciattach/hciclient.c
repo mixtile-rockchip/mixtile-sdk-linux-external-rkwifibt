@@ -27,8 +27,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <getopt.h>
-#include <utils/Log.h>
-#include <android/log.h>
+//#include <utils/Log.h>
+//#include <android/log.h>
 
 #ifndef LOG_TAG
 #define LOG_TAG "zdm"
@@ -85,10 +85,10 @@ static const uint16_t SERV_PORT = 8873;
 #define b_2DH5  (b_NOALL&~NO_2_DH5)
 #define b_3DH5  (b_NOALL&~NO_3_DH5)*/
 
-#define LOGI(param, ...) do { ALOGI(param, ##__VA_ARGS__); printf(param, ##__VA_ARGS__);}while(0)
-#define LOGD(param, ...) do { ALOGD(param, ##__VA_ARGS__); printf(param, ##__VA_ARGS__);}while(0)
-#define LOGW(param, ...) do { ALOGW(param, ##__VA_ARGS__); printf(param, ##__VA_ARGS__);}while(0)
-#define LOGE(param, ...) do { ALOGE(param, ##__VA_ARGS__); printf(param, ##__VA_ARGS__); }while(0)
+#define LOGI(param, ...) do { printf(param, ##__VA_ARGS__);}while(0)
+#define LOGD(param, ...) do { printf(param, ##__VA_ARGS__);}while(0)
+#define LOGW(param, ...) do { printf(param, ##__VA_ARGS__);}while(0)
+#define LOGE(param, ...) do { printf(param, ##__VA_ARGS__); }while(0)
 
 struct bredr_t {
 	char *type;

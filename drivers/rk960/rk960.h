@@ -18,7 +18,7 @@
 #include <linux/atomic.h>
 #include <net/mac80211.h>
 
-#define RK960_VERSION   "svn5899.huwg 2022-11-01 18:01:08 +0800 (Tue, 01 Nov 2022)"
+#define RK960_VERSION   "wangqy, Fri May 15 10:52:16 2026 +0800"
 
 #ifdef P2P_MULTIVIF
 #define RK960_MAX_VIFS			(3)
@@ -111,7 +111,6 @@
 
 #define RK960_SCAN_TXRX_BURST_THRESHOLD    100
 
-#define RK960_CSYNC_ADJUST
 #ifdef RK960_CSYNC_ADJUST
 /*
  * use latest e.g. 100 rx rssi within 1 seconds to calcute average rssi
@@ -124,6 +123,7 @@
 #define RK960_CSYNC_THRESH_MIN	110
 #define RK960_CSYNC_THRESH_MAX	190
 
+#define RK960_CSYNC_THRESH_OFFSET_JOIN 70
 #define RK960_CSYNC_THRESH_OFFSET 50	// means set the csync thresholds 25 dB below the true RSSI
 								// half-dB  steps  (e.g.,  60  means  30  dBm)
 #define RK960_CSYNC_THRESH_EXPONENT 4
@@ -260,13 +260,13 @@ struct rk960_start_stop_tsm {
 };
 #endif /* CONFIG_RK960_TESTMODE */
 
-/* #define RK960_FW_ERROR_RECOVERY */
-
+#define RK960_FW_ERROR_RECOVERY
 #define RK960_FWERR_REASON_TEST         0
 #define RK960_FWERR_REASON_TX_CONF      1
 #define RK960_FWERR_REASON_SDIO         2
 #define RK960_FWERR_REASON_CMD          3
 #define RK960_FWERR_REASON_FLUSH        4
+#define RK960_FWERR_REASON_DEV_BCN_ER   5
 
 #define RK960_FWERR_SIZE        128
 
@@ -314,9 +314,10 @@ struct rk960_sended_wsm_cmds_s {
 #define RK960_FWCR_FRAME_TYPE_2_4WAY            BIT(6)
 #define RK960_FWCR_FRAME_TYPE_4_4WAY            BIT(7)
 #define RK960_FWCR_FRAME_TYPE_1_2GRO            BIT(8)
+#define RK960_FWCR_FRAME_TYPE_2_2GRO            BIT(9)
 
 #ifdef SUPPORT_FWCR
-#define RK960_FWCR_FRAME_SAVE_PATH      "/data/rk960_fwcr.bin"
+/* RK960_FWCR_FRAME_SAVE_PATH will be generated dynamically using config_get_full_path */
 
 struct rk960_fwcr_frame_s {
         u16 type;
@@ -410,6 +411,7 @@ struct rk960_common {
 	/* BH */
 	atomic_t bh_rx;
 	atomic_t bh_tx;
+	atomic_t irq_protect;
 	atomic_t bh_term;
 	atomic_t bh_suspend;
 	struct task_struct *bh_thread;
@@ -503,7 +505,10 @@ struct rk960_common {
 	struct delayed_work rem_chan_timeout;
 #ifdef SUPPORT_RK962_POWERSAVE
 	struct delayed_work keepalive_timeout;
-    struct delayed_work rk960_wpa_sm_timeout;
+	struct delayed_work rk960_wpa_sm_timeout;
+#ifdef RK96X_WIFI_ONLY
+	struct delayed_work btcmd_dev_to_app_timeout;
+#endif
 #endif
 	atomic_t remain_on_channel;
 	atomic_t cancel_roc;
@@ -549,6 +554,11 @@ struct rk960_common {
 	int ps_mode_switch_in_progress;
 	wait_queue_head_t ps_mode_switch_done;
 
+	#ifdef RK96X_WIFI_ONLY
+	/* Recovery event wait queue */
+	wait_queue_head_t recovery_wait;
+	int recovery_event_flag;
+	#endif
 #ifdef RK960_CSYNC_ADJUST
 	struct timer_list csync_timer;
 	struct work_struct csync_work;
@@ -617,16 +627,17 @@ struct rk960_common {
         int fwcr_recovery;
         struct rk960_fwcr_frame_s fwcr_bcn[RK960_FWCR_BCN_CNT];
         struct rk960_fwcr_frame_s fwcr_auth[RK960_FWCR_AUTH_CNT];
-        struct rk960_fwcr_frame_s fwcr_group[RK960_FWCR_AUTH_CNT+1];
+        struct rk960_fwcr_frame_s fwcr_group[RK960_FWCR_GROUP_CNT+1];
         struct work_struct fwcr_work;
         int fwcr_fw_resumed;
         wait_queue_head_t fwcr_resume_done;
         u8 fwcr_bssid[6];
         int fwcr_update_key;
-        u32 fwcr_encrypt_ap;
         u32 fwcr_key_map;
         struct wsm_add_key fwcr_keys[WSM_KEY_MAX_INDEX + 1];
+        int fwcr_cmd_cnt;
 #endif
+        u32 fwcr_encrypt_ap;
         int fw_hotboot;
         int tx_fixed_rate;
 
@@ -782,6 +793,16 @@ enum rk960_data_filterid {
 	IPV6ADDR_FILTER_ID,
 #endif /*IPV6_FILTERING */
 };
+
+static inline bool rk960_pm_is_allowed(const struct rk960_common *hw_priv,
+				      const struct rk960_vif *priv)
+{
+	/* Allow PM immediately for open networks. For encrypted networks, only
+	 * allow PM after pairwise key (PTK) installation has been observed.
+	 */
+	return ((hw_priv->fwcr_encrypt_ap & 0xffff0000) == 0) ||
+	       (priv->cipherType != 0);
+}
 
 static inline
     struct rk960_common *rk960_vifpriv_to_hwpriv(struct rk960_vif *priv)
@@ -980,6 +1001,7 @@ struct ipv6_addr_info {
 #endif /*IPV6_FILTERING */
 
 /* interfaces for the drivers */
+int load_wifi_user_config(void);
 int rk960_core_probe(const struct hwbus_ops *hwbus_ops,
 		     struct hwbus_priv *hwbus,
 		     struct device *pdev,

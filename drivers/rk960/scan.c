@@ -600,7 +600,14 @@ void rk960_scan_work(struct work_struct *work)
 			    && !(priv->powersave_mode.pmMode & WSM_PSM_PS)) {
 				struct wsm_set_pm pm = priv->powersave_mode;
 				pm.pmMode = WSM_PSM_PS;
-				rk960_set_pm(priv, &pm);
+				if (rk960_pm_is_allowed(hw_priv, priv)) {
+					RK960_DEBUG_SCAN("%s:%d calling rk960_set_pm (open network or after PTK installed)\n",
+							 __func__, __LINE__);
+					rk960_set_pm(priv, &pm);
+				} else {
+					RK960_DEBUG_SCAN("%s:%d skipping rk960_set_pm (encrypted network, PTK not installed yet)\n",
+							 __func__, __LINE__);
+				}
 			}
 		} else {
 #endif

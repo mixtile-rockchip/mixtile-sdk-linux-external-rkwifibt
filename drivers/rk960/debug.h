@@ -19,7 +19,7 @@ extern int rk960_debug_level;
 //#define RK960_SDIO_RX_TP_TEST
 #define DUMP_TXRX_MAC_FRAME_INFO
 
-#define MODULE_TAG "RK960: "
+#define MODULE_TAG "RK96x: "
 #define DEBUG_TAG "DEBUG: "
 #define INFO_TAG "INFO: "
 #define ERROR_TAG "ERROR: "
@@ -301,6 +301,27 @@ do {                                          \
 		pr_err(MODULE_TAG ERROR_TAG fmt, ##__VA_ARGS__);   \
 } while (0)
 
+#define RK960_DEBUG_KEEPALIVE(fmt, ...)              \
+do {                                          \
+	if (rk960_debug_flag & DEBUG_KEEPALIVE &&		\
+		rk960_debug_level & DEBUG_LEVEL_DEBUG)        \
+		pr_info(MODULE_TAG DEBUG_TAG fmt, ##__VA_ARGS__);   \
+} while (0)
+
+#define RK960_INFO_KEEPALIVE(fmt, ...)              \
+do {                                          \
+	if (rk960_debug_flag & DEBUG_KEEPALIVE &&		\
+		rk960_debug_level & DEBUG_LEVEL_INFO)        \
+		pr_info(MODULE_TAG INFO_TAG fmt, ##__VA_ARGS__);   \
+} while (0)
+
+#define RK960_ERROR_KEEPALIVE(fmt, ...)              \
+do {                                          \
+	if (rk960_debug_flag & DEBUG_KEEPALIVE &&		\
+		rk960_debug_level & DEBUG_LEVEL_ERROR)        \
+		pr_err(MODULE_TAG ERROR_TAG fmt, ##__VA_ARGS__);   \
+} while (0)
+
 enum rk960_debug_flag_e {
 	DEBUG_BH = BIT(1),
 	DEBUG_IO = BIT(2),
@@ -315,6 +336,7 @@ enum rk960_debug_flag_e {
 	DEBUG_AP = BIT(11),
 	DEBUG_TXPOLICY = BIT(12),
 	DEBUG_FW_REC = BIT(13),
+	DEBUG_KEEPALIVE = BIT(14),
 };
 
 enum rk960_debug_level_e {
@@ -363,6 +385,7 @@ int rk960_access_file(char *path, char *buffer, int size, int isRead);
 int rk960_get_file_size(char *path);
 int ieee80211_crypt_hdrlen(u16 fc);
 int rk960_rate_to_rate_index(int rate);
+void debug_level_set(int value);
 
 static inline void rk960_debug_txed(struct rk960_vif *priv)
 {

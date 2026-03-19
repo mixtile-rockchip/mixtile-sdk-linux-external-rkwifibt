@@ -94,7 +94,7 @@ int rk960_sta_add(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 	spin_unlock_bh(&priv->ps_state_lock);
 #ifdef AP_AGGREGATE_FW_FIX
 	hw_priv->connected_sta_cnt++;
-	if (hw_priv->connected_sta_cnt > 1) {
+	if (hw_priv->connected_sta_cnt > RK960_MAX_STA_IN_AP_MODE) {
 		wsm_lock_tx(hw_priv);
 		WARN_ON(wsm_set_block_ack_policy(hw_priv,
 						 RK960_TX_BLOCK_ACK_DISABLED_FOR_ALL_TID,
@@ -151,7 +151,7 @@ int rk960_sta_remove(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 	flush_workqueue(hw_priv->workqueue);
 #ifdef AP_AGGREGATE_FW_FIX
 	hw_priv->connected_sta_cnt--;
-	if (hw_priv->connected_sta_cnt <= 1) {
+	if (hw_priv->connected_sta_cnt <= RK960_MAX_STA_IN_AP_MODE) {
 		/*if ((priv->if_id != 1) ||
 		   ((priv->if_id == 1) && hw_priv->is_go_thru_go_neg)) */  {
 			wsm_lock_tx(hw_priv);
@@ -588,9 +588,17 @@ void rk960_bss_info_changed(struct ieee80211_hw *dev,
 					 || !priv->power_set_true)
 					priv->powersave_mode.pmMode =
 					    WSM_PSM_FAST_PS;
-				ret = rk960_set_pm(priv, &priv->powersave_mode);
-				if (ret)
-					priv->powersave_mode = pm;
+				/* Set PM mode for open networks or encrypted networks after PTK is installed */
+				if (rk960_pm_is_allowed(hw_priv, priv)) {
+					RK960_DEBUG_AP("[PM] %s:%d calling rk960_set_pm (open network or after PTK installed, ARP filter)\n",
+							 __func__, __LINE__);
+					ret = rk960_set_pm(priv, &priv->powersave_mode);
+					if (ret)
+						priv->powersave_mode = pm;
+				} else {
+					RK960_DEBUG_AP("[PM] %s:%d skipping rk960_set_pm (encrypted network, PTK not installed yet, ARP filter)\n",
+							 __func__, __LINE__);
+				}
 			} else
 				priv->powersave_mode.pmMode = WSM_PSM_FAST_PS;
 			priv->power_set_true = 0;
@@ -781,6 +789,9 @@ void rk960_bss_info_changed(struct ieee80211_hw *dev,
 			priv->cqm_link_loss_count = 40;
 			priv->cqm_beacon_loss_count = 20;
 			priv->cqm_tx_failure_thold = 0;
+			/* Reset cipherType when disconnecting */
+			priv->cipherType = 0;
+			RK960_DEBUG_AP("[PM] %s:%d resetting cipherType to 0\n", __func__, __LINE__);
 		}
 		priv->cqm_tx_failure_count = 0;
 	}
@@ -990,7 +1001,36 @@ void rk960_bss_info_changed(struct ieee80211_hw *dev,
 				wsm_unlock_tx(hw_priv);
 			}
 
-			rk960_set_pm(priv, &priv->powersave_mode);
+			/* Set power save mode:
+			 * For open networks, set it now since there's no 4-way handshake
+			 * For encrypted networks, set it after PTK is installed (cipherType != 0)
+			 * Use fwcr_encrypt_ap high 16 bits to check: 0 = open, 0x10000 = WPA, 0x20000 = RSN */
+			if (priv->join_status == RK960_JOIN_STATUS_STA &&
+				priv->bss_params.aid && priv->setbssparams_done) {
+				/* For encrypted networks:
+				 * - If cipherType != 0, it means 4-way handshake has completed (set in rk960_set_key)
+				 *   Don't reset it, just use it to determine if we should set PM mode
+				 * - If cipherType == 0, it means 4-way handshake hasn't completed yet
+				 *   This is correct at associate time, don't reset it
+				 *
+				 * Note: We don't reset cipherType here because:
+				 * 1. If it's 0, it's already correct (4-way handshake not completed)
+				 * 2. If it's != 0, it means 4-way handshake has completed, we should keep it
+				 *
+				 * The reset of cipherType happens in BSS_CHANGED_ASSOC (!assoc) when disconnecting */
+
+				if (rk960_pm_is_allowed(hw_priv, priv)) {
+					/* Open network or encrypted network after PTK installed */
+					priv->powersave_mode.pmMode = priv->user_pm_mode;
+					RK960_DEBUG_AP("[PM] %s:%d calling rk960_set_pm (open network or after PTK installed)\n",
+							 __func__, __LINE__);
+					RK960_DEBUG_AP("[PM] fwcr_encrypt_ap=0x%x, cipherType=0x%x\n", hw_priv->fwcr_encrypt_ap, priv->cipherType);
+					rk960_set_pm(priv, &priv->powersave_mode);
+				} else {
+					RK960_DEBUG_AP("[PM] %s:%d skipping rk960_set_pm (encrypted network, PTK not installed yet)\n",
+							 __func__, __LINE__);
+				}
+			}
 			if (priv->vif->p2p) {
 				RK960_DEBUG_AP("[STA] Setting p2p powersave "
 					       "configuration.\n");
@@ -1179,9 +1219,11 @@ void rk960_bss_info_changed(struct ieee80211_hw *dev,
 			priv->powersave_mode.fastPsmIdlePeriod =
 			    dynamic_ps_timeout << 1;
 
+		/* Set PM mode for open networks or encrypted networks after 4-way handshake */
 		if (priv->join_status == RK960_JOIN_STATUS_STA &&
-		    priv->bss_params.aid &&
-		    priv->setbssparams_done && priv->filter4.enable)
+			priv->bss_params.aid&&
+			priv->setbssparams_done && priv->filter4.enable &&
+			((hw_priv->fwcr_encrypt_ap & 0xffff0000) == 0 || priv->cipherType != 0))
 			rk960_set_pm(priv, &priv->powersave_mode);
 		else
 			priv->power_set_true = 1;
@@ -1223,8 +1265,16 @@ void rk960_bss_info_changed(struct ieee80211_hw *dev,
 
 			if (info->p2p_ps.ctwindow && info->p2p_ps.opp_ps)
 				priv->powersave_mode.pmMode = WSM_PSM_PS;
-			if (priv->join_status == RK960_JOIN_STATUS_STA)
-				rk960_set_pm(priv, &priv->powersave_mode);
+			if (priv->join_status == RK960_JOIN_STATUS_STA) {
+				if (rk960_pm_is_allowed(hw_priv, priv)) {
+					RK960_DEBUG_AP("[PM] %s:%d calling rk960_set_pm (open network or after PTK installed)\n",
+							 __func__, __LINE__);
+					rk960_set_pm(priv, &priv->powersave_mode);
+				} else {
+					RK960_DEBUG_AP("[PM] %s:%d skipping rk960_set_pm (encrypted network, PTK not installed yet)\n",
+							 __func__, __LINE__);
+				}
+			}
 		}
 
 		RK960_DEBUG_AP("[AP] CTWindow: %d\n", info->p2p_ps.ctwindow);
@@ -1786,7 +1836,7 @@ static int rk960_start_ap(struct rk960_vif *priv)
 	};
 
 	struct wsm_inactivity inactivity = {
-		.min_inactivity = 9,
+		.min_inactivity = 59,
 		.max_inactivity = 1,
 	};
 
@@ -1834,7 +1884,10 @@ static int rk960_start_ap(struct rk960_vif *priv)
 #endif
 
 	priv->beacon_int = conf->beacon_int;
-	priv->join_dtim_period = conf->dtim_period;
+	conf->dtim_period=1;
+	//priv->join_dtim_period = conf->dtim_period;
+	priv->join_dtim_period = 1;  // or use conf->dtim_period
+	RK960_DEBUG_AP("[AP] conf->dtim_period %d\n", conf->dtim_period);
 
 	start.ssidLength = priv->ssid_length;
 	memcpy(&start.ssid[0], priv->ssid, start.ssidLength);

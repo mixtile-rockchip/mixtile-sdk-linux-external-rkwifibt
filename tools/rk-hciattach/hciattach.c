@@ -22,6 +22,8 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  *
  */
+#define _GNU_SOURCE
+
 #ifndef LOG_TAG
 #define LOG_TAG "hciattach"
 #endif
@@ -49,12 +51,13 @@
 #include <time.h>
 #include <sys/time.h>
 #include <sys/poll.h>
+#include <poll.h>
 #include <sys/param.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/uio.h>
 #include <sys/timerfd.h>
-
+// #include <stdbool.h>
 #include "hciattach.h"
 
 #define RFKILL_NODE	"/sys/class/rfkill/rfkill0/state"
@@ -69,23 +72,6 @@
 #include <sched.h>
 #endif
 
-struct uart_t {
-	char *type;
-	int  m_id;
-	int  p_id;
-	int  proto;
-	int  init_speed;
-	int  speed;
-	int  flags;
-	int  pm;
-	char *bdaddr;
-	int  (*init) (int fd, struct uart_t *u, struct termios *ti);
-	int  (*post) (int fd, struct uart_t *u, struct termios *ti);
-};
-
-#define FLOW_CTL	0x0001
-#define ENABLE_PM	1
-#define DISABLE_PM	0
 
 static volatile sig_atomic_t __io_canceled = 0;
 
@@ -109,7 +95,7 @@ static void sig_term(int sig)
 
 static void sig_alarm(int sig)
 {
-	BT_WARN("Initialization timed out.");
+	BT_ERROR("Initialization timed out. Time: %s", getCurrentTime());
 	exit(1);
 }
 
@@ -167,7 +153,12 @@ static int uart_speed(int s)
 
 int set_speed(int fd, struct termios *ti, int speed)
 {
-	BT_DBG("%s: %d", __func__, speed);
+
+	if (fd < 0 || ti == NULL || speed <= 0) {
+		BT_ERROR("Invalid parameters for set_speed");
+		return -EINVAL;
+	}
+
 	if (cfsetospeed(ti, uart_speed(speed)) < 0)
 		return -errno;
 
@@ -188,14 +179,16 @@ static int rockchip_init(int fd, struct uart_t *u, struct termios *ti)
 	BT_DBG("Rockchip Bluetooth init uart with init speed:%d, type:HCI UART %s",
 		u->init_speed,
 		(u->proto == HCI_UART_H4) ? "H4" : "H5");
-	return rk_bt_init(fd, u->speed, ti, u->bdaddr);
+	return rk_bt_init(fd, u, ti);
 }
 
 struct uart_t uart[] = {
-	{ "any",     0x0000, 0x0000, HCI_UART_H4,   115200, 115200, FLOW_CTL, DISABLE_PM, NULL, NULL},
+	{ "any",     0x0000, 0x0000, HCI_UART_H4,   115200, 0, 115200, FLOW_CTL, 0, NULL, NULL, NULL},
 
 	/* Rockchip Bluetooth H4 */
-	{ "rockchip",  0x0000, 0x0000, HCI_UART_H4,  115200,  115200, 0, DISABLE_PM, NULL, rockchip_init, NULL },
+	{ "rockchip",  0x0000, 0x0000, HCI_UART_H4,  115200, 0, 115200, AUDIO_VOHCI, 0x0060, NULL, rockchip_init, NULL },
+
+	{ "rockchip_h5",  0x0000, 0x0000, HCI_UART_3WIRE,  115200, 0, 115200, 0, 0x0060, NULL, rockchip_init, NULL },
 
 	{ NULL, 0 }
 };
@@ -248,10 +241,10 @@ static int init_uart(char *dev, struct uart_t *u, int send_break, int raw)
 	cfmakeraw(&ti);
 
 	ti.c_cflag |= CLOCAL;
-	if (u->flags & FLOW_CTL)
-		ti.c_cflag |= CRTSCTS;
-	else
-		ti.c_cflag &= ~CRTSCTS;
+	// if (u->flags & FLOW_CTL)
+	// 	ti.c_cflag |= CRTSCTS;
+	// else
+	ti.c_cflag &= ~CRTSCTS;
 
 	if (tcsetattr(fd, TCSANOW, &ti) < 0) {
 		BT_ERROR("Can't set port settings, %d, %s", errno,
@@ -357,17 +350,46 @@ static void usage(void)
 {
 	BT_INFO("hciattach - HCI UART driver initialization utility");
 	BT_INFO("Usage:");
-	BT_INFO("\thciattach [-n] [-p] [-b] [-r] [-t timeout] [-s initial_speed] <tty> <type | id> [speed] [flow|noflow] [bdaddr]");
-	BT_INFO("\thciattach -l");
+	BT_INFO("\thciattach [options] <tty> <type> [speed] [flow|noflow] [sleep|nosleep] [bdaddr]");
+	BT_INFO("");
+	BT_INFO("Options:");
+	BT_INFO("\t-b           Send break signal during initialization");
+	BT_INFO("\t-n           Do not detach from terminal (stay in foreground)");
+	BT_INFO("\t-p           Print PID when detaching");
+	BT_INFO("\t-t timeout   Set initialization timeout in seconds (default: 5)");
+	BT_INFO("\t-s speed     Set initial UART speed before device setup");
+	BT_INFO("\t-m mode      Set loader mode (1 or 2)");
+	BT_INFO("\t-r           Enable raw mode (no line discipline)");
+	BT_INFO("\t-i prefix[=value]  Set SCO audio parameter");
+	BT_INFO("\t   prefix:   vohci (default) or pcm");
+	BT_INFO("\t   value:    hex/decimal Voice_Setting (default: 0x60)");
+	BT_INFO("\t   examples: -i, -i vohci, -i pcm=0x60");
+	BT_INFO("\t-l           List supported UART types and exit");
+	BT_INFO("");
+	BT_INFO("Arguments:");
+	BT_INFO("\ttty          TTY device path (e.g., ttyS0 or /dev/ttyS0)");
+	BT_INFO("\ttype         UART type name (e.g., 'any', 'rockchip')");
+	BT_INFO("\tspeed        UART baud rate (e.g., 115200, optional)");
+	BT_INFO("\tflow/noflow  Enable/disable hardware flow control (optional)");
+	BT_INFO("\tsleep/nosleep Enable/disable power management (optional)");
+	BT_INFO("\tbdaddr       Bluetooth device address (XX:XX:XX:XX:XX:XX, optional)");
 }
 
 int main(int argc, char *argv[])
 {
 	struct uart_t *u = NULL;
 	int detach, printpid, raw, opt, i, n, ld, err;
-	int to = 10;
+	int to = 5;
+	int flag = -1;
+	int LOADER_MODE = 1;
 	int init_speed = 0;
 	int send_break = 0;
+	int vohci = 1;
+	char *vohci_prefix = "vohci";
+	char *pcm_prefix = "pcm";
+	int sco_para = 0x0060;
+	char *numbers = NULL;
+	char *endptr = NULL;
 	pid_t pid;
 	struct sigaction sa;
 	struct pollfd p;
@@ -381,7 +403,7 @@ int main(int argc, char *argv[])
 	printpid = 0;
 	raw = 0;
 
-	while ((opt=getopt(argc, argv, "bnpt:s:lr")) != EOF) {
+	while ((opt=getopt(argc, argv, "bnpt:s:m:lri:")) != EOF) {
 		switch(opt) {
 		case 'b':
 			send_break = 1;
@@ -403,6 +425,16 @@ int main(int argc, char *argv[])
 			init_speed = atoi(optarg);
 			break;
 
+		case 'm':
+			flag = atoi(optarg);
+			if(flag == 1 || flag == 2){
+				LOADER_MODE = flag;
+				break;
+			}else{
+				BT_INFO("Invalid parameter please try again\n");
+				exit(0);
+			}
+
 		case 'l':
 			for (i = 0; uart[i].type; i++) {
 				BT_INFO("%-10s0x%04x,0x%04x", uart[i].type,
@@ -413,7 +445,20 @@ int main(int argc, char *argv[])
 		case 'r':
 			raw = 1;
 			break;
-
+		case 'i':
+			if (strncmp(optarg, vohci_prefix, strlen(vohci_prefix)) == 0) {
+				numbers = optarg + strlen(vohci_prefix) + 1; //skip '='
+				vohci = 1;
+			}
+			else if (strncmp(optarg, pcm_prefix, strlen(pcm_prefix)) == 0) {
+				numbers = optarg + strlen(pcm_prefix) + 1; //skip '='
+				vohci = 0;
+			}
+			sco_para = strtol(numbers, &endptr, 0);
+			if (numbers == endptr || errno == ERANGE) {
+				sco_para = 0x60;
+			}
+			break;
 		default:
 			usage();
 			exit(1);
@@ -422,6 +467,7 @@ int main(int argc, char *argv[])
 
 	n = argc - optind;
 	if (n < 2) {
+		BT_ERROR("Not enough arguments. Please provide at least a device path and a device type.");
 		usage();
 		exit(1);
 	}
@@ -468,9 +514,9 @@ int main(int argc, char *argv[])
 
 		case 4:
 			if (!strcmp("sleep", argv[optind]))
-				u->pm = ENABLE_PM;
+				u->flags |= ENABLE_PM;
 			else
-				u->pm = DISABLE_PM;
+				u->flags &= ~ENABLE_PM;
 			break;
 
 		case 5:
@@ -478,6 +524,13 @@ int main(int argc, char *argv[])
 			break;
 		}
 	}
+
+	if (vohci) {
+		u->flags |= AUDIO_VOHCI;
+	} else {
+		u->flags &= ~AUDIO_VOHCI;
+	}
+	u->sco_para = sco_para;
 
 	if (!u) {
 		BT_ERROR("Unknown device type or id");
@@ -509,6 +562,9 @@ start:
 	if (init_speed)
 		u->init_speed = init_speed;
 
+	if(LOADER_MODE == 1 || LOADER_MODE == 2)
+		u->loader_mode = LOADER_MODE;
+
 	memset(&sa, 0, sizeof(sa));
 	sa.sa_flags   = SA_NOCLDSTOP;
 	sa.sa_handler = sig_alarm;
@@ -524,7 +580,8 @@ start:
 		exit(1);
 	}
 
-	BT_INFO("Device setup complete");
+	BT_INFO("Device setup complete. Time: %s", getCurrentTime());
+	BT_INFO("Please wait ...");
 
 	alarm(0);
 
@@ -569,8 +626,15 @@ start:
 		if (err < 0 && errno == EINTR) {
 			BT_INFO("Got EINTR.");
 			continue;
-		} if (err)
+		} if (err){
+			if (p.revents & POLLERR) {
+				BT_INFO("Poll error event.");
+			}
+			else if (p.revents & POLLHUP) {
+				BT_INFO("Poll hangup event.");
+			}
 			break;
+		}
 	}
 
 	BT_INFO("err %d, p->revents %04x", err, p.revents);
@@ -578,9 +642,17 @@ start:
 	/* Restore TTY line discipline */
 	BT_INFO("Restore TTY line discipline");
 	ld = N_TTY;
-	if (ioctl(n, TIOCSETD, &ld) < 0) {
-		BT_ERROR("Can't restore line discipline %d, %s", errno,
-		       strerror(errno));
+	int retries = 3;
+	while (retries-- > 0) {
+		if (ioctl(n, TIOCSETD, &ld) >= 0) {
+			break;
+		}
+		BT_ERROR("Can't restore line discipline %d, %s", errno, strerror(errno));
+		usleep(100000); // 等待 100 毫秒
+	}
+
+	if (retries <= 0) {
+		BT_ERROR("Failed to restore line discipline after multiple attempts.");
 		exit(1);
 	}
 

@@ -1,9 +1,11 @@
 CFLAGS := -Wall -g
 #CC := $(CROSS_COMPLE)gcc
+
 all: rk_hciattach
+
 OBJS := hciattach.o hciattach_rk.o
 
-rtk_hciattach: $(OBJS)
+rk_hciattach: $(OBJS)
 	$(CC) -o rk_hciattach $(OBJS)
 
 %.o: %.c

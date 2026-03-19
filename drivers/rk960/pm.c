@@ -18,7 +18,7 @@
 #include "debug.h"
 
 //0: disable: all mc will send to host during suspend
-//1: enable: mc in maAddress¿¨DA) will send to host during suspend
+//1: enable: mc in maAddress (DA) will send to host during suspend
 //2: drop: no mc will send to host during suspend
 static int mc_filter = 1;
 module_param(mc_filter, int, 0644);
@@ -481,6 +481,7 @@ static int __rk960_wow_suspend(struct rk960_vif *priv,
 	    priv->powersave_mode.pmMode != WSM_PSM_PS) {
 		state->prev_ps_mode = priv->powersave_mode.pmMode;
 		priv->powersave_mode.pmMode = WSM_PSM_PS;
+		RK960_DEBUG_PM("[PM] %s:%d calling rk960_set_pm\n", __func__, __LINE__);
 		rk960_set_pm(priv, &priv->powersave_mode);
 		if (wait_event_interruptible_timeout
 		    (hw_priv->ps_mode_switch_done,
@@ -671,6 +672,7 @@ static int __rk960_wow_resume(struct rk960_vif *priv)
 	/* Restores previous PS mode */
 	if (!priv->vif->p2p && priv->join_status == RK960_JOIN_STATUS_STA) {
 		priv->powersave_mode.pmMode = state->prev_ps_mode;
+		RK960_DEBUG_PM("[PM] %s:%d calling rk960_set_pm\n", __func__, __LINE__);
 		rk960_set_pm(priv, &priv->powersave_mode);
 	}
 
@@ -723,6 +725,7 @@ int rk960_wow_resume_fwcr(struct rk960_vif *priv)
 	/* Restores previous PS mode */
 	if (priv->join_status == RK960_JOIN_STATUS_STA) {
 		priv->powersave_mode.pmMode = WSM_PSM_FAST_PS;
+		RK960_DEBUG_PM("[PM] %s:%d calling rk960_set_pm\n", __func__, __LINE__);
 		rk960_set_pm(priv, &priv->powersave_mode);
 	}
 

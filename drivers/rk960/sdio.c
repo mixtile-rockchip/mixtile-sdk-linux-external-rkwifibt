@@ -9,6 +9,8 @@
 
 #include <linux/module.h>
 #include <linux/gpio.h>
+#include <dt-bindings/gpio/gpio.h>
+#include <linux/of_gpio.h>
 #include <linux/delay.h>
 #include <linux/mmc/host.h>
 #include <linux/mmc/sdio_func.h>
@@ -220,6 +222,76 @@ fail:
 	return error;
 }
 
+#ifndef RFKILL_RK
+static int rk96x_wifi_get_oob_irq(void)
+{
+	struct device_node *node;
+	int gpio_num;
+
+	node = of_find_compatible_node(NULL, NULL, "wlan-platdata");
+	if (!node) {
+		RK960_ERROR_IO("%s Failed to find node.\n", __func__);
+		return -ENODEV;
+	}
+
+	gpio_num = of_get_named_gpio(node, "WIFI,host_wake_irq", 0);
+	of_node_put(node);
+	if (gpio_num < 0) {
+		RK960_ERROR_IO("%s The 'WIFI,host_wake_irq' node was not set in the dts file.\n", __func__);
+		return -ENODEV;
+	}
+
+	if (gpio_is_valid(gpio_num)) {
+		return gpio_to_irq(gpio_num);
+	} else {
+		RK960_ERROR_IO("%s Invalid gpio num.\n", __func__);
+		return -ENODEV;
+	}
+
+	return -1;
+}
+
+int rK96x_wifi_power(int on)
+{
+	struct device_node *node;
+	enum of_gpio_flags flags;
+	int gpio_num;
+	int enable;
+
+	node = of_find_compatible_node(NULL, NULL, "wlan-platdata");
+	if (!node) {
+		RK960_ERROR_IO("%s Failed to find node.\n", __func__);
+		return 0;
+	}
+
+	gpio_num = of_get_named_gpio_flags(node, "WIFI,poweren_gpio", 0, &flags);
+	of_node_put(node);
+	if (gpio_num < 0) {
+		RK960_ERROR_IO("%s The 'WIFI,poweren_gpio' node was not set in the dts file.\n", __func__);
+		return 0;
+	}
+
+	enable = (flags == GPIO_ACTIVE_HIGH) ? 1 : 0;
+
+	if (on) {
+		if (gpio_is_valid(gpio_num)) {
+			gpio_direction_output(gpio_num, enable);
+			msleep(100);
+		}
+		RK960_INFO_IO("wifi power on\n");
+	} else {
+		if (gpio_is_valid(gpio_num)) {
+			gpio_direction_output(gpio_num, !enable);
+			msleep(100);
+		}
+		RK960_INFO_IO("wifi power off\n");
+	}
+
+	return 0;
+
+}
+#endif
+
 static int rk960_request_irq(struct hwbus_priv *self)
 {
 	int ret;
@@ -292,6 +364,8 @@ static int rk960_sdio_off(const struct rk960_platform_data_sdio *pdata)
 	mdelay(10);
 	rockchip_wifi_power(0);
 #endif
+#else
+	rK96x_wifi_power(0);
 #endif
 	return 0;
 }
@@ -308,6 +382,9 @@ static int rk960_sdio_on(const struct rk960_platform_data_sdio *pdata)
 	mdelay(10);
 	rockchip_wifi_set_carddetect(1);
 #endif
+#else
+	rK96x_wifi_power(0);
+	rK96x_wifi_power(1);
 #endif
 	return 0;
 }
@@ -347,7 +424,6 @@ static struct hwbus_ops rk960_sdio_hwbus_ops = {
 	.power_mgmt = rk960_sdio_pm,
 };
 
-extern int rk_host_irq_gpio;
 /* Probe Function to be called by SDIO stack when device is discovered */
 static int rk960_sdio_probe(struct sdio_func *func,
 			    const struct sdio_device_id *id)
@@ -372,7 +448,7 @@ static int rk960_sdio_probe(struct sdio_func *func,
 #ifdef RFKILL_RK
 	global_plat_data->irq = rockchip_wifi_get_oob_irq();
 #else
-	global_plat_data->irq = gpio_to_irq(rk_host_irq_gpio);
+	global_plat_data->irq = rk96x_wifi_get_oob_irq();
 #endif
 
 	self->pdata = global_plat_data;	/* FIXME */
@@ -720,9 +796,8 @@ int rk960_sdio_recovery_init(struct rk960_common *hw_priv)
 
 	rk960_mmc_set_clock(shost, 50000000);
 
-        if (rk960_get_sdio_width_param() == 4) {
-                rk960_sdio_set_bus_width(hw_priv, 4, 0);
-        }
+	if (rk960_get_sdio_width_param(hw_priv) == 4)
+		rk960_sdio_set_bus_width(hw_priv, 4, 0);
 
 	err = sdio_set_block_size(func, RK960_SDIO_BLOCK_SIZE);
 	if (err) {
@@ -803,6 +878,8 @@ static int __init rk960_sdio_init(void)
 {
 	const struct rk960_platform_data_sdio *pdata;
 	int ret;
+
+	load_wifi_user_config();
 
 	rk960_debug_level_init();
 

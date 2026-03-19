@@ -14,6 +14,17 @@
 #include <linux/sched.h>
 #include <linux/random.h>
 #include <linux/etherdevice.h>
+#include <linux/fs.h>
+#include <linux/wait.h>
+#include <linux/sched.h>
+#include <linux/kthread.h>
+#include <linux/spinlock.h>
+#include <linux/list.h>
+#include <linux/string.h>
+#include <linux/time.h>
+#include <linux/timekeeping.h>
+#include <linux/random.h>
+#include <asm/div64.h>
 
 #include "rk960.h"
 #include "wsm.h"
@@ -110,10 +121,36 @@
                 }                                                               \
         } while (0)
 
+#ifdef RK96X_WIFI_ONLY
+extern unsigned char btcmd_dev_to_app[64];
+#endif
+#ifdef CONFIG_OFFLINE_LOG_SUPPORT
+#define MAX_LOG_ENTRY_SIZE 1024
+
+static u32 offline_log_en = 0;
+module_param(offline_log_en, uint, 0644);
+MODULE_PARM_DESC(offline_log_en, "Enable offline logging (default: 0)");
+
+static char offline_log_file_path_buffer[256] = "/tmp/offline_log.txt";
+static char *offline_log_file_path = offline_log_file_path_buffer;
+module_param(offline_log_file_path, charp, 0644);
+MODULE_PARM_DESC(offline_log_file_path, "Path for offline log file (default: /tmp/offline_log.txt)");
+
+/* Statistics for monitoring offline log performance */
+static struct {
+	atomic_t entries_dropped_queue_full;
+	atomic_t entries_dropped_oom;
+	atomic_t entries_written;
+	atomic_t write_failures;
+	atomic_t file_reopens;
+	atomic_t oldest_lines_removed;
+} offline_log_stats;
+
+extern struct offline_log_common *offline_log_priv;
+#endif
+
 #ifdef SUPPORT_RK962_POWERSAVE
-static u16 rk960_keepalive_confirm = 0;
-module_param(rk960_keepalive_confirm, ushort, 0644);
-MODULE_PARM_DESC(rk960_keepalive_confirm, "rk960 keepalive confirm");
+u16 keepalive_confirm = 0;
 #endif
 static void wsm_buf_reset(struct wsm_buf *buf);
 static int wsm_buf_reserve(struct wsm_buf *buf, size_t extra_size);
@@ -146,6 +183,34 @@ static inline void wsm_oper_unlock(struct rk960_common *hw_priv)
 	if (mutex_is_locked(&hw_priv->wsm_oper_lock))
 		mutex_unlock(&hw_priv->wsm_oper_lock);
 }
+
+#ifdef CONFIG_OFFLINE_LOG_SUPPORT
+const char *offline_log_file_path_param(void)
+{
+	return offline_log_file_path;
+}
+
+void offline_log_en_set(u32 value)
+{
+	offline_log_en = value;
+}
+
+u32 offline_log_en_get(void)
+{
+	return offline_log_en;
+}
+
+void offline_log_file_path_set(const char *value)
+{
+	if (value && value[0]) {
+		size_t len = strlen(value);
+		if (len < sizeof(offline_log_file_path_buffer)) {
+			strncpy(offline_log_file_path_buffer, value, sizeof(offline_log_file_path_buffer) - 1);
+			offline_log_file_path_buffer[sizeof(offline_log_file_path_buffer) - 1] = '\0';
+		}
+	}
+}
+#endif
 
 /* ******************************************************************** */
 /* WSM API implementation						*/
@@ -269,6 +334,14 @@ char *wsm_conv_req_resp_to_str(int id)
 		return "WSM_SCHED_SCAN_COMPLETE_IND";
 	case 0x0811:
 		return "WSM_TCP_KEEPALIVE_READY_IND";
+#ifdef CONFIG_OFFLINE_LOG_SUPPORT
+	case 0x0813:
+		return "WSM_HI_OFFLINE_LOG_IND_ID";
+#endif
+#if defined(SUPPORT_RK962_POWERSAVE) && defined(RK96X_WIFI_ONLY)
+	case 0x0814:
+		return "WSM_HI_WAKEUP_HOST_REASON_IND_ID";
+#endif
 	default:
 		return "UNKNOW";
 	}
@@ -792,7 +865,6 @@ underflow:
 	return -EINVAL;
 }
 
-#ifdef SUPPORT_RK962_POWERSAVE
 static int wsm_generic_confirm2(struct rk960_common *hw_priv,
 			       void *arg, struct wsm_buf *buf)
 {
@@ -808,7 +880,6 @@ underflow:
 	WARN_ON(1);
 	return -EINVAL;
 }
-#endif
 
 int wsm_configuration(struct rk960_common *hw_priv,
 		      struct wsm_configuration *arg, int if_id)
@@ -1508,6 +1579,13 @@ int wsm_add_key(struct rk960_common *hw_priv, const struct wsm_add_key *arg,
 {
 	int ret;
 	struct wsm_buf *buf = &hw_priv->wsm_cmd_buf;
+
+#ifdef SUPPORT_FWCR
+	if (hw_priv->fw_hotboot || (hw_priv->fwcr_4way_set)) {
+			RK960_DEBUG_WSM("%s: hw_priv->fwcr_4way_set %d, return\n", __func__, hw_priv->fwcr_4way_set);
+			return 0;
+	}
+#endif
 
 	if (wsm_add_key_cmd_save(hw_priv, arg, if_id))
 		return -ENOMEM;
@@ -2303,6 +2381,11 @@ static int wsm_event_indication(struct rk960_common *hw_priv,
 			event->evt.eventId, event->evt.eventData,
 			interface_link_id);
 
+	if (buf->end - buf->data >= sizeof(struct wsm_rec_info))
+	{
+		WSM_GET(buf, &hw_priv->wsm_rec_info, sizeof(struct wsm_rec_info));
+	}
+
 	spin_lock(&hw_priv->event_queue_lock);
 	first = list_empty(&hw_priv->event_queue);
 	list_add_tail(&event->link, &hw_priv->event_queue);
@@ -2470,17 +2553,639 @@ static int wsm_tcp_keepalive_ready_indication(struct rk960_common *hw_priv,
 
 	indicationid = WSM_GET32(buf);
 	if (1 == indicationid) {
-		rk960_keepalive_confirm = 0x1;
+		keepalive_confirm = 0x1;
 	}
 	return 0;
 
 underflow:
 	return -EINVAL;
 }
+
+u16 wsm_get_keepalive_confirm(void)
+{
+	return keepalive_confirm;
+}
+#ifdef RK96X_WIFI_ONLY
+static int wsm_btcmd_from_dev_msg(struct rk960_common *hw_priv,
+					struct wsm_buf *buf)
+{
+	int i;
+#ifdef ROAM_OFFLOAD
+	if (hw_priv->auto_scanning == 0)
+		wsm_oper_unlock(hw_priv);
+#else
+	wsm_oper_unlock(hw_priv);
+#endif /*ROAM_OFFLOAD */
+
+	for (i = 0; i < 64; i++) {
+		btcmd_dev_to_app[i] = WSM_GET8(buf);
+	}
+
+	RK960_DEBUG_WSM("btcmd[0-3]=0x%x 0x%x 0x%x 0x%x\n", btcmd_dev_to_app[0],
+		btcmd_dev_to_app[1], btcmd_dev_to_app[2], btcmd_dev_to_app[3]);
+
+	queue_delayed_work(hw_priv->workqueue, &hw_priv->btcmd_dev_to_app_timeout, 0);
+
+	return 0;
+
+underflow:
+	return -EINVAL;
+}
 #endif
+#endif
+
+#ifdef CONFIG_OFFLINE_LOG_SUPPORT
+int offline_send_log_en(struct rk960_common *hw_priv, u32 value)
+{
+	int ret;
+	bool wifi_enabled;
+	bool bt_enabled;
+	struct wsm_buf *buf = &hw_priv->wsm_cmd_buf;
+
+	value &= 0x03;
+
+	wifi_enabled = (value & BIT(0)) != 0;
+	bt_enabled = (value & BIT(1)) != 0;
+
+	RK960_INFO_WSM("WiFi: %s, BT: %s\n", wifi_enabled ? "enabled" : "disabled",
+									  bt_enabled ? "enabled" : "disabled");
+
+	wsm_cmd_lock(hw_priv);
+
+	WSM_PUT32(buf, HI_GEN_REQ_OFFLINE_LOG_REQ_ID);
+	WSM_PUT(buf, &value, sizeof(u32));
+
+	ret = wsm_cmd_send(hw_priv, buf, NULL, 0x0003, WSM_CMD_TIMEOUT, 0);
+	wsm_cmd_unlock(hw_priv);
+
+	return ret;
+
+nomem:
+	wsm_cmd_unlock(hw_priv);
+	return -ENOMEM;
+}
+
+#if OFFLINE_LOG_ADD_TIMESTAMP
+static void format_timestamp(char *buf, size_t size)
+{
+	struct timespec64 ts;
+	struct tm tm;
+
+	ktime_get_real_ts64(&ts);
+	time64_to_tm(ts.tv_sec, 0, &tm);
+
+	snprintf(buf, size, "%04ld-%02d-%02d %02d:%02d:%02d.%06ld ",
+			tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
+			tm.tm_hour, tm.tm_min, tm.tm_sec, ts.tv_nsec / 1000);
+}
+#endif
+
+static int rk96x_enqueue_offline_entry(struct offline_log_common *priv,
+                                       struct offline_buffer_entry *entry)
+{
+	struct offline_buffer_entry *old_entry = NULL;
+	unsigned long flags;
+	unsigned int queue_usage_percent;
+	size_t old_entry_len = 0;
+	static unsigned long last_warn_time = 0;
+	unsigned long now = jiffies;
+	unsigned long warn_interval = HZ * 2;
+
+	spin_lock_irqsave(&priv->queue_lock, flags);
+
+	if (priv->max_queue_len > 0) {
+		queue_usage_percent = (priv->queue_count * 100) / priv->max_queue_len;
+
+		if (queue_usage_percent >= OFFLINE_QUEUE_WARN_THRESHOLD &&
+		    queue_usage_percent < 100 &&
+		    time_after(now, last_warn_time + warn_interval)) {
+			RK960_INFO_WSM("Offline queue usage high: %u%% (%u/%u)\n",
+				       queue_usage_percent, priv->queue_count, priv->max_queue_len);
+			last_warn_time = now;
+		}
+	}
+
+	if (priv->max_queue_len > 0 && priv->queue_count >= priv->max_queue_len) {
+		if (!list_empty(&priv->offline_buffer_queue)) {
+			old_entry = list_first_entry(&priv->offline_buffer_queue,
+						     struct offline_buffer_entry, list);
+			old_entry_len = old_entry->len;
+			list_del(&old_entry->list);
+			priv->queue_count--;
+			atomic_inc(&offline_log_stats.entries_dropped_queue_full);
+		}
+	}
+
+	list_add_tail(&entry->list, &priv->offline_buffer_queue);
+	priv->queue_count++;
+	spin_unlock_irqrestore(&priv->queue_lock, flags);
+
+	if (old_entry) {
+		kfree(old_entry->data);
+		kfree(old_entry);
+		RK960_DEBUG_WSM("Dropped oldest offline log entry (queue full, len: %zu, total dropped: %d)\n",
+				old_entry_len,
+				atomic_read(&offline_log_stats.entries_dropped_queue_full));
+	}
+
+	return 0;
+}
+
+static void rk96x_wake_offline_worker(struct offline_log_common *priv)
+{
+	wake_up(&priv->offline_wait_queue);
+}
+
+static void rk96x_cleanup_offline_queue(struct offline_log_common *priv)
+{
+	struct offline_buffer_entry *entry, *tmp;
+	unsigned long flags;
+
+	spin_lock_irqsave(&priv->queue_lock, flags);
+	list_for_each_entry_safe(entry, tmp, &priv->offline_buffer_queue, list) {
+		list_del(&entry->list);
+		priv->queue_count--;
+		kfree(entry->data);
+		kfree(entry);
+	}
+	spin_unlock_irqrestore(&priv->queue_lock, flags);
+}
+
+static struct file *rk96x_open_log_file(const char *path, loff_t *file_size)
+{
+	struct file *fp;
+	 fp = filp_open(path, O_RDWR | O_CREAT, 0644);
+	if (IS_ERR(fp)) {
+		RK960_ERROR_WSM("Failed to open log file %s: %ld\n", path, PTR_ERR(fp));
+		*file_size = 0;
+		return fp;
+	}
+
+	*file_size = i_size_read(fp->f_inode);
+	RK960_INFO_WSM("Log file %s opened (size: %lld bytes)\n",
+			path, (long long)*file_size);
+	return fp;
+}
+
+static int rk96x_remove_oldest_portion(struct file *fp, loff_t *new_pos, loff_t target_size)
+{
+	char *buf = NULL;
+	loff_t file_size;
+	loff_t delete_end = 0;
+	loff_t read_pos = 0;
+	loff_t write_pos = 0;
+	ssize_t bytes_read;
+	ssize_t bytes_written;
+	ssize_t i;
+	size_t buf_size = 8192;
+	int ret = 0;
+	bool found_newline = false;
+	loff_t read_start;
+	size_t chunk_size;
+
+	if (IS_ERR(fp) || !fp) {
+		return -EBADF;
+	}
+
+	file_size = i_size_read(fp->f_inode);
+	if (file_size == 0) {
+		*new_pos = 0;
+		return 0;
+	}
+
+	if (file_size <= target_size) {
+		*new_pos = file_size;
+		return 0;
+	}
+
+	buf = kmalloc(buf_size, GFP_KERNEL);
+	if (!buf) {
+		RK960_ERROR_WSM("Failed to alloc buffer for portion removal\n");
+		return -ENOMEM;
+	}
+
+	read_pos = target_size;
+	while (read_pos < file_size && !found_newline) {
+		read_start = read_pos;
+		chunk_size = min((size_t)(file_size - read_pos), buf_size);
+
+		bytes_read = kernel_read(fp, buf, chunk_size, &read_pos);
+		if (bytes_read <= 0) {
+			break;
+		}
+
+		for (i = 0; i < bytes_read; i++) {
+			if (buf[i] == '\n') {
+				delete_end = read_start + i + 1;
+				found_newline = true;
+				break;
+			}
+		}
+
+		if (bytes_read < chunk_size) {
+			break;
+		}
+	}
+
+	if (!found_newline) {
+		delete_end = file_size;
+	}
+
+	if (delete_end >= file_size) {
+		ret = vfs_truncate(&fp->f_path, 0);
+		if (ret < 0) {
+			RK960_ERROR_WSM("Failed to truncate file to 0: %d\n", ret);
+		} else {
+			*new_pos = 0;
+		}
+		goto out;
+	}
+
+	read_pos = delete_end;
+	write_pos = 0;
+
+	while (read_pos < file_size) {
+		chunk_size = min((size_t)(file_size - read_pos), buf_size);
+
+		bytes_read = kernel_read(fp, buf, chunk_size, &read_pos);
+		if (bytes_read <= 0) {
+			break;
+		}
+
+		bytes_written = kernel_write(fp, buf, bytes_read, &write_pos);
+		if (bytes_written != bytes_read) {
+			RK960_ERROR_WSM("Failed to move content (read %zd, wrote %zd)\n",
+					bytes_read, bytes_written);
+			ret = -EIO;
+			break;
+		}
+	}
+
+	if (ret == 0) {
+		loff_t new_size = file_size - delete_end;
+		ret = vfs_truncate(&fp->f_path, new_size);
+		if (ret < 0) {
+			RK960_ERROR_WSM("Failed to truncate file: %d\n", ret);
+		} else {
+			atomic_inc(&offline_log_stats.oldest_lines_removed);
+			*new_pos = new_size;
+			RK960_DEBUG_WSM("Removed oldest portion (%lld bytes), new size: %lld (total removed: %d)\n",
+					(long long)delete_end, (long long)new_size,
+					atomic_read(&offline_log_stats.oldest_lines_removed));
+		}
+	}
+
+out:
+	kfree(buf);
+	return ret;
+}
+
+static int rk96x_write_log_entry(struct file *fp, struct offline_buffer_entry *entry,
+								loff_t *pos, loff_t max_file_size)
+{
+#if OFFLINE_LOG_ADD_TIMESTAMP
+	char timestamp_buf[32];
+#endif
+	char *log_buffer;
+	size_t ts_len, entry_len, total_len, buffer_size;
+	ssize_t written, max_content_len;
+	loff_t temp_pos;
+	bool is_truncated = false;
+	loff_t target_size;
+	int ret;
+	u64 tmp;
+
+	if (IS_ERR(fp) || !fp) {
+		RK960_ERROR_WSM("Invalid file pointer\n");
+		return -EBADF;
+	}
+
+#if OFFLINE_LOG_ADD_TIMESTAMP
+	format_timestamp(timestamp_buf, sizeof(timestamp_buf));
+	ts_len = strlen(timestamp_buf);
+#else
+	ts_len = 0;
+#endif
+
+	max_content_len = MAX_LOG_ENTRY_SIZE - ts_len - 2 - 12;
+
+	entry_len = entry->len;
+	if (entry_len > max_content_len) {
+		entry_len = max_content_len;
+		is_truncated = true;
+		RK960_INFO_WSM("Log entry truncated (max %zu bytes)\n", max_content_len);
+	}
+
+	buffer_size = ts_len + entry_len;
+	if (is_truncated) {
+		buffer_size += 12;
+	}
+
+	log_buffer = kmalloc(buffer_size, GFP_KERNEL);
+	if (!log_buffer) {
+		RK960_ERROR_WSM("Failed to alloc log buffer (OOM, size: %zu)\n", buffer_size);
+		return -ENOMEM;
+	}
+
+	total_len = 0;
+#if OFFLINE_LOG_ADD_TIMESTAMP
+	memcpy(log_buffer + total_len, timestamp_buf, ts_len);
+	total_len += ts_len;
+#endif
+	memcpy(log_buffer + total_len, entry->data, entry_len);
+	total_len += entry_len;
+	if (is_truncated) {
+		const char trunc_tag[] = " [TRUNCATED]";
+		memcpy(log_buffer + total_len, trunc_tag, strlen(trunc_tag));
+		total_len += strlen(trunc_tag);
+	}
+
+	if (max_file_size > 0 && *pos + total_len > max_file_size) {
+		tmp = max_file_size;
+		do_div(tmp, 100);
+		target_size = tmp * 10;
+
+		ret = rk96x_remove_oldest_portion(fp, pos, target_size);
+		if (ret < 0) {
+			RK960_ERROR_WSM("Failed to remove oldest portion: %d\n", ret);
+			kfree(log_buffer);
+			return ret;
+		}
+	}
+
+	temp_pos = *pos;
+	written = kernel_write(fp, log_buffer, total_len, &temp_pos);
+	if (written != total_len) {
+		RK960_ERROR_WSM("Incomplete write (expected %zu, wrote %zd)\n", total_len, written);
+		kfree(log_buffer);
+		return written < 0 ? written : -EIO;
+	}
+
+	*pos = temp_pos;
+
+	kfree(log_buffer);
+	return 0;
+}
+
+static void rk96x_safe_close_log_file(struct file **fp_ptr)
+{
+	if (fp_ptr && *fp_ptr) {
+		if (!IS_ERR(*fp_ptr)) {
+			filp_close(*fp_ptr, NULL);
+		}
+		*fp_ptr = NULL;
+	}
+}
+
+static struct file *rk96x_ensure_log_file_open(struct file **fp, loff_t *pos, int max_retries)
+{
+	int retry_count = 0;
+
+	if (*fp && !IS_ERR(*fp)) {
+		return *fp;
+	}
+
+	rk96x_safe_close_log_file(fp);
+
+	while (retry_count < max_retries) {
+		*fp = rk96x_open_log_file(offline_log_file_path, pos);
+		if (!IS_ERR(*fp)) {
+			atomic_inc(&offline_log_stats.file_reopens);
+			RK960_INFO_WSM("Reopened log file after %d retries (size: %lld, total reopens: %d)\n",
+					retry_count, (long long)*pos,
+					atomic_read(&offline_log_stats.file_reopens));
+			return *fp;
+		}
+
+		retry_count++;
+		RK960_INFO_WSM("Retry open log file (%d/%d): %ld\n",
+				retry_count, max_retries, PTR_ERR(*fp));
+		msleep(100 * retry_count);
+	}
+
+	return *fp;
+}
+
+int rk96x_offline_worker_thread(void *data)
+{
+	struct offline_log_common *priv = data;
+	struct offline_buffer_entry *entry, *tmp;
+	struct file *fp = NULL;
+	loff_t pos = 0;
+	unsigned int peak_queue_length = 0;
+	int retry_count = 0;
+	const int max_retries = 3;
+	unsigned int processed_count = 0;
+	unsigned int total_processed_count = 0;
+	unsigned int batch_size = 0;
+	int i;
+	struct offline_buffer_entry *batch_entries[OFFLINE_LOG_BATCH_SIZE];
+	size_t batch_lens[OFFLINE_LOG_BATCH_SIZE];
+	u8 *batch_data[OFFLINE_LOG_BATCH_SIZE];
+	int batch_count;
+	struct offline_buffer_entry write_entry;
+	loff_t last_file_size_check = 0;
+	const loff_t file_size_check_interval = 64 * 1024;
+	loff_t actual_file_size;
+
+	fp = rk96x_open_log_file(offline_log_file_path, &pos);
+	if (IS_ERR(fp)) {
+		RK960_ERROR_WSM("Failed to open log file initially: %ld\n", PTR_ERR(fp));
+		rk96x_safe_close_log_file(&fp);
+		return PTR_ERR(fp);
+	}
+
+	while (!kthread_should_stop() && !priv->thread_should_stop && priv->runtime_offline_log_en) {
+		wait_event_interruptible(priv->offline_wait_queue,
+				!list_empty(&priv->offline_buffer_queue) ||
+				kthread_should_stop() ||
+				priv->thread_should_stop ||
+				!priv->runtime_offline_log_en);
+
+		if (kthread_should_stop() || priv->thread_should_stop || !priv->runtime_offline_log_en) {
+			break;
+		}
+
+		processed_count = 0;
+		batch_count = 0;
+
+		spin_lock_irq(&priv->queue_lock);
+		batch_size = priv->queue_count;
+		peak_queue_length = max(peak_queue_length, batch_size);
+		while (!list_empty(&priv->offline_buffer_queue) && batch_count < OFFLINE_LOG_BATCH_SIZE) {
+			entry = list_first_entry(&priv->offline_buffer_queue,
+						  struct offline_buffer_entry, list);
+			batch_lens[batch_count] = entry->len;
+			batch_data[batch_count] = entry->data;
+			batch_entries[batch_count] = entry;
+			list_del(&entry->list);
+			priv->queue_count--;
+			batch_count++;
+		}
+		spin_unlock_irq(&priv->queue_lock);
+
+		for (i = 0; i < batch_count; i++) {
+			processed_count++;
+
+			if (rk96x_ensure_log_file_open(&fp, &pos, max_retries) == NULL || IS_ERR(fp)) {
+				RK960_ERROR_WSM("Drop log (len: %zu) after max retries\n", batch_lens[i]);
+				kfree(batch_data[i]);
+				kfree(batch_entries[i]);
+				continue;
+			}
+
+			write_entry.data = batch_data[i];
+			write_entry.len = batch_lens[i];
+
+			if (priv->offline_log_file_max_size > 0 &&
+			    (pos - last_file_size_check) >= file_size_check_interval) {
+				actual_file_size = i_size_read(fp->f_inode);
+				if (actual_file_size != pos) {
+					pos = actual_file_size;
+				}
+				last_file_size_check = pos;
+			}
+
+			if (rk96x_write_log_entry(fp, &write_entry, &pos, priv->offline_log_file_max_size) < 0) {
+				atomic_inc(&offline_log_stats.write_failures);
+				RK960_ERROR_WSM("Write failed, mark file for reopen (total failures: %d)\n",
+						atomic_read(&offline_log_stats.write_failures));
+				rk96x_safe_close_log_file(&fp);
+			} else {
+				atomic_inc(&offline_log_stats.entries_written);
+			}
+
+			kfree(batch_data[i]);
+			kfree(batch_entries[i]);
+		}
+
+		total_processed_count += processed_count;
+		RK960_DEBUG_WSM("Processed batch: %u entries (remaining: %u, peak: %u, pos: %lld)\n",
+			processed_count, priv->queue_count, peak_queue_length, (long long)pos);
+	}
+
+	rk96x_safe_close_log_file(&fp);
+	rk96x_cleanup_offline_queue(priv);
+	RK960_DEBUG_WSM("Worker thread stopped (peak queue: %u, total processed: %u)\n",
+			peak_queue_length, total_processed_count);
+	return 0;
+}
+
+static int wsm_handle_offline_log_msg(struct offline_log_common *priv, struct wsm_buf *wsm_buf)
+{
+	struct offline_buffer_entry *entry;
+	size_t data_len;
+	int ret;
+	static unsigned long last_oom_warn_time = 0;
+	static unsigned long last_queue_full_warn_time = 0;
+	unsigned long now = jiffies;
+	unsigned long warn_interval = HZ;
+
+	if (!priv->runtime_offline_log_en) {
+		return 0;
+	}
+
+	data_len = wsm_buf->end - wsm_buf->data;
+	if (data_len == 0) {
+		return 0;
+	}
+
+	if (data_len > MAX_LOG_ENTRY_SIZE) {
+		atomic_inc(&offline_log_stats.entries_dropped_queue_full);
+		if (time_after(now, last_queue_full_warn_time + warn_interval)) {
+			RK960_ERROR_WSM("Offline log entry too large (len: %zu, max: %d, dropped)\n",
+					data_len, MAX_LOG_ENTRY_SIZE);
+			last_queue_full_warn_time = now;
+		}
+		return -EINVAL;
+	}
+
+	entry = kmalloc(sizeof(*entry), GFP_ATOMIC);
+	if (!entry) {
+		atomic_inc(&offline_log_stats.entries_dropped_oom);
+		if (time_after(now, last_oom_warn_time + warn_interval)) {
+			RK960_ERROR_WSM("Failed to alloc entry (OOM, total OOM: %d)\n",
+					atomic_read(&offline_log_stats.entries_dropped_oom));
+			last_oom_warn_time = now;
+		}
+		return -ENOMEM;
+	}
+
+	entry->len = data_len;
+	entry->data = kmalloc(entry->len, GFP_ATOMIC);
+	if (!entry->data) {
+		kfree(entry);
+		atomic_inc(&offline_log_stats.entries_dropped_oom);
+		if (time_after(now, last_oom_warn_time + warn_interval)) {
+			RK960_ERROR_WSM("Failed to alloc data buf (OOM, len: %zu, total OOM: %d)\n",
+					entry->len,
+					atomic_read(&offline_log_stats.entries_dropped_oom));
+			last_oom_warn_time = now;
+		}
+		return -ENOMEM;
+	}
+	memcpy(entry->data, wsm_buf->data, entry->len);
+
+	ret = rk96x_enqueue_offline_entry(priv, entry);
+	if (ret) {
+		kfree(entry->data);
+		kfree(entry);
+		atomic_inc(&offline_log_stats.entries_dropped_queue_full);
+		if (time_after(now, last_queue_full_warn_time + warn_interval)) {
+			RK960_ERROR_WSM("Failed to enqueue offline log (len: %zu, total dropped: %d)\n",
+					entry->len,
+					atomic_read(&offline_log_stats.entries_dropped_queue_full));
+			last_queue_full_warn_time = now;
+		}
+		return ret;
+	}
+
+	rk96x_wake_offline_worker(priv);
+
+	RK960_DEBUG_WSM("Enqueued offline data (len: %zu, queue size: %u/%u)\n",
+			entry->len, priv->queue_count, priv->max_queue_len);
+	return 0;
+}
+
+int rk96x_init_offline_components(struct offline_log_common *priv)
+{
+	INIT_LIST_HEAD(&priv->offline_buffer_queue);
+	spin_lock_init(&priv->queue_lock);
+	priv->max_queue_len = OFFLINE_QUEUE_MAX_LEN;
+	priv->queue_count = 0;
+
+	init_waitqueue_head(&priv->offline_wait_queue);
+	priv->thread_should_stop = false;
+
+	priv->offline_log_file_max_size = DEFAULT_LOG_FILE_MAX_SIZE;
+	priv->runtime_offline_log_en = offline_log_en;
+
+	atomic_set(&offline_log_stats.entries_dropped_queue_full, 0);
+	atomic_set(&offline_log_stats.entries_dropped_oom, 0);
+	atomic_set(&offline_log_stats.entries_written, 0);
+	atomic_set(&offline_log_stats.write_failures, 0);
+	atomic_set(&offline_log_stats.file_reopens, 0);
+	atomic_set(&offline_log_stats.oldest_lines_removed, 0);
+
+	if (priv->runtime_offline_log_en != 0) {
+		priv->offline_thread = kthread_run(rk96x_offline_worker_thread,
+                                         priv, "rk96x_offline_thread");
+		if (IS_ERR(priv->offline_thread)) {
+			RK960_ERROR_WSM("Failed to create worker thread: %ld\n",
+					PTR_ERR(priv->offline_thread));
+			return PTR_ERR(priv->offline_thread);
+		}
+	} else {
+		priv->offline_thread = NULL;
+	}
+
+	return 0;
+}
+#endif
+
 /* ******************************************************************** */
 /* WSM TX								*/
-
+extern int wpa_group_key_flag;
 int wsm_cmd_send(struct rk960_common *hw_priv,
 		 struct wsm_buf *buf, void *arg, u16 cmd, long tmo, int if_id)
 {
@@ -2511,24 +3216,48 @@ int wsm_cmd_send(struct rk960_common *hw_priv,
     }
 #endif
 #ifdef SUPPORT_FWCR
-        if (hw_priv->fwcr_recovery) {
-                RK960_INFO_WSM("[WSM] <<< skip\n");
+        if (hw_priv->fwcr_recovery
+			#ifdef SUPPORT_RK962_POWERSAVE
+			|| (0x1 == wsm_get_keepalive_confirm())
+			#endif
+			) {
+                RK960_INFO_WSM("[WSM] <<< skip, %d\n", hw_priv->fwcr_cmd_cnt);
+                if (100 <= hw_priv->fwcr_cmd_cnt)
+                {
+                        hw_priv->fwcr_4way_set = 1;
+                        hw_priv->fwcr_recovery = 0;
+                        hw_priv->fw_hotboot = 0;
+                        schedule_work(&hw_priv->fwcr_work);
+                        RK960_INFO_TXRX("%s: WiFi fast connection failed!\n", __func__);
+                }
+                hw_priv->fwcr_cmd_cnt++;
                 wsm_buf_reset(buf);
 
                 if (cmd == 0x0007 || cmd == 0x000B || cmd == 0x0010) {
                         hw_priv->ps_mode_switch_in_progress = 1;
                         wsm_oper_unlock(hw_priv);
                 }
+                if (0x1 == wpa_group_key_flag) {
+                        wpa_group_key_flag = 0x2;
+                        schedule_work(&hw_priv->fwcr_work);
+                        RK960_INFO_WSM("[WSM] wpa_group_key_flag is 0x2\n");
+                }
                 return 0;
         }
-
+		#ifdef SUPPORT_RK962_POWERSAVE
+        if(0x1 == wsm_get_keepalive_confirm())
+        {
+            RK960_DEBUG_TXRX("Received kp confirm 1, return!");
+            return 0;
+        }
+		#endif
         if (cmd == 0x000C)
         {
-            hw_priv->fwcr_encrypt_ap = 1;
-            RK960_INFO_WSM("%s, fwcr_encrypt_ap %d\n", __func__, hw_priv->fwcr_encrypt_ap);
+            hw_priv->fwcr_encrypt_ap = (hw_priv->fwcr_encrypt_ap & 0xffff0000) | 0x1;
+            RK960_INFO_WSM("%s, fwcr_encrypt_ap 0x%x\n", __func__, hw_priv->fwcr_encrypt_ap);
         } else if (cmd == 0x000D) {
-            hw_priv->fwcr_encrypt_ap = 0;
-            RK960_INFO_WSM("%s, fwcr_encrypt_ap %d\n", __func__, hw_priv->fwcr_encrypt_ap);
+            hw_priv->fwcr_encrypt_ap = (hw_priv->fwcr_encrypt_ap & 0xffff0000) | 0x0;
+            RK960_INFO_WSM("%s, fwcr_encrypt_ap 0x%x\n", __func__, hw_priv->fwcr_encrypt_ap);
         }
 #endif
 
@@ -2604,7 +3333,17 @@ int wsm_cmd_send(struct rk960_common *hw_priv,
 		//BUG_ON(1);
 #ifdef RK960_FW_ERROR_RECOVERY
 		RK960_ERROR_WSM("[WSM] cmd send timeout\n");
-		rk960_signal_fw_error(hw_priv, RK960_FWERR_REASON_CMD);
+		#ifdef SUPPORT_RK962_POWERSAVE
+		if(0x1 == wsm_get_keepalive_confirm())
+		{
+			RK960_DEBUG_TXRX("%s, line = %d, Received kp confirm 1, return!\n", __func__, __LINE__);
+			return 0;
+		}
+		else
+		#endif
+		{
+			rk960_signal_fw_error(hw_priv, RK960_FWERR_REASON_CMD);
+		}
 #endif
 		spin_lock(&hw_priv->wsm_cmd.lock);
 		raceCheck = hw_priv->wsm_cmd.cmd;
@@ -2693,7 +3432,13 @@ bool wsm_flush_tx(struct rk960_common *hw_priv)
 	bool pending = false;
 	long timeout;
 	int i;
-
+	#ifdef SUPPORT_RK962_POWERSAVE
+	if((!atomic_read(&hw_priv->tx_lock)) && (0x1 == wsm_get_keepalive_confirm()))
+	{
+		RK960_DEBUG_TXRX("%s, hw_priv->tx_lock = %d.\n", __func__, atomic_read(&hw_priv->tx_lock));
+		return true;
+	}
+	#endif
 	/* Flush must be called with TX lock held. */
 	BUG_ON(!atomic_read(&hw_priv->tx_lock));
 
@@ -2831,6 +3576,13 @@ void wsm_unlock_tx(struct rk960_common *hw_priv)
 	else {
 		tx_lock = atomic_sub_return(1, &hw_priv->tx_lock);
 		//pr_info("%s: tx_lock %d\n", __func__, tx_lock);
+		#ifdef SUPPORT_RK962_POWERSAVE
+		if((tx_lock < 0) && (0x1 == wsm_get_keepalive_confirm()))
+		{
+			RK960_DEBUG_WSM("%s, tx_lock = %d.\n", __func__, tx_lock);
+			return;
+		}
+		#endif
 		if (tx_lock < 0) {
 			BUG_ON(1);
 		} else if (tx_lock == 0) {
@@ -3077,7 +3829,6 @@ int wsm_handle_rx(struct rk960_common *hw_priv, int id,
 						"failed for request 0x%.4X.\n",
 						id & ~0x0400);
 			break;
-#ifdef SUPPORT_RK962_POWERSAVE
 		case 0x0403:	/* wsm_generic_req */
 			WARN_ON(wsm_arg != NULL);
 			ret = wsm_generic_confirm2(hw_priv, wsm_arg, &wsm_buf);
@@ -3086,7 +3837,6 @@ int wsm_handle_rx(struct rk960_common *hw_priv, int id,
 						"failed for request 0x%.4X.\n",
 						id & ~0x0400);
 			break;
-#endif
 		default:
 			BUG_ON(1);
 		}
@@ -3193,6 +3943,19 @@ int wsm_handle_rx(struct rk960_common *hw_priv, int id,
 #ifdef SUPPORT_RK962_POWERSAVE
 		case 0x0811:
 			ret = wsm_tcp_keepalive_ready_indication(hw_priv, &wsm_buf);
+			break;
+#endif
+#ifdef CONFIG_OFFLINE_LOG_SUPPORT
+		case 0x0813:
+			ret = wsm_handle_offline_log_msg(offline_log_priv, &wsm_buf);
+			if (ret == -ENOSPC || ret == -ENOMEM) {
+				ret = 0;
+			}
+			break;
+#endif
+#if defined(SUPPORT_RK962_POWERSAVE) && defined(RK96X_WIFI_ONLY)
+		case 0x0814:
+			ret = wsm_btcmd_from_dev_msg(hw_priv, &wsm_buf);
 			break;
 #endif
 		default:
