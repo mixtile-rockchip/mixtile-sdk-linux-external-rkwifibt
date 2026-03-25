@@ -167,7 +167,10 @@ wl_ext_event_enq_event(struct wl_event_params *event_params, u32 event,
 	if (data)
 		data_len = ntoh32(msg->datalen);
 	evtq_size = sizeof(struct wl_event_q) + data_len;
-	aflags = (in_atomic()) ? GFP_ATOMIC : GFP_KERNEL;
+	if (IS_ENABLED(CONFIG_PREEMPT_RT))
+		aflags = GFP_ATOMIC;
+	else
+		aflags = (in_atomic()) ? GFP_ATOMIC : GFP_KERNEL;
 	e = kzalloc(evtq_size, aflags);
 	if (unlikely(!e)) {
 		EVENT_ERROR("wlan", "event alloc failed\n");

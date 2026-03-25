@@ -10208,11 +10208,17 @@ dhd_fillup_ioct_reqst(dhd_pub_t *dhd, uint16 len, uint cmd, void* buf, int ifidx
 		return BCME_ERROR;
 
 #ifdef DBG_DW_CHK_PCIE_READ_LATENCY
-	preempt_disable();
+	if (IS_ENABLED(CONFIG_PREEMPT_RT))
+		migrate_disable();
+	else
+		preempt_disable();
 	begin_time = ktime_get();
 	dhd_bus_cmn_readshared(dhd->bus, &data, RING_RD_UPD, ring->idx);
 	end_time = ktime_get();
-	preempt_enable();
+	if (IS_ENABLED(CONFIG_PREEMPT_RT))
+		migrate_enable();
+	else
+		preempt_enable();
 	diff_ns = ktime_to_ns(ktime_sub(end_time, begin_time));
 	/* Check if the delta is greater than 1 msec */
 	if (diff_ns > (1 * NSEC_PER_MSEC)) {
