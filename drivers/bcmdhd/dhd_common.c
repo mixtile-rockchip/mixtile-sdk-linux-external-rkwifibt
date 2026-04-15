@@ -10277,6 +10277,7 @@ dhd_print_fw_ver_from_file(dhd_pub_t *dhdp, FWPKG_FILE *fw, fwpkg_info_t *fwpkg,
 
 	rdlen = fwpkg_get_firmware_img_block(fw, fwpkg, FWPKG_TAG_FW,
 		buf, FW_TAG_BUF_SIZE, fw_size - FW_TAG_BUF_SIZE);
+	buf[FW_TAG_BUF_SIZE - 1] = '\0';
 	if (rdlen <= 0) {
 		DHD_ERROR(("%s: get FW-TAG failed with size %d !!!\n",
 			__FUNCTION__, FW_TAG_BUF_SIZE));
