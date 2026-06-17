@@ -26,11 +26,11 @@
 #define LOG_TAG "hciattach"
 #endif
 
+#define _GNU_SOURCE
+
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
-
-//#define _GNU_SOURCE
 //#include <utils/Log.h>
 
 //#include <android/log.h>
