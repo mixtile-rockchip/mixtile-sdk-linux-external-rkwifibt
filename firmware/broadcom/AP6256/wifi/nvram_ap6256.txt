@@ -100,9 +100,9 @@ swctrlmapext_2g=0x00000000,0x00000000,0x00000000,0x000000,0x3
 vcodivmode=1
 deadman_to=481500000
 ed_thresh2g=-54
-ed_thresh5g=-54
+ed_thresh5g=-74
 eu_edthresh2g=-54
-eu_edthresh5g=-54
+eu_edthresh5g=-74
 
 #ed_thresh2g=-69
 #ed_thresh5g=-69
